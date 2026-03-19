@@ -30,7 +30,7 @@ const PIECE_DEFS = [
   [[0,0],[0,1],[0,2],[1,0]],
   // T-tetromino
   [[0,0],[0,1],[0,2],[1,1]],
-  // S-tetromino
+  // S-tetromino (horizontal)
   [[0,1],[0,2],[1,0],[1,1]],
   // Step corner (vertical S)
   [[0,0],[1,0],[1,1],[2,1]],
@@ -77,9 +77,9 @@ const PIECE_DEFS = [
   [[0,0],[0,1],[1,0],[1,1],[2,0]],
   // F-pentomino (offset cross form)
   [[0,1],[0,2],[1,0],[1,1],[2,1]],
-  // Z-pentomino (5-block zigzag)
+  // Z5-pentomino (5-block zigzag)
   [[0,0],[0,1],[1,1],[2,1],[2,2]],
-  // S-pentomino (mirror of Z)
+  // S5-pentomino (5-block mirror of Z)
   [[0,1],[0,2],[1,1],[2,0],[2,1]],
 ];
 
