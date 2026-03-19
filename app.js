@@ -7,7 +7,9 @@
 // ── Piece definitions ──────────────────────────────────────
 // Each entry is an array of [row, col] offsets.
 // All pieces normalised: minRow = 0, minCol = 0.
-const PIECE_DEFS = [
+
+// Extended set – all 47 canonical pieces (current full set)
+const PIECE_DEFS_EXTENDED = [
   // 1-cell
   [[0,0]],
   // Dominoes
@@ -83,6 +85,67 @@ const PIECE_DEFS = [
   [[0,1],[0,2],[1,1],[2,0],[2,1]],
 ];
 
+// Standard set – matches original Blockudoku shapes (no complex V/W/P/F/Z5/S5 pentominoes)
+// Explicitly defined (not filtered by index) for maintainability
+const PIECE_DEFS_STANDARD = [
+  // 1-cell
+  [[0,0]],
+  // Dominoes
+  [[0,0],[0,1]],
+  [[0,0],[1,0]],
+  // Straight trominoes
+  [[0,0],[0,1],[0,2]],
+  [[0,0],[1,0],[2,0]],
+  // Corner trominoes (2 canonical forms)
+  [[0,0],[0,1],[1,0]],
+  [[0,0],[1,0],[1,1]],
+  // 2×2 square
+  [[0,0],[0,1],[1,0],[1,1]],
+  // Straight tetrominoes
+  [[0,0],[0,1],[0,2],[0,3]],
+  [[0,0],[1,0],[2,0],[3,0]],
+  // L-tetromino
+  [[0,0],[1,0],[2,0],[2,1]],
+  // Extended corner (wide L in 2×3)
+  [[0,0],[0,1],[0,2],[1,0]],
+  // T-tetromino
+  [[0,0],[0,1],[0,2],[1,1]],
+  // S-tetromino (horizontal)
+  [[0,1],[0,2],[1,0],[1,1]],
+  // Step corner (vertical S)
+  [[0,0],[1,0],[1,1],[2,1]],
+  // Z-tetromino
+  [[0,0],[0,1],[1,1],[1,2]],
+  // Straight pentominoes
+  [[0,0],[0,1],[0,2],[0,3],[0,4]],
+  [[0,0],[1,0],[2,0],[3,0],[4,0]],
+  // Plus / X-pentomino
+  [[0,1],[1,0],[1,1],[1,2],[2,1]],
+  // T-pentomino (4 orientations)
+  [[0,0],[0,1],[0,2],[1,1],[2,1]],
+  [[0,2],[1,0],[1,1],[1,2],[2,2]],
+  [[0,1],[1,1],[2,0],[2,1],[2,2]],
+  [[0,0],[1,0],[1,1],[1,2],[2,0]],
+  // L-pentomino (4 orientations)
+  [[0,0],[1,0],[2,0],[3,0],[3,1]],
+  [[0,0],[0,1],[0,2],[0,3],[1,0]],
+  [[0,0],[0,1],[1,1],[2,1],[3,1]],
+  [[0,3],[1,0],[1,1],[1,2],[1,3]],
+  // J-pentomino (4 orientations)
+  [[0,1],[1,1],[2,1],[3,0],[3,1]],
+  [[0,0],[1,0],[1,1],[1,2],[1,3]],
+  [[0,0],[0,1],[1,0],[2,0],[3,0]],
+  [[0,0],[0,1],[0,2],[0,3],[1,3]],
+  // U-pentomino (4 orientations)
+  [[0,0],[0,2],[1,0],[1,1],[1,2]],
+  [[0,0],[0,1],[1,0],[2,0],[2,1]],
+  [[0,0],[0,1],[0,2],[1,0],[1,2]],
+  [[0,0],[0,1],[1,1],[2,0],[2,1]],
+];
+
+// Keep PIECE_DEFS as an alias so other helpers can reference the active set
+let PIECE_DEFS = PIECE_DEFS_STANDARD;
+
 const N = 9;
 
 // ── Animation durations (ms) – keep in sync with styles.css ──
@@ -100,6 +163,7 @@ let todayScore = 0;
 let combo   = 0;
 let gameOver = false;
 let trainingMode = false;
+let extendedPieces = false;
 let darkMode     = false;
 let colorSetting = 'orange';   // 'orange','blue','green','purple','red','teal','pink','random'
 
@@ -186,20 +250,26 @@ function applyDarkMode(on) {
     .setAttribute('content', on ? '#1c1c1e' : '#f2f2f7');
 }
 
+function applyExtendedPieces(on) {
+  PIECE_DEFS = on ? PIECE_DEFS_EXTENDED : PIECE_DEFS_STANDARD;
+}
+
 function saveSettings() {
   localStorage.setItem('bst-settings', JSON.stringify({
-    training: trainingMode,
-    dark:     darkMode,
-    color:    colorSetting,
+    training:  trainingMode,
+    extended:  extendedPieces,
+    dark:      darkMode,
+    color:     colorSetting,
   }));
 }
 
 function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('bst-settings') || '{}');
-    if (typeof s.training === 'boolean') trainingMode = s.training;
-    if (typeof s.dark === 'boolean')     darkMode = s.dark;
-    if (typeof s.color === 'string')     colorSetting = s.color;
+    if (typeof s.training === 'boolean')  trainingMode   = s.training;
+    if (typeof s.extended === 'boolean')  extendedPieces = s.extended;
+    if (typeof s.dark === 'boolean')      darkMode       = s.dark;
+    if (typeof s.color === 'string')      colorSetting   = s.color;
   } catch (_) { /* ignore corrupt data */ }
 }
 
@@ -769,37 +839,116 @@ function strategyNote(holes, lanes, centre) {
 // ── Training: hint ─────────────────────────────────────────
 let hintActive = false;
 
-function showHint() {
-  clearHint();
+// Return all permutations of an array
+function getPermutations(arr) {
+  if (arr.length <= 1) return [arr.slice()];
+  const result = [];
+  for (let i = 0; i < arr.length; i++) {
+    const rest = arr.filter((_, j) => j !== i);
+    for (const perm of getPermutations(rest)) result.push([arr[i], ...perm]);
+  }
+  return result;
+}
 
-  let bestVal  = -Infinity;
-  let bestMove = null;
+// Evaluate a move on an arbitrary board snapshot (not the live board)
+function evalMoveOnBoard(cells, row, col, b) {
+  const tmp = b.map(r => [...r]);
+  for (const [dr, dc] of cells) tmp[row + dr][col + dc] = 1;
 
-  for (let i = 0; i < 3; i++) {
-    if (used[i]) continue;
-    const cells = pieces[i];
+  const clrs = getClearsOnBoard(tmp);
+  const afterBoard = applyClears(tmp, clrs);
+
+  let val = cells.length;
+  val += clrs.total * 18;
+  if (clrs.total > 1) val += (clrs.total - 1) * 12;
+  val -= countHoles(afterBoard) * 7;
+  val += countOpenLanes(afterBoard) * 2;
+  val -= centreCongestion(afterBoard) * 2;
+  val -= fragmentation(afterBoard) * 3;
+  return val;
+}
+
+// Greedy best-placement sequence for a given ordering of slot indices, starting from board b
+function greedySequence(order, startBoard) {
+  let b = startBoard.map(r => [...r]);
+  const moves = [];
+  let totalScore = 0;
+
+  for (const slotIdx of order) {
+    const cells = pieces[slotIdx];
+    let bestVal = -Infinity;
+    let bestMove = null;
+
     for (let r = 0; r < N; r++) {
       for (let c = 0; c < N; c++) {
-        if (!canPlace(cells, r, c)) continue;
-        const val = evalMove(cells, r, c);
-        if (val > bestVal) { bestVal = val; bestMove = { i, r, c, cells }; }
+        let ok = true;
+        for (const [dr, dc] of cells) {
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= N || nc < 0 || nc >= N || b[nr][nc]) { ok = false; break; }
+        }
+        if (!ok) continue;
+        const val = evalMoveOnBoard(cells, r, c, b);
+        if (val > bestVal) { bestVal = val; bestMove = { slotIdx, r, c, cells }; }
       }
+    }
+
+    if (!bestMove) return null; // can't place this piece
+    moves.push(bestMove);
+    totalScore += bestVal;
+
+    // Apply placement + clears to b
+    for (const [dr, dc] of cells) b[bestMove.r + dr][bestMove.c + dc] = 1;
+    const clrs = getClearsOnBoard(b);
+    b = applyClears(b, clrs);
+  }
+
+  return { moves, score: totalScore };
+}
+
+// Find the best sequence of placements for all unplaced slots
+function findBestSequence() {
+  const unplaced = [0, 1, 2].filter(i => !used[i]);
+  if (unplaced.length === 0) return null;
+
+  let bestScore = -Infinity;
+  let bestMoves = null;
+
+  for (const order of getPermutations(unplaced)) {
+    const result = greedySequence(order, board);
+    if (result && result.score > bestScore) {
+      bestScore = result.score;
+      bestMoves = result.moves;
     }
   }
 
-  if (!bestMove) return;
+  return bestMoves;
+}
 
-  for (const [dr, dc] of bestMove.cells) {
-    const el = cellEl(bestMove.r + dr, bestMove.c + dc);
-    if (el) el.classList.add('hint-cell');
-  }
-  document.getElementById(`slot-${bestMove.i}`).classList.add('hint-slot');
-  document.getElementById('move-eval').textContent = explainMove(bestMove.cells, bestMove.r, bestMove.c);
+function showHint() {
+  clearHint();
+
+  const sequence = findBestSequence();
+  if (!sequence || sequence.length === 0) return;
+
+  const hintClasses = ['hint-cell', 'hint-cell-2', 'hint-cell-3'];
+  sequence.forEach((move, idx) => {
+    const cls = hintClasses[idx] || 'hint-cell';
+    for (const [dr, dc] of move.cells) {
+      const el = cellEl(move.r + dr, move.c + dc);
+      if (el) el.classList.add(cls);
+    }
+    document.getElementById(`slot-${move.slotIdx}`).classList.add('hint-slot');
+  });
+
+  const first = sequence[0];
+  const suffix = sequence.length > 1 ? ` · Play slot ${first.slotIdx + 1} first.` : '';
+  document.getElementById('move-eval').textContent = explainMove(first.cells, first.r, first.c) + suffix;
   hintActive = true;
 }
 
 function clearHint() {
-  document.querySelectorAll('.hint-cell').forEach(el => el.classList.remove('hint-cell'));
+  document.querySelectorAll('.hint-cell, .hint-cell-2, .hint-cell-3')
+    .forEach(el => el.classList.remove('hint-cell', 'hint-cell-2', 'hint-cell-3'));
   document.querySelectorAll('.hint-slot').forEach(el => el.classList.remove('hint-slot'));
   if (hintActive) {
     document.getElementById('move-eval').textContent = '';
@@ -809,20 +958,7 @@ function clearHint() {
 
 // ── Move evaluation heuristics ─────────────────────────────
 function evalMove(cells, row, col) {
-  const tmp = board.map(r => [...r]);
-  for (const [dr, dc] of cells) tmp[row + dr][col + dc] = 1;
-
-  const clrs = getClearsOnBoard(tmp);
-  const afterBoard = applyClears(tmp, clrs);
-
-  let val = cells.length;                        // blocks placed
-  val += clrs.total * 18;                        // region clears
-  if (clrs.total > 1) val += (clrs.total - 1) * 12; // multi-clear bonus
-  val -= countHoles(afterBoard) * 7;             // penalise holes
-  val += countOpenLanes(afterBoard) * 2;         // reward open lanes
-  val -= centreCongestion(afterBoard) * 2;       // penalise centre congestion
-  val -= fragmentation(afterBoard) * 3;          // penalise fragmentation
-  return val;
+  return evalMoveOnBoard(cells, row, col, board);
 }
 
 function getClearsOnBoard(b) {
@@ -922,6 +1058,7 @@ function hideOverlay(id) {
 // ── Settings / overlays ────────────────────────────────────
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('chk-training').checked = trainingMode;
+  document.getElementById('chk-extended').checked = extendedPieces;
   document.getElementById('chk-dark').checked = darkMode;
   document.getElementById('sel-color').value = colorSetting;
   showOverlay('ov-settings');
@@ -929,12 +1066,14 @@ document.getElementById('btn-settings').addEventListener('click', () => {
 
 document.getElementById('btn-done').addEventListener('click', () => {
   const prev = trainingMode;
-  trainingMode = document.getElementById('chk-training').checked;
-  darkMode     = document.getElementById('chk-dark').checked;
-  colorSetting = document.getElementById('sel-color').value;
+  trainingMode   = document.getElementById('chk-training').checked;
+  extendedPieces = document.getElementById('chk-extended').checked;
+  darkMode       = document.getElementById('chk-dark').checked;
+  colorSetting   = document.getElementById('sel-color').value;
 
   applyDarkMode(darkMode);
   applyColor(colorSetting);
+  applyExtendedPieces(extendedPieces);
   saveSettings();
 
   hideOverlay('ov-settings');
@@ -945,6 +1084,29 @@ document.getElementById('btn-done').addEventListener('click', () => {
     document.getElementById('move-eval').textContent = '';
     document.getElementById('strategy-note').textContent = '';
   }
+});
+
+document.getElementById('btn-clear-data').addEventListener('click', async () => {
+  if (!confirm('Clear all game progress and cached data?\nThis cannot be undone.')) return;
+
+  // Remove game progress from localStorage
+  localStorage.removeItem('bst-best');
+  localStorage.removeItem('bst-today');
+  localStorage.removeItem('bst-settings');
+
+  // Unregister service workers so new assets are fetched on next load
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+  }
+
+  // Delete all cached responses (style, script, etc.)
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  }
+
+  location.reload();
 });
 
 
@@ -970,6 +1132,7 @@ function init() {
   loadSettings();
   applyDarkMode(darkMode);
   applyColor(colorSetting);
+  applyExtendedPieces(extendedPieces);
   document.getElementById('training-panel').hidden = !trainingMode;
 
   initBoardDOM();
