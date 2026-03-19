@@ -149,9 +149,12 @@ let PIECE_DEFS = PIECE_DEFS_STANDARD;
 const N = 9;
 
 // ── Animation durations (ms) – keep in sync with styles.css ──
-const ANIM_SLOT_SHRINK = 200;    // matches slotShrink 0.2s
-const ANIM_CLEAR       = 380;    // matches clearFlash 0.38s
-const ANIM_CLEAR_STAGGER = 120;  // max ripple stagger offset
+const ANIM_SLOT_SHRINK   = 200;   // matches slotShrink 0.2s
+const ANIM_CLEAR         = 380;   // matches clearFlash 0.38s
+const ANIM_CLEAR_STAGGER = 120;   // max ripple stagger offset
+const ANIM_NO_SPACE_IN   = 700;   // "no more space" fade-in
+const ANIM_NO_SPACE_HOLD = 1500;  // "no more space" hold time
+const ANIM_NO_SPACE_OUT  = 800;   // "no more space" fade-out
 
 // ── State ─────────────────────────────────────────────────
 let board   = [];   // N×N of 0/1
@@ -196,8 +199,79 @@ function canPlaceAnywhere(cells) {
   return false;
 }
 
+// ── Arbitrary-board placement helpers (for order-checking) ─
+function canPlaceOnBoard(cells, row, col, b) {
+  for (const [dr, dc] of cells) {
+    const r = row + dr, c = col + dc;
+    if (r < 0 || r >= N || c < 0 || c >= N) return false;
+    if (b[r][c]) return false;
+  }
+  return true;
+}
+
+// Try placing each piece (in the given slot order) at its first available
+// position and return whether all can be placed.
+function canFitAllInOrder(order) {
+  let b = board.map(r => [...r]);
+  for (const i of order) {
+    let placed = false;
+    outer: for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        if (!canPlaceOnBoard(pieces[i], r, c, b)) continue;
+        for (const [dr, dc] of pieces[i]) b[r + dr][c + dc] = 1;
+        b = applyClears(b, getClearsOnBoard(b));
+        placed = true;
+        break outer;
+      }
+    }
+    if (!placed) return false;
+  }
+  return true;
+}
+
+// Returns true when only some orderings allow all pieces to be placed –
+// meaning the player must choose carefully which piece to play first.
+function orderMatters() {
+  if (rackSize <= 1) return false;
+  const unplaced = Array.from({ length: rackSize }, (_, i) => i).filter(i => !used[i]);
+  if (unplaced.length <= 1) return false;
+
+  // Skip the check on nearly-empty boards – not tight enough to matter.
+  const fillCount = board.reduce((sum, row) => sum + row.reduce((total, cell) => total + cell, 0), 0);
+  if (fillCount < 28) return false;
+
+  const perms = getPermutations(unplaced);
+  let worksCount = 0;
+  for (const order of perms) {
+    if (canFitAllInOrder(order)) worksCount++;
+  }
+  // True only if at least one ordering works but not all do.
+  return worksCount > 0 && worksCount < perms.length;
+}
+
 function randomPiece() {
   return PIECE_DEFS[Math.floor(Math.random() * PIECE_DEFS.length)];
+}
+
+// ── Difficulty-weighted piece selection ────────────────────
+// As score grows, larger/harder pieces become progressively more likely.
+function weightedRandomPiece() {
+  // fill: 0 at score 0, 1 at score 200+
+  const fill = Math.min(1, score / 200);
+  // Each piece gets a weight = 1 + fill × (cellCount - 1) × 0.5
+  // At fill=0 all weights are equal; at fill=1 a 5-cell piece is 3× a 1-cell piece.
+  let totalWeight = 0;
+  const weights = PIECE_DEFS.map(p => {
+    const w = 1 + fill * (p.length - 1) * 0.5;
+    totalWeight += w;
+    return w;
+  });
+  let rand = Math.random() * totalWeight;
+  for (let i = 0; i < PIECE_DEFS.length; i++) {
+    rand -= weights[i];
+    if (rand <= 0) return PIECE_DEFS[i];
+  }
+  return PIECE_DEFS[PIECE_DEFS.length - 1];
 }
 
 // ── Smart piece selection ──────────────────────────────────
@@ -215,7 +289,7 @@ function canCauseClear(cells) {
 }
 
 function smartPieces() {
-  const p = Array.from({ length: rackSize }, () => randomPiece());
+  const p = Array.from({ length: rackSize }, () => weightedRandomPiece());
   // Fast path: check if any of the rack pieces can cause a clear
   for (let i = 0; i < rackSize; i++) {
     if (canCauseClear(p[i])) return p;
@@ -231,6 +305,16 @@ function smartPieces() {
   if (candidates.length > 0) {
     const slot = Math.floor(Math.random() * rackSize);
     p[slot] = candidates[Math.floor(Math.random() * candidates.length)];
+    return p;
+  }
+  // No clear is possible at all – ensure at least one piece fits so the
+  // player can keep scoring before the game genuinely ends.
+  if (!p.some(pc => canPlaceAnywhere(pc))) {
+    outerLoop: for (let i = 0; i < rackSize; i++) {
+      for (const pc of PIECE_DEFS) {
+        if (canPlaceAnywhere(pc)) { p[i] = pc; break outerLoop; }
+      }
+    }
   }
   return p;
 }
@@ -346,7 +430,7 @@ function renderRack() {
 function renderSlot(i) {
   const slot = document.getElementById(`slot-${i}`);
   slot.innerHTML = '';
-  slot.classList.remove('used', 'dragging', 'hint-slot');
+  slot.classList.remove('used', 'dragging', 'hint-slot', 'unplayable');
 
   if (used[i]) { slot.classList.add('used'); return; }
 
@@ -378,6 +462,15 @@ function renderSlot(i) {
 
   slot.appendChild(inner);
   attachDragListeners(slot, i);
+}
+
+// Grey out any piece that cannot be placed anywhere on the current board.
+function updateRackPlayability() {
+  for (let i = 0; i < rackSize; i++) {
+    if (used[i]) continue;
+    const slot = document.getElementById(`slot-${i}`);
+    if (slot) slot.classList.toggle('unplayable', !canPlaceAnywhere(pieces[i]));
+  }
 }
 
 // ── Drag & drop ────────────────────────────────────────────
@@ -417,6 +510,8 @@ document.addEventListener('mouseup',   e => { if (drag) endDrag(e.clientX, e.cli
 
 function startDrag(cx, cy, slotIdx) {
   if (drag || used[slotIdx] || gameOver) return;
+  const slotEl = document.getElementById(`slot-${slotIdx}`);
+  if (slotEl && slotEl.classList.contains('unplayable')) return;
   clearHint();
 
   const cells = pieces[slotIdx];
@@ -575,6 +670,7 @@ function doPlace(slotIdx, row, col) {
 }
 
 function afterPlace() {
+  updateRackPlayability();
   updateTrainingPanel();
   if (used.every(Boolean)) {
     // All pieces placed → new round
@@ -704,12 +800,15 @@ function simClears(cells, row, col) {
 }
 
 // ── Game over ──────────────────────────────────────────────
+// Game over only when every remaining unplaced piece is blocked.
+// (Individual pieces that can't fit are just greyed out; the game continues
+//  as long as at least one piece can still be placed.)
 function isGameOver() {
   for (let i = 0; i < rackSize; i++) {
     if (used[i]) continue;
-    if (!canPlaceAnywhere(pieces[i])) return true;
+    if (canPlaceAnywhere(pieces[i])) return false;
   }
-  return false;
+  return true;
 }
 
 function triggerGameOver() {
@@ -726,9 +825,43 @@ function triggerGameOver() {
   localStorage.setItem('bst-today', JSON.stringify({ d: todayKey, s: todayScore }));
   updateScoreUI();
 
-  document.getElementById('go-score').textContent = `Score: ${score}`;
-  document.getElementById('go-best').textContent  = `Best: ${bestScore}`;
-  showOverlay('ov-gameover');
+  // Fade in "No more space!", hold, then fade out before showing the game-over card.
+  showNoMoreSpaceMsg(() => {
+    document.getElementById('go-score').textContent = `Score: ${score}`;
+    document.getElementById('go-best').textContent  = `Best: ${bestScore}`;
+    showOverlay('ov-gameover');
+  });
+}
+
+// ── End-of-game messages ───────────────────────────────────
+function showNoMoreSpaceMsg(cb) {
+  const overlay = document.createElement('div');
+  overlay.className = 'no-space-overlay';
+  const span = document.createElement('span');
+  span.className = 'no-space-text';
+  span.textContent = 'No more space!';
+  overlay.appendChild(span);
+  document.body.appendChild(overlay);
+
+  // After fade-in + hold, fade out then invoke callback.
+  setTimeout(() => {
+    overlay.classList.add('fading-out');
+    setTimeout(() => {
+      overlay.remove();
+      if (cb) cb();
+    }, ANIM_NO_SPACE_OUT);
+  }, ANIM_NO_SPACE_IN + ANIM_NO_SPACE_HOLD);
+}
+
+function showChooseCarefullyMsg() {
+  const boardRect = document.getElementById('board-wrap').getBoundingClientRect();
+  const msg = document.createElement('div');
+  msg.className = 'choose-carefully-msg';
+  msg.textContent = 'Choose carefully…';
+  // Centre the pill vertically in the board
+  msg.style.top = (boardRect.top + boardRect.height / 2) + 'px';
+  document.body.appendChild(msg);
+  msg.addEventListener('animationend', () => msg.remove(), { once: true });
 }
 
 // ── New round / restart ────────────────────────────────────
@@ -737,7 +870,12 @@ function newRound() {
   pieces  = smartPieces();
   if (colorSetting === 'random') applyColor('random');
   renderRack();
-  if (isGameOver()) triggerGameOver();
+  updateRackPlayability();
+  if (isGameOver()) {
+    setTimeout(triggerGameOver, 150);
+  } else if (rackSize > 1 && orderMatters()) {
+    showChooseCarefullyMsg();
+  }
 }
 
 function startNewGame() {
@@ -746,12 +884,13 @@ function startNewGame() {
   combo    = 0;
   gameOver = false;
   used     = Array(rackSize).fill(false);
-  pieces   = Array.from({ length: rackSize }, () => randomPiece());
+  pieces   = smartPieces();
 
   applyColor(colorSetting);
   updateScoreUI();
   renderBoard();
   renderRack();
+  updateRackPlayability();
   clearHint();
   updateTrainingPanel();
 
