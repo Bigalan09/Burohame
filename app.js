@@ -847,9 +847,7 @@ document.getElementById('btn-done').addEventListener('click', () => {
   }
 });
 
-document.getElementById('btn-back').addEventListener('click', () => {
-  // No-op on single-page app; could reset or show menu in future
-});
+
 
 document.getElementById('btn-hint').addEventListener('click', showHint);
 

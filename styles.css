@@ -86,6 +86,7 @@ html, body {
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
+a.icon-btn { text-decoration: none; }
 .icon-btn:active { opacity: 0.6; }
 
 #score-wrap {
