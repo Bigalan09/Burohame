@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: pages-deploy
@@ -14,6 +16,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,3 +36,21 @@ jobs:
           force: false
           clean-exclude: |
             pr-preview/
+
+      - name: Checkout gh-pages for deployment
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: _deploy
+
+      - name: Remove git metadata from deployment content
+        run: rm -rf _deploy/.git
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _deploy
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
