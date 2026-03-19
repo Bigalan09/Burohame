@@ -26,7 +26,7 @@ jobs:
       - name: Stamp cache version into service worker
         run: |
           COMMIT=$(git rev-parse --short HEAD)
-          sed -i "s/const CACHE_NAME = 'burokeshoku-v[^']*'/const CACHE_NAME = 'burokeshoku-${COMMIT}'/" sw.js
+          sed -i "s/const CACHE_NAME = 'burohame-v[^']*'/const CACHE_NAME = 'burohame-${COMMIT}'/" sw.js
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4.8.0

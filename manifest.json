@@ -1,6 +1,6 @@
 {
-  "name": "Burokeshoku",
-  "short_name": "Burokeshoku",
+  "name": "Burohame",
+  "short_name": "Burohame",
   "description": "Block Sudoku Trainer",
   "start_url": "/burokeshoku/",
   "display": "standalone",

@@ -1,6 +1,8 @@
-# Burokeshoku
+# Burohame
 
-> A mobile-first Burokeshoku training app that helps you score above 3000 consistently.
+> A mobile-first Burohame training app that helps you score above 3000 consistently.
+
+**Pronunciation:** boo-roh-hah-meh · ブロハメ
 
 🎮 **[Play the latest version](https://bigalan09.github.io/burokeshoku/)**
 
@@ -8,7 +10,7 @@
 
 ## Features
 
-- Authentic 9×9 Burokeshoku gameplay — 3 pieces per round, no rotation
+- Authentic 9×9 Burohame gameplay — 3 pieces per round, no rotation
 - Rows, columns and 3×3 boxes clear when full
 - Multi-clear and combo bonuses
 - Best score saved locally
