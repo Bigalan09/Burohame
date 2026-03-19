@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  pages: read
 
 concurrency:
   group: pr-preview-${{ github.event.pull_request.number }}
@@ -30,3 +31,4 @@ jobs:
           source-dir: .
           preview-branch: gh-pages
           umbrella-dir: pr-preview
+          wait-for-pages-deployment: true

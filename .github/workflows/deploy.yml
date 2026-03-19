@@ -28,5 +28,6 @@ jobs:
         with:
           folder: .
           clean: true
+          force: false
           clean-exclude: |
             pr-preview/
