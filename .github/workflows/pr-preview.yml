@@ -7,6 +7,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: pr-preview-${{ github.event.pull_request.number }}
@@ -18,6 +20,9 @@ jobs:
     # write to gh-pages or post comments.
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout PR
         uses: actions/checkout@v4
@@ -30,3 +35,21 @@ jobs:
           source-dir: .
           preview-branch: gh-pages
           umbrella-dir: pr-preview
+
+      - name: Checkout gh-pages for deployment
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: _deploy
+
+      - name: Remove git metadata from deployment content
+        run: rm -rf _deploy/.git
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _deploy
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
