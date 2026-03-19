@@ -171,14 +171,114 @@ a.icon-btn { text-decoration: none; }
 .cell[data-c="2"], .cell[data-c="5"] { border-right: 1.5px solid rgba(0,0,0,0.18); }
 .cell[data-r="2"], .cell[data-r="5"] { border-bottom: 1.5px solid rgba(0,0,0,0.18); }
 
-/* Clear animation */
-@keyframes clearPop {
-  0%   { transform: scale(1);    opacity: 1; }
-  40%  { transform: scale(1.15); opacity: 0.9; }
-  100% { transform: scale(0);    opacity: 0; }
+/* ===== Piece-placement pop ===== */
+@keyframes placePop {
+  0%   { transform: scale(0.3); opacity: 0.4; }
+  50%  { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.cell.just-placed {
+  animation: placePop 0.28s cubic-bezier(.36,1.8,.62,1) forwards;
+  z-index: 1;
+}
+
+/* ===== Enhanced clear animation ===== */
+@keyframes clearFlash {
+  0%   { transform: scale(1);   opacity: 1; background: #fff; }
+  30%  { transform: scale(1.15); opacity: 0.95; }
+  100% { transform: scale(0);   opacity: 0; }
 }
 .cell.clearing {
-  animation: clearPop 0.32s ease-in forwards;
+  animation: clearFlash 0.38s ease-in forwards;
+  z-index: 2;
+}
+
+/* ===== Score bump ===== */
+@keyframes scoreBump {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+#score-main.bump {
+  animation: scoreBump 0.35s cubic-bezier(.36,1.4,.62,1);
+}
+
+/* ===== Rack piece entrance ===== */
+@keyframes pieceIn {
+  0%   { transform: scale(0.4) translateY(12px); opacity: 0; }
+  70%  { transform: scale(1.06) translateY(-2px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.slot .piece-inner.entering {
+  animation: pieceIn 0.35s cubic-bezier(.36,1.5,.62,1) forwards;
+}
+
+/* ===== Combo popup ===== */
+@keyframes comboFloat {
+  0%   { transform: translateY(0) scale(0.7); opacity: 0; }
+  20%  { transform: translateY(-8px) scale(1.1); opacity: 1; }
+  70%  { transform: translateY(-32px) scale(1); opacity: 1; }
+  100% { transform: translateY(-52px) scale(0.9); opacity: 0; }
+}
+.combo-popup {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--accent);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.18);
+  pointer-events: none;
+  z-index: 3000;
+  animation: comboFloat 0.9s ease-out forwards;
+  white-space: nowrap;
+}
+
+/* ===== Points popup ===== */
+@keyframes pointsFloat {
+  0%   { transform: translateY(0) scale(0.6); opacity: 0; }
+  20%  { transform: translateY(-6px) scale(1.05); opacity: 1; }
+  80%  { transform: translateY(-28px) scale(1); opacity: 0.8; }
+  100% { transform: translateY(-42px) scale(0.9); opacity: 0; }
+}
+.points-popup {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--accent-hi);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  pointer-events: none;
+  z-index: 3000;
+  animation: pointsFloat 0.75s ease-out forwards;
+  white-space: nowrap;
+}
+
+/* ===== Overlay transitions ===== */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cardSlideIn {
+  from { transform: scale(0.85) translateY(20px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+.overlay.show {
+  animation: overlayFadeIn 0.25s ease-out forwards;
+}
+.overlay.show .ov-card {
+  animation: cardSlideIn 0.3s cubic-bezier(.36,1.4,.62,1) forwards;
+}
+
+/* ===== Slot used shrink-out ===== */
+@keyframes slotShrink {
+  0%   { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+.slot.shrinking {
+  animation: slotShrink 0.22s ease-in forwards;
+  pointer-events: none;
 }
 
 /* ===== Training panel ===== */
@@ -308,7 +408,7 @@ a.icon-btn { text-decoration: none; }
   z-index: 2000;
   padding: 24px;
 }
-.overlay[hidden] { display: none; }
+.overlay[hidden] { display: none !important; }
 
 .ov-card {
   background: var(--bg-card);

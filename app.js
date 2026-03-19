@@ -259,7 +259,7 @@ function renderSlot(i) {
   const b = bounds(cells);
 
   const inner = document.createElement('div');
-  inner.className = 'piece-inner';
+  inner.className = 'piece-inner entering';
   inner.style.width  = (b.cols * RACK_CELL) + 'px';
   inner.style.height = (b.rows * RACK_CELL) + 'px';
 
@@ -273,6 +273,13 @@ function renderSlot(i) {
     `;
     inner.appendChild(blk);
   }
+
+  // Stagger entrance by slot index
+  inner.style.animationDelay = (i * 80) + 'ms';
+  inner.addEventListener('animationend', () => {
+    inner.classList.remove('entering');
+    inner.style.animationDelay = '';
+  }, { once: true });
 
   slot.appendChild(inner);
   attachDragListeners(slot, i);
@@ -437,13 +444,32 @@ function doPlace(slotIdx, row, col) {
   updateScoreUI();
 
   used[slotIdx] = true;
+
+  // Animate slot shrinking out, then render board with placement pop
+  const slotEl = document.getElementById(`slot-${slotIdx}`);
+  slotEl.classList.add('shrinking');
+  setTimeout(() => {
+    slotEl.classList.remove('shrinking');
+    renderSlot(slotIdx);
+  }, 220);
+
   renderBoard();
-  renderSlot(slotIdx);
+
+  // Add placement pop animation to newly placed cells
+  for (const [dr, dc] of cells) {
+    const el = cellEl(row + dr, col + dc);
+    if (el) {
+      el.classList.add('just-placed');
+      el.addEventListener('animationend', () => el.classList.remove('just-placed'), { once: true });
+    }
+  }
 
   // Check clears
   const cleared = doClears();
 
   if (cleared.size) {
+    showPointsPopup(cleared.size);
+    if (combo > 0) showComboPopup(combo);
     animateClears(cleared, () => {
       renderBoard();
       afterPlace();
@@ -517,12 +543,36 @@ function doClears() {
 }
 
 function animateClears(cleared, cb) {
-  for (const key of cleared) {
-    const [r, c] = key.split(',').map(Number);
+  // Stagger clear animation for a ripple effect
+  const cells = [...cleared].map(key => key.split(',').map(Number));
+  // Sort by distance from centroid for ripple effect
+  const cx = cells.reduce((s, [r]) => s + r, 0) / cells.length;
+  const cy = cells.reduce((s, [, c]) => s + c, 0) / cells.length;
+  cells.sort((a, b) => {
+    const da = Math.abs(a[0] - cx) + Math.abs(a[1] - cy);
+    const db = Math.abs(b[0] - cx) + Math.abs(b[1] - cy);
+    return da - db;
+  });
+
+  const maxDelay = 120; // max stagger ms
+  const step = cells.length > 1 ? maxDelay / (cells.length - 1) : 0;
+
+  cells.forEach(([r, c], i) => {
     const el = cellEl(r, c);
-    if (el) el.classList.add('clearing');
-  }
-  setTimeout(cb, 340);
+    if (el) {
+      el.style.animationDelay = (i * step) + 'ms';
+      el.classList.add('clearing');
+    }
+  });
+
+  setTimeout(() => {
+    // Clean up animation delays
+    cells.forEach(([r, c]) => {
+      const el = cellEl(r, c);
+      if (el) el.style.animationDelay = '';
+    });
+    cb();
+  }, 380 + maxDelay);
 }
 
 // ── Clears simulation (for preview) ───────────────────────
@@ -584,7 +634,7 @@ function triggerGameOver() {
 
   document.getElementById('go-score').textContent = `Score: ${score}`;
   document.getElementById('go-best').textContent  = `Best: ${bestScore}`;
-  document.getElementById('ov-gameover').hidden = false;
+  showOverlay('ov-gameover');
 }
 
 // ── New round / restart ────────────────────────────────────
@@ -611,16 +661,25 @@ function startNewGame() {
   clearHint();
   updateTrainingPanel();
 
-  document.getElementById('ov-gameover').hidden = true;
+  hideOverlay('ov-gameover');
   document.getElementById('move-eval').textContent = '';
   document.getElementById('strategy-note').textContent = '';
 }
 
 // ── Score UI ───────────────────────────────────────────────
 function updateScoreUI() {
-  document.getElementById('score-main').textContent = score;
+  const el = document.getElementById('score-main');
+  const prev = el.textContent;
+  el.textContent = score;
   document.getElementById('today-val').textContent  = Math.max(todayScore, score);
   document.getElementById('best-val').textContent   = Math.max(bestScore, score);
+
+  // Bump animation when score changes
+  if (String(score) !== prev) {
+    el.classList.remove('bump');
+    void el.offsetWidth; // reflow to restart animation
+    el.classList.add('bump');
+  }
 }
 
 // ── Training: metrics ──────────────────────────────────────
@@ -819,12 +878,49 @@ function explainMove(cells, row, col) {
   return '💡 Neutral placement — no immediate clears or major penalties.';
 }
 
+// ── Animation helpers ──────────────────────────────────────
+function showComboPopup(c) {
+  const label = c >= 5 ? '🔥🔥🔥' : c >= 3 ? '🔥🔥' : '🔥';
+  const popup = document.createElement('div');
+  popup.className = 'combo-popup';
+  popup.textContent = `${label} ${c}× Combo!`;
+  // Position above the board
+  const boardRect = document.getElementById('board-wrap').getBoundingClientRect();
+  popup.style.top = (boardRect.top + boardRect.height * 0.3) + 'px';
+  document.body.appendChild(popup);
+  popup.addEventListener('animationend', () => popup.remove());
+}
+
+function showPointsPopup(pts) {
+  const popup = document.createElement('div');
+  popup.className = 'points-popup';
+  popup.textContent = `+${pts}`;
+  const boardRect = document.getElementById('board-wrap').getBoundingClientRect();
+  popup.style.top = (boardRect.top + boardRect.height * 0.45) + 'px';
+  document.body.appendChild(popup);
+  popup.addEventListener('animationend', () => popup.remove());
+}
+
+function showOverlay(id) {
+  const ov = document.getElementById(id);
+  ov.hidden = false;
+  ov.classList.remove('show');
+  void ov.offsetWidth; // reflow
+  ov.classList.add('show');
+}
+
+function hideOverlay(id) {
+  const ov = document.getElementById(id);
+  ov.classList.remove('show');
+  ov.hidden = true;
+}
+
 // ── Settings / overlays ────────────────────────────────────
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('chk-training').checked = trainingMode;
   document.getElementById('chk-dark').checked = darkMode;
   document.getElementById('sel-color').value = colorSetting;
-  document.getElementById('ov-settings').hidden = false;
+  showOverlay('ov-settings');
 });
 
 document.getElementById('btn-done').addEventListener('click', () => {
@@ -837,7 +933,7 @@ document.getElementById('btn-done').addEventListener('click', () => {
   applyColor(colorSetting);
   saveSettings();
 
-  document.getElementById('ov-settings').hidden = true;
+  hideOverlay('ov-settings');
   document.getElementById('training-panel').hidden = !trainingMode;
   if (trainingMode && !prev) updateTrainingPanel();
   if (!trainingMode) {
