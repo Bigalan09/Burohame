@@ -154,19 +154,21 @@ function canCauseClear(cells) {
 
 function smartPieces() {
   const p = [randomPiece(), randomPiece(), randomPiece()];
-  // Check if any of the 3 random pieces can cause a clear
-  let anyCanClear = false;
+  // Fast path: check if any of the 3 random pieces can cause a clear
   for (let i = 0; i < 3; i++) {
-    if (canCauseClear(p[i])) { anyCanClear = true; break; }
+    if (canCauseClear(p[i])) return p;
   }
-  if (!anyCanClear) {
-    // Find all piece defs that could cause a clear
-    const candidates = PIECE_DEFS.filter(pc => canCauseClear(pc));
-    if (candidates.length > 0) {
-      // Replace one random slot with a clearing piece
-      const slot = Math.floor(Math.random() * 3);
-      p[slot] = candidates[Math.floor(Math.random() * candidates.length)];
+  // Fallback: lazily find a few candidates and stop early
+  const candidates = [];
+  for (const pc of PIECE_DEFS) {
+    if (canCauseClear(pc)) {
+      candidates.push(pc);
+      if (candidates.length >= 5) break;
     }
+  }
+  if (candidates.length > 0) {
+    const slot = Math.floor(Math.random() * 3);
+    p[slot] = candidates[Math.floor(Math.random() * candidates.length)];
   }
   return p;
 }
