@@ -55,6 +55,40 @@ const PIECE_DEFS = [
   // Rectangles
   [[0,0],[0,1],[1,0],[1,1],[2,0],[2,1]],
   [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2]],
+
+  // ── Additional shapes ──────────────────────────────────
+  // Plus / X-pentomino (rotationally symmetric)
+  [[0,1],[1,0],[1,1],[1,2],[2,1]],
+  // T-pentomino (4 orientations)
+  [[0,0],[0,1],[0,2],[1,1],[2,1]],
+  [[0,2],[1,0],[1,1],[1,2],[2,2]],
+  [[0,1],[1,1],[2,0],[2,1],[2,2]],
+  [[0,0],[1,0],[1,1],[1,2],[2,0]],
+  // V-pentomino / large corner (4 orientations)
+  [[0,0],[1,0],[2,0],[2,1],[2,2]],
+  [[0,0],[0,1],[0,2],[1,0],[2,0]],
+  [[0,0],[0,1],[0,2],[1,2],[2,2]],
+  [[0,2],[1,2],[2,0],[2,1],[2,2]],
+  // L-pentomino (4 orientations)
+  [[0,0],[1,0],[2,0],[3,0],[3,1]],
+  [[0,0],[0,1],[0,2],[0,3],[1,0]],
+  [[0,0],[0,1],[1,1],[2,1],[3,1]],
+  [[0,3],[1,0],[1,1],[1,2],[1,3]],
+  // J-pentomino (4 orientations)
+  [[0,1],[1,1],[2,1],[3,0],[3,1]],
+  [[0,0],[1,0],[1,1],[1,2],[1,3]],
+  [[0,0],[0,1],[1,0],[2,0],[3,0]],
+  [[0,0],[0,1],[0,2],[0,3],[1,3]],
+  // U-pentomino (4 orientations)
+  [[0,0],[0,2],[1,0],[1,1],[1,2]],
+  [[0,0],[0,1],[1,0],[2,0],[2,1]],
+  [[0,0],[0,1],[0,2],[1,0],[1,2]],
+  [[0,0],[0,1],[1,1],[2,0],[2,1]],
+  // W-pentomino / staircase (4 orientations)
+  [[0,0],[1,0],[1,1],[2,1],[2,2]],
+  [[0,1],[0,2],[1,0],[1,1],[2,0]],
+  [[0,0],[0,1],[1,1],[1,2],[2,2]],
+  [[0,2],[1,1],[1,2],[2,0],[2,1]],
 ];
 
 const N = 9;
@@ -69,6 +103,10 @@ let todayScore = 0;
 let combo   = 0;
 let gameOver = false;
 let trainingMode = false;
+let darkMode     = false;
+let colorSetting = 'orange';   // 'orange','blue','green','purple','red','teal','pink','random'
+
+const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 
 // ── Piece helpers ──────────────────────────────────────────
 function bounds(cells) {
@@ -98,6 +136,74 @@ function canPlaceAnywhere(cells) {
 
 function randomPiece() {
   return PIECE_DEFS[Math.floor(Math.random() * PIECE_DEFS.length)];
+}
+
+// ── Smart piece selection ──────────────────────────────────
+function canCauseClear(cells) {
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (!canPlace(cells, r, c)) continue;
+      const tmp = board.map(row => [...row]);
+      for (const [dr, dc] of cells) tmp[r + dr][c + dc] = 1;
+      const clrs = getClearsOnBoard(tmp);
+      if (clrs.total > 0) return true;
+    }
+  }
+  return false;
+}
+
+function smartPieces() {
+  const p = [randomPiece(), randomPiece(), randomPiece()];
+  // Fast path: check if any of the 3 random pieces can cause a clear
+  for (let i = 0; i < 3; i++) {
+    if (canCauseClear(p[i])) return p;
+  }
+  // Fallback: lazily find a few candidates and stop early
+  const candidates = [];
+  for (const pc of PIECE_DEFS) {
+    if (canCauseClear(pc)) {
+      candidates.push(pc);
+      if (candidates.length >= 5) break;
+    }
+  }
+  if (candidates.length > 0) {
+    const slot = Math.floor(Math.random() * 3);
+    p[slot] = candidates[Math.floor(Math.random() * candidates.length)];
+  }
+  return p;
+}
+
+// ── Colour / theme helpers ─────────────────────────────────
+function applyColor(name) {
+  if (name === 'random') {
+    const pick = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+    document.documentElement.dataset.color = pick;
+  } else {
+    document.documentElement.dataset.color = name;
+  }
+}
+
+function applyDarkMode(on) {
+  document.documentElement.dataset.theme = on ? 'dark' : '';
+  document.querySelector('meta[name="theme-color"]')
+    .setAttribute('content', on ? '#1c1c1e' : '#f2f2f7');
+}
+
+function saveSettings() {
+  localStorage.setItem('bst-settings', JSON.stringify({
+    training: trainingMode,
+    dark:     darkMode,
+    color:    colorSetting,
+  }));
+}
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('bst-settings') || '{}');
+    if (typeof s.training === 'boolean') trainingMode = s.training;
+    if (typeof s.dark === 'boolean')     darkMode = s.dark;
+    if (typeof s.color === 'string')     colorSetting = s.color;
+  } catch (_) { /* ignore corrupt data */ }
 }
 
 // ── Board helpers ──────────────────────────────────────────
@@ -492,7 +598,8 @@ function triggerGameOver() {
 // ── New round / restart ────────────────────────────────────
 function newRound() {
   used    = [false, false, false];
-  pieces  = [randomPiece(), randomPiece(), randomPiece()];
+  pieces  = smartPieces();
+  if (colorSetting === 'random') applyColor('random');
   renderRack();
   if (isGameOver()) triggerGameOver();
 }
@@ -505,6 +612,7 @@ function startNewGame() {
   used     = [false, false, false];
   pieces   = [randomPiece(), randomPiece(), randomPiece()];
 
+  applyColor(colorSetting);
   updateScoreUI();
   renderBoard();
   renderRack();
@@ -722,12 +830,21 @@ function explainMove(cells, row, col) {
 // ── Settings / overlays ────────────────────────────────────
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('chk-training').checked = trainingMode;
+  document.getElementById('chk-dark').checked = darkMode;
+  document.getElementById('sel-color').value = colorSetting;
   document.getElementById('ov-settings').hidden = false;
 });
 
 document.getElementById('btn-done').addEventListener('click', () => {
   const prev = trainingMode;
   trainingMode = document.getElementById('chk-training').checked;
+  darkMode     = document.getElementById('chk-dark').checked;
+  colorSetting = document.getElementById('sel-color').value;
+
+  applyDarkMode(darkMode);
+  applyColor(colorSetting);
+  saveSettings();
+
   document.getElementById('ov-settings').hidden = true;
   document.getElementById('training-panel').hidden = !trainingMode;
   if (trainingMode && !prev) updateTrainingPanel();
@@ -759,6 +876,11 @@ function init() {
   const todayKey = new Date().toISOString().slice(0, 10);
   const td   = JSON.parse(localStorage.getItem('bst-today') || '{"d":"","s":0}');
   todayScore = (td.d === todayKey) ? td.s : 0;
+
+  loadSettings();
+  applyDarkMode(darkMode);
+  applyColor(colorSetting);
+  document.getElementById('training-panel').hidden = !trainingMode;
 
   initBoardDOM();
   startNewGame();
