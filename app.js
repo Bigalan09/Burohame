@@ -85,6 +85,11 @@ const PIECE_DEFS = [
 
 const N = 9;
 
+// ── Animation durations (ms) – keep in sync with styles.css ──
+const ANIM_SLOT_SHRINK = 220;    // matches slotShrink 0.22s
+const ANIM_CLEAR       = 380;    // matches clearFlash 0.38s
+const ANIM_CLEAR_STAGGER = 120;  // max ripple stagger offset
+
 // ── State ─────────────────────────────────────────────────
 let board   = [];   // N×N of 0/1
 let pieces  = [];   // current 3 piece-cell-arrays
@@ -451,7 +456,7 @@ function doPlace(slotIdx, row, col) {
   setTimeout(() => {
     slotEl.classList.remove('shrinking');
     renderSlot(slotIdx);
-  }, 220);
+  }, ANIM_SLOT_SHRINK);
 
   renderBoard();
 
@@ -554,8 +559,7 @@ function animateClears(cleared, cb) {
     return da - db;
   });
 
-  const maxDelay = 120; // max stagger ms
-  const step = cells.length > 1 ? maxDelay / (cells.length - 1) : 0;
+  const step = cells.length > 1 ? ANIM_CLEAR_STAGGER / (cells.length - 1) : 0;
 
   cells.forEach(([r, c], i) => {
     const el = cellEl(r, c);
@@ -572,7 +576,7 @@ function animateClears(cleared, cb) {
       if (el) el.style.animationDelay = '';
     });
     cb();
-  }, 380 + maxDelay);
+  }, ANIM_CLEAR + ANIM_CLEAR_STAGGER);
 }
 
 // ── Clears simulation (for preview) ───────────────────────
