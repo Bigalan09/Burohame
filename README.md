@@ -2,7 +2,7 @@
 
 > A mobile-first Burokeshoku training app that helps you score above 3000 consistently.
 
-🎮 **[Play the latest version](https://bigalan09.github.io/block-sudoku-trainer/)**
+🎮 **[Play the latest version](https://bigalan09.github.io/burokeshoku/)**
 
 ---
 
