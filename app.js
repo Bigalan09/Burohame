@@ -155,8 +155,8 @@ const ANIM_CLEAR_STAGGER = 120;  // max ripple stagger offset
 
 // ── State ─────────────────────────────────────────────────
 let board   = [];   // N×N of 0/1
-let pieces  = [];   // current 3 piece-cell-arrays
-let used    = [];   // [bool, bool, bool] – which slots are placed
+let pieces  = [];   // current rack piece-cell-arrays
+let used    = [];   // [bool …] – which slots are placed
 let score   = 0;
 let bestScore = 0;
 let todayScore = 0;
@@ -166,6 +166,7 @@ let trainingMode = false;
 let extendedPieces = false;
 let darkMode     = false;
 let colorSetting = 'orange';   // 'orange','blue','green','purple','red','teal','pink','random'
+let rackSize     = 3;          // number of pieces shown in the rack (1–3)
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 
@@ -214,9 +215,9 @@ function canCauseClear(cells) {
 }
 
 function smartPieces() {
-  const p = [randomPiece(), randomPiece(), randomPiece()];
-  // Fast path: check if any of the 3 random pieces can cause a clear
-  for (let i = 0; i < 3; i++) {
+  const p = Array.from({ length: rackSize }, () => randomPiece());
+  // Fast path: check if any of the rack pieces can cause a clear
+  for (let i = 0; i < rackSize; i++) {
     if (canCauseClear(p[i])) return p;
   }
   // Fallback: lazily find a few candidates and stop early
@@ -228,7 +229,7 @@ function smartPieces() {
     }
   }
   if (candidates.length > 0) {
-    const slot = Math.floor(Math.random() * 3);
+    const slot = Math.floor(Math.random() * rackSize);
     p[slot] = candidates[Math.floor(Math.random() * candidates.length)];
   }
   return p;
@@ -260,6 +261,7 @@ function saveSettings() {
     extended:  extendedPieces,
     dark:      darkMode,
     color:     colorSetting,
+    rackSize:  rackSize,
   }));
 }
 
@@ -268,8 +270,15 @@ function loadSettings() {
     const s = JSON.parse(localStorage.getItem('bst-settings') || '{}');
     if (typeof s.training === 'boolean')  trainingMode   = s.training;
     if (typeof s.extended === 'boolean')  extendedPieces = s.extended;
-    if (typeof s.dark === 'boolean')      darkMode       = s.dark;
     if (typeof s.color === 'string')      colorSetting   = s.color;
+    if (typeof s.rackSize === 'number' && s.rackSize >= 1 && s.rackSize <= 3)
+      rackSize = s.rackSize;
+    // Respect saved dark preference; fall back to OS preference on first launch
+    if (typeof s.dark === 'boolean') {
+      darkMode = s.dark;
+    } else {
+      darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
   } catch (_) { /* ignore corrupt data */ }
 }
 
@@ -319,8 +328,19 @@ function renderBoard() {
 // ── DOM – rack ─────────────────────────────────────────────
 const RACK_CELL = 18; // px per cell in rack
 
+function initRackDOM() {
+  const rack = document.getElementById('rack');
+  rack.innerHTML = '';
+  for (let i = 0; i < rackSize; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.id = `slot-${i}`;
+    rack.appendChild(slot);
+  }
+}
+
 function renderRack() {
-  for (let i = 0; i < 3; i++) renderSlot(i);
+  for (let i = 0; i < rackSize; i++) renderSlot(i);
 }
 
 function renderSlot(i) {
@@ -557,7 +577,7 @@ function doPlace(slotIdx, row, col) {
 function afterPlace() {
   updateTrainingPanel();
   if (used.every(Boolean)) {
-    // All 3 placed → new round
+    // All pieces placed → new round
     setTimeout(newRound, 80);
   } else {
     if (isGameOver()) setTimeout(triggerGameOver, 150);
@@ -685,7 +705,7 @@ function simClears(cells, row, col) {
 
 // ── Game over ──────────────────────────────────────────────
 function isGameOver() {
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < rackSize; i++) {
     if (used[i]) continue;
     if (!canPlaceAnywhere(pieces[i])) return true;
   }
@@ -713,7 +733,7 @@ function triggerGameOver() {
 
 // ── New round / restart ────────────────────────────────────
 function newRound() {
-  used    = [false, false, false];
+  used    = Array(rackSize).fill(false);
   pieces  = smartPieces();
   if (colorSetting === 'random') applyColor('random');
   renderRack();
@@ -725,8 +745,8 @@ function startNewGame() {
   score    = 0;
   combo    = 0;
   gameOver = false;
-  used     = [false, false, false];
-  pieces   = [randomPiece(), randomPiece(), randomPiece()];
+  used     = Array(rackSize).fill(false);
+  pieces   = Array.from({ length: rackSize }, () => randomPiece());
 
   applyColor(colorSetting);
   updateScoreUI();
@@ -907,7 +927,7 @@ function greedySequence(order, startBoard) {
 
 // Find the best sequence of placements for all unplaced slots
 function findBestSequence() {
-  const unplaced = [0, 1, 2].filter(i => !used[i]);
+  const unplaced = Array.from({ length: rackSize }, (_, i) => i).filter(i => !used[i]);
   if (unplaced.length === 0) return null;
 
   let bestScore = -Infinity;
@@ -1061,15 +1081,18 @@ document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('chk-extended').checked = extendedPieces;
   document.getElementById('chk-dark').checked = darkMode;
   document.getElementById('sel-color').value = colorSetting;
+  document.getElementById('sel-rack').value = String(rackSize);
   showOverlay('ov-settings');
 });
 
 document.getElementById('btn-done').addEventListener('click', () => {
   const prev = trainingMode;
+  const prevRackSize = rackSize;
   trainingMode   = document.getElementById('chk-training').checked;
   extendedPieces = document.getElementById('chk-extended').checked;
   darkMode       = document.getElementById('chk-dark').checked;
   colorSetting   = document.getElementById('sel-color').value;
+  rackSize       = parseInt(document.getElementById('sel-rack').value, 10);
 
   applyDarkMode(darkMode);
   applyColor(colorSetting);
@@ -1083,6 +1106,12 @@ document.getElementById('btn-done').addEventListener('click', () => {
     clearHint();
     document.getElementById('move-eval').textContent = '';
     document.getElementById('strategy-note').textContent = '';
+  }
+
+  // Rebuild rack and restart game if rack size changed
+  if (rackSize !== prevRackSize) {
+    initRackDOM();
+    startNewGame();
   }
 });
 
@@ -1135,7 +1164,19 @@ function init() {
   applyExtendedPieces(extendedPieces);
   document.getElementById('training-panel').hidden = !trainingMode;
 
+  // Follow OS dark-mode changes dynamically when the user hasn't set
+  // an explicit preference (i.e. no saved 'dark' key in settings yet).
+  const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+  darkMQ.addEventListener('change', e => {
+    const s = JSON.parse(localStorage.getItem('bst-settings') || '{}');
+    if (typeof s.dark !== 'boolean') {
+      darkMode = e.matches;
+      applyDarkMode(darkMode);
+    }
+  });
+
   initBoardDOM();
+  initRackDOM();
   startNewGame();
 }
 

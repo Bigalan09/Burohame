@@ -63,11 +63,7 @@
       </div>
 
       <!-- Piece rack -->
-      <div id="rack">
-        <div class="slot" id="slot-0"></div>
-        <div class="slot" id="slot-1"></div>
-        <div class="slot" id="slot-2"></div>
-      </div>
+      <div id="rack"></div>
 
     </main>
 
@@ -107,6 +103,14 @@
             <option value="teal">💎 Teal</option>
             <option value="pink">💗 Pink</option>
             <option value="random">🎲 Random</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <span>Pieces per Round</span>
+          <select id="sel-rack">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
           </select>
         </div>
         <button class="pill-btn wide" id="btn-done">Done</button>
