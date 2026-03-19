@@ -15,6 +15,8 @@
   --preview-bad: rgba(220,50,50,0.35);
   --preview-clr: rgba(255,215,0,0.55);
   --hint-cell:   rgba(90,150,255,0.55);
+  --hint-cell-2: rgba(255,160,40,0.55);
+  --hint-cell-3: rgba(60,200,120,0.55);
   --radius:    14px;
 }
 
@@ -39,6 +41,8 @@
   --preview-bad: rgba(220,50,50,0.40);
   --preview-clr: rgba(255,215,0,0.60);
   --hint-cell:   rgba(90,150,255,0.60);
+  --hint-cell-2: rgba(255,160,40,0.65);
+  --hint-cell-3: rgba(60,200,120,0.65);
 }
 
 html, body {
@@ -171,6 +175,8 @@ a.icon-btn { text-decoration: none; }
 .cell.preview-bad { background: var(--preview-bad) !important; border-radius: 0; }
 .cell.preview-clr { background: var(--preview-clr) !important; border-radius: 0; }
 .cell.hint-cell   { background: var(--hint-cell) !important; border-radius: 0; }
+.cell.hint-cell-2 { background: var(--hint-cell-2) !important; border-radius: 0; }
+.cell.hint-cell-3 { background: var(--hint-cell-3) !important; border-radius: 0; }
 
 /* Box separators – heavier lines every 3 cells */
 .cell[data-c="2"], .cell[data-c="5"] { border-right: 1.5px solid rgba(0,0,0,0.18); }
@@ -404,6 +410,7 @@ a.icon-btn { text-decoration: none; }
 }
 .pill-btn:active { opacity: 0.75; }
 .pill-btn.wide   { width: 100%; padding: 12px; font-size: 15px; margin-top: 8px; }
+.pill-btn.danger { background: #ff3b30; }
 
 /* ===== Overlays ===== */
 .overlay {
