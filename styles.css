@@ -152,6 +152,10 @@ a.icon-btn { text-decoration: none; }
   position: relative;
 }
 
+[data-theme="dark"] .cell {
+  border-color: rgba(255,255,255,0.10);
+}
+
 .cell.cell-alt { background: var(--cell-alt); }
 
 .cell.filled {
@@ -171,6 +175,11 @@ a.icon-btn { text-decoration: none; }
 /* Box separators – heavier lines every 3 cells */
 .cell[data-c="2"], .cell[data-c="5"] { border-right: 1.5px solid rgba(0,0,0,0.18); }
 .cell[data-r="2"], .cell[data-r="5"] { border-bottom: 1.5px solid rgba(0,0,0,0.18); }
+
+[data-theme="dark"] .cell[data-c="2"],
+[data-theme="dark"] .cell[data-c="5"] { border-right-color: rgba(255,255,255,0.28); }
+[data-theme="dark"] .cell[data-r="2"],
+[data-theme="dark"] .cell[data-r="5"] { border-bottom-color: rgba(255,255,255,0.28); }
 
 /* ===== Piece-placement pop ===== */
 @keyframes placePop {
