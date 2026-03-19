@@ -520,6 +520,76 @@ input:checked + .tog-track .tog-thumb { transform: translateX(20px); }
   border: 1px solid rgba(0,0,0,0.15);
 }
 
+/* ===== Unplayable piece (greyed out – can't fit anywhere) ===== */
+.slot.unplayable {
+  opacity: 0.38;
+  cursor: default;
+}
+.slot.unplayable .piece-block {
+  background: var(--text-2) !important;
+  box-shadow: none !important;
+  filter: grayscale(1);
+}
+
+/* ===== "Choose carefully" message ===== */
+@keyframes chooseCarefullyFade {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-50%) scale(0.82); }
+  18%  { opacity: 1; transform: translateX(-50%) translateY(-50%) scale(1);    }
+  72%  { opacity: 1; transform: translateX(-50%) translateY(-50%) scale(1);    }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-50%) scale(0.95); }
+}
+.choose-carefully-msg {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  background: rgba(0, 0, 0, 0.76);
+  color: #fff;
+  font-weight: 700;
+  font-size: 17px;
+  padding: 11px 26px;
+  border-radius: 26px;
+  pointer-events: none;
+  z-index: 3500;
+  white-space: nowrap;
+  animation: chooseCarefullyFade 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ===== "No more space!" end-of-game overlay ===== */
+@keyframes noSpaceBgIn {
+  from { background: rgba(0, 0, 0, 0);    }
+  to   { background: rgba(0, 0, 0, 0.62); }
+}
+@keyframes noSpaceTextIn {
+  from { opacity: 0; transform: scale(0.8);  }
+  to   { opacity: 1; transform: scale(1);    }
+}
+@keyframes noSpaceFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.no-space-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4000;
+  pointer-events: none;
+  animation: noSpaceBgIn 0.7s ease forwards;
+}
+.no-space-overlay.fading-out {
+  animation: noSpaceFadeOut 0.8s ease forwards;
+}
+.no-space-text {
+  font-size: 32px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  animation: noSpaceTextIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+}
+
 /* ===== Responsive tweaks ===== */
 @media (max-height: 700px) {
   #score-main { font-size: 28px; }
