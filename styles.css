@@ -295,8 +295,8 @@ a.icon-btn { text-decoration: none; }
   pointer-events: none;
 }
 
-/* ===== Training panel ===== */
-#training-panel {
+/* ===== Coach panel ===== */
+#coach-panel {
   width: 100%;
   background: var(--bg-card);
   border-radius: var(--radius);
@@ -365,7 +365,9 @@ a.icon-btn { text-decoration: none; }
 
 .slot.used    { opacity: 0; pointer-events: none; }
 .slot.dragging { opacity: 0.35; }
-.slot.hint-slot .piece-block { box-shadow: 0 0 0 2px #4a90e2, 0 2px 6px rgba(0,0,0,0.25) !important; }
+.slot.hint-slot   .piece-block { box-shadow: 0 0 0 2px #4a90e2, 0 2px 6px rgba(0,0,0,0.25) !important; }
+.slot.hint-slot-2 .piece-block { box-shadow: 0 0 0 2px #ffa028, 0 2px 6px rgba(0,0,0,0.25) !important; }
+.slot.hint-slot-3 .piece-block { box-shadow: 0 0 0 2px #3cc878, 0 2px 6px rgba(0,0,0,0.25) !important; }
 
 .piece-inner { position: relative; }
 

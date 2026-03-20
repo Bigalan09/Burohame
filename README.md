@@ -1,6 +1,6 @@
 # Burohame
 
-> A mobile-first Burohame training app that helps you score above 3000 consistently.
+> A mobile-first block-puzzle game. Place three pieces per round onto a 9×9 grid — clear full rows, columns and 3×3 boxes to score points. Chain clears for combo bonuses, and use **Coach Mode** to get move hints and board-health feedback while you learn the strategy.
 
 **Pronunciation:** boo-roh-hah-meh · ブロハメ
 
@@ -15,7 +15,7 @@
 - Rows, columns and 3×3 boxes clear when full
 - Multi-clear and combo bonuses
 - Best score saved locally
-- **Training mode** (toggle via ⚙️): hints, board health metrics, move quality feedback
+- **Coach Mode** (toggle via ⚙️): colour-coded move hints, board health metrics, move quality feedback
 
 ## Local dev
 
