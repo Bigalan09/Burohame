@@ -1,55 +1,47 @@
-name: PR Preview
+name: PR Preview (Deploy)
 
 on:
-  pull_request:
-    types: [opened, reopened, synchronize, closed]
+  workflow_run:
+    workflows: ["PR Preview (Prepare)"]
+    types: [completed]
 
 permissions:
-  contents: write
-  pull-requests: write
   pages: write
   id-token: write
 
 concurrency:
-  group: pr-preview-${{ github.event.pull_request.number }}
+  group: pages-deploy
   cancel-in-progress: true
 
 jobs:
-  preview:
-    # Only run for same-repo PRs; fork PRs get a read-only token that cannot
-    # write to gh-pages or post comments.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout PR
-        uses: actions/checkout@v4
+      - name: Get artifact URL from prepare run
+        id: get-artifact
+        uses: actions/github-script@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Deploy PR preview
-        uses: rossjrw/pr-preview-action@v1.8.1
-        with:
-          source-dir: .
-          preview-branch: gh-pages
-          umbrella-dir: pr-preview
-
-      - name: Checkout gh-pages for deployment
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: _deploy
-
-      - name: Remove git metadata from deployment content
-        run: rm -rf _deploy/.git
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _deploy
+          result-encoding: string
+          script: |
+            const runId = context.payload.workflow_run.id;
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+            const artifact = artifacts.data.artifacts.find(a => a.name === 'github-pages');
+            if (!artifact) {
+              const names = artifacts.data.artifacts.map(a => a.name).join(', ') || '(none)';
+              throw new Error(`No 'github-pages' artifact found in run ${runId}. Available: ${names}`);
+            }
+            return artifact.archive_download_url;
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_url: ${{ steps.get-artifact.outputs.result }}
