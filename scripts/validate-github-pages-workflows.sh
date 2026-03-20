@@ -9,7 +9,7 @@ check_contains() {
   pattern=$2
   message=$3
 
-  if ! rg -Fq "$pattern" "$file"; then
+  if ! grep -Fq "$pattern" "$file"; then
     printf 'FAIL: %s\n' "$message"
     fail=1
   fi
@@ -20,7 +20,7 @@ check_not_contains() {
   pattern=$2
   message=$3
 
-  if rg -Fq "$pattern" "$file"; then
+  if grep -Fq "$pattern" "$file"; then
     printf 'FAIL: %s\n' "$message"
     fail=1
   fi
