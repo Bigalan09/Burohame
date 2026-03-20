@@ -425,7 +425,7 @@ function renderRack() {
 function renderSlot(i) {
   const slot = document.getElementById(`slot-${i}`);
   slot.innerHTML = '';
-  slot.classList.remove('used', 'dragging', 'hint-slot', 'unplayable');
+  slot.classList.remove('used', 'dragging', 'hint-slot', 'hint-slot-2', 'hint-slot-3', 'unplayable');
 
   if (used[i]) { slot.classList.add('used'); return; }
 
@@ -1085,13 +1085,15 @@ function showHint() {
   if (!sequence || sequence.length === 0) return;
 
   const hintClasses = ['hint-cell', 'hint-cell-2', 'hint-cell-3'];
+  const hintSlotClasses = ['hint-slot', 'hint-slot-2', 'hint-slot-3'];
   sequence.forEach((move, idx) => {
     const cls = hintClasses[idx] || 'hint-cell';
     for (const [dr, dc] of move.cells) {
       const el = cellEl(move.r + dr, move.c + dc);
       if (el) el.classList.add(cls);
     }
-    document.getElementById(`slot-${move.slotIdx}`).classList.add('hint-slot');
+    const slotCls = hintSlotClasses[idx] || 'hint-slot';
+    document.getElementById(`slot-${move.slotIdx}`).classList.add(slotCls);
   });
 
   const first = sequence[0];
@@ -1103,7 +1105,8 @@ function showHint() {
 function clearHint() {
   document.querySelectorAll('.hint-cell, .hint-cell-2, .hint-cell-3')
     .forEach(el => el.classList.remove('hint-cell', 'hint-cell-2', 'hint-cell-3'));
-  document.querySelectorAll('.hint-slot').forEach(el => el.classList.remove('hint-slot'));
+  document.querySelectorAll('.hint-slot, .hint-slot-2, .hint-slot-3')
+    .forEach(el => el.classList.remove('hint-slot', 'hint-slot-2', 'hint-slot-3'));
   if (hintActive) {
     document.getElementById('move-eval').textContent = '';
     hintActive = false;
@@ -1211,7 +1214,7 @@ function hideOverlay(id) {
 
 // ── Settings / overlays ────────────────────────────────────
 document.getElementById('btn-settings').addEventListener('click', () => {
-  document.getElementById('chk-training').checked = trainingMode;
+  document.getElementById('chk-coach').checked = trainingMode;
   document.getElementById('chk-extended').checked = extendedPieces;
   document.getElementById('chk-dark').checked = darkMode;
   document.getElementById('sel-color').value = colorSetting;
@@ -1222,7 +1225,7 @@ document.getElementById('btn-settings').addEventListener('click', () => {
 document.getElementById('btn-done').addEventListener('click', () => {
   const prev = trainingMode;
   const prevRackSize = rackSize;
-  trainingMode   = document.getElementById('chk-training').checked;
+  trainingMode   = document.getElementById('chk-coach').checked;
   extendedPieces = document.getElementById('chk-extended').checked;
   darkMode       = document.getElementById('chk-dark').checked;
   colorSetting   = document.getElementById('sel-color').value;
@@ -1234,7 +1237,7 @@ document.getElementById('btn-done').addEventListener('click', () => {
   saveSettings();
 
   hideOverlay('ov-settings');
-  document.getElementById('training-panel').hidden = !trainingMode;
+  document.getElementById('coach-panel').hidden = !trainingMode;
   if (trainingMode && !prev) updateTrainingPanel();
   if (!trainingMode) {
     clearHint();
@@ -1296,7 +1299,7 @@ function init() {
   applyDarkMode(darkMode);
   applyColor(colorSetting);
   applyExtendedPieces(extendedPieces);
-  document.getElementById('training-panel').hidden = !trainingMode;
+  document.getElementById('coach-panel').hidden = !trainingMode;
 
   // Follow OS dark-mode changes dynamically when the user hasn't set
   // an explicit preference (i.e. no saved 'dark' key in settings yet).
