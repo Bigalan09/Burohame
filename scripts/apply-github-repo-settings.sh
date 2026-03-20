@@ -63,11 +63,11 @@ for spec in \
 done
 
 try_step "Enable vulnerability alerts" \
-  sh -c 'gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$0/vulnerability-alerts" >/dev/null' "$repo"
+  sh -c 'gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$1/vulnerability-alerts" >/dev/null' _ "$repo"
 try_step "Enable automated security fixes" \
-  sh -c 'gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$0/automated-security-fixes" >/dev/null' "$repo"
+  sh -c 'gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$1/automated-security-fixes" >/dev/null' _ "$repo"
 try_step "Enable secret scanning" \
-  sh -c 'gh api --method PATCH -H "Accept: application/vnd.github+json" "repos/$0" --input - >/dev/null' "$repo" <<EOF
+  sh -c 'gh api --method PATCH -H "Accept: application/vnd.github+json" "repos/$1" --input - >/dev/null' _ "$repo" <<EOF
 {
   "security_and_analysis": {
     "secret_scanning": {
