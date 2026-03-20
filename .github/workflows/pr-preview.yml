@@ -31,7 +31,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
