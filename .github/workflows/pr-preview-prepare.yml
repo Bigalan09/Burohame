@@ -1,0 +1,46 @@
+name: PR Preview (Prepare)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-preview-prepare-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    # Only run for same-repo PRs; fork PRs get a read-only token that cannot
+    # write to gh-pages or post comments.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Deploy PR preview
+        uses: rossjrw/pr-preview-action@v1.8.1
+        with:
+          source-dir: .
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+
+      - name: Checkout gh-pages for deployment
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: _deploy
+
+      - name: Remove git metadata from deployment content
+        run: rm -rf _deploy/.git
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _deploy
