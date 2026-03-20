@@ -63,11 +63,11 @@ for spec in \
 done
 
 try_step "Enable vulnerability alerts" \
-  gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$repo/vulnerability-alerts"
+  sh -c 'gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$0/vulnerability-alerts" >/dev/null' "$repo"
 try_step "Enable automated security fixes" \
-  gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$repo/automated-security-fixes"
+  sh -c 'gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$0/automated-security-fixes" >/dev/null' "$repo"
 try_step "Enable secret scanning" \
-  gh api --method PATCH -H "Accept: application/vnd.github+json" "repos/$repo" --input - <<EOF
+  sh -c 'gh api --method PATCH -H "Accept: application/vnd.github+json" "repos/$0" --input - >/dev/null' "$repo" <<EOF
 {
   "security_and_analysis": {
     "secret_scanning": {
@@ -109,19 +109,10 @@ gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$repo/branch
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
-    "dismissal_restrictions": {
-      "users": [],
-      "teams": []
-    },
     "dismiss_stale_reviews": true,
     "require_code_owner_reviews": false,
     "required_approving_review_count": 1,
-    "require_last_push_approval": false,
-    "bypass_pull_request_allowances": {
-      "users": [],
-      "teams": [],
-      "apps": []
-    }
+    "require_last_push_approval": false
   },
   "restrictions": null,
   "required_linear_history": true,
