@@ -25,3 +25,4 @@ chmod +x "$fake_bin/rg"
 
 PATH="$fake_bin:/usr/bin:/bin" sh scripts/validate-static-site.sh
 PATH="$fake_bin:/usr/bin:/bin" sh scripts/validate-github-pages-workflows.sh
+PATH="$fake_bin:/usr/bin:/bin" sh scripts/validate-game-ui.sh

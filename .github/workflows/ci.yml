@@ -22,6 +22,9 @@ jobs:
       - name: Validate Pages workflows
         run: sh scripts/validate-github-pages-workflows.sh
 
+      - name: Validate game UI contract
+        run: sh scripts/validate-game-ui.sh
+
       - name: Validate scripts without ripgrep
         run: sh scripts/test-validation-portability.sh
 
