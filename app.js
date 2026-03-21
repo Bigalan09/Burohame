@@ -179,6 +179,7 @@ let colorSetting = 'orange';   // 'orange','blue','green','purple','red','teal',
 let rackSize     = 3;          // number of pieces shown in the rack (1–3)
 let progressionState = null;
 let coinToastOffset = 0;
+let runSummary = null;
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
@@ -192,6 +193,38 @@ const COIN_REWARDS = Object.freeze({
   endRunPer50Score: 1,
   personalBestBonus: 15,
 });
+const RUN_OBJECTIVES = Object.freeze([
+  {
+    id: 'first-clear',
+    label: 'First clear',
+    description: 'Clear at least one region during the run.',
+    isComplete: summary => summary.stats.regionsCleared >= 1,
+  },
+  {
+    id: 'combo-builder',
+    label: 'Combo builder',
+    description: 'Reach a 3× combo or better.',
+    isComplete: summary => summary.stats.maxCombo >= 3,
+  },
+  {
+    id: 'rack-runner',
+    label: 'Rack runner',
+    description: 'Finish two full racks in one run.',
+    isComplete: summary => summary.stats.racksCompleted >= 2,
+  },
+  {
+    id: 'centurion',
+    label: 'Centurion',
+    description: 'Score 100 points or more.',
+    isComplete: summary => summary.finalScore >= 100,
+  },
+  {
+    id: 'personal-best',
+    label: 'Personal best',
+    description: 'Beat your previous best score.',
+    isComplete: summary => summary.stats.personalBest,
+  },
+]);
 
 function clampWholeNumber(value, fallback) {
   return Number.isInteger(value) && value >= 0 ? value : fallback;
@@ -280,6 +313,75 @@ function sanitiseProgressionState(rawState) {
   };
 }
 
+function createDefaultRunSummary() {
+  return {
+    finalScore: 0,
+    coinsEarned: 0,
+    completedObjectiveIds: [],
+    stats: {
+      regionsCleared: 0,
+      maxCombo: 0,
+      racksCompleted: 0,
+      personalBest: false,
+    },
+  };
+}
+
+function ensureRunSummary() {
+  if (!runSummary) runSummary = createDefaultRunSummary();
+  return runSummary;
+}
+
+function recordRunObjective(objectiveId) {
+  const summary = ensureRunSummary();
+  if (!summary.completedObjectiveIds.includes(objectiveId)) {
+    summary.completedObjectiveIds.push(objectiveId);
+  }
+}
+
+function evaluateRunObjectives() {
+  const summary = ensureRunSummary();
+  summary.finalScore = score;
+
+  for (const objective of RUN_OBJECTIVES) {
+    if (objective.isComplete(summary)) recordRunObjective(objective.id);
+  }
+}
+
+function getCompletedRunObjectives() {
+  const summary = ensureRunSummary();
+  return RUN_OBJECTIVES.filter(objective => summary.completedObjectiveIds.includes(objective.id));
+}
+
+function renderGameOverSummary() {
+  const summary = ensureRunSummary();
+  const objectives = getCompletedRunObjectives();
+  const objectivesList = document.getElementById('go-objectives-list');
+  const objectiveCount = document.getElementById('go-objective-count');
+
+  document.getElementById('go-score').textContent = String(summary.finalScore);
+  document.getElementById('go-best').textContent = String(bestScore);
+  document.getElementById('go-coins-earned').textContent = `+${summary.coinsEarned}`;
+  document.getElementById('go-coin-total').textContent = String(getCoinBalance());
+  objectiveCount.textContent = objectives.length === 1 ? '1 cleared' : `${objectives.length} cleared`;
+
+  objectivesList.innerHTML = '';
+  if (!objectives.length) {
+    const emptyItem = document.createElement('li');
+    emptyItem.className = 'run-objective run-objective--empty';
+    emptyItem.textContent = 'No objectives completed this run. Your next run can still earn coins and milestones.';
+    objectivesList.appendChild(emptyItem);
+    return;
+  }
+
+  for (const objective of objectives) {
+    const item = document.createElement('li');
+    item.className = 'run-objective';
+    item.innerHTML = `<strong>${objective.label}</strong><span>${objective.description}</span>`;
+    objectivesList.appendChild(item);
+  }
+}
+
 function saveProgressionState() {
   localStorage.setItem(PROGRESSION_STORAGE_KEY, JSON.stringify(progressionState));
 }
@@ -327,6 +429,10 @@ function awardCoins(amount, reason, options = {}) {
     state.coins.lifetimeEarned += wholeAmount;
     return state;
   });
+
+  if (!options.excludeFromRunSummary) {
+    ensureRunSummary().coinsEarned += wholeAmount;
+  }
 
   updateCoinUI();
   if (!options.silent) showCoinToast(wholeAmount, reason);
@@ -947,6 +1053,7 @@ function doPlace(slotIdx, row, col) {
 
   // Check clears
   const cleared = doClears();
+  evaluateRunObjectives();
 
   if (cleared.size) {
     showPointsPopup(cleared.size);
@@ -1014,6 +1121,9 @@ function doClears() {
   combo += total;   // combo grows by every region cleared in this move
   pts += combo * 5;
   score += pts;
+  const summary = ensureRunSummary();
+  summary.stats.regionsCleared += total;
+  summary.stats.maxCombo = Math.max(summary.stats.maxCombo, combo);
 
   const clearCoins = calculateClearCoinReward(total, combo);
   awardCoins(clearCoins, clearRewardLabel(total, combo));
@@ -1106,6 +1216,7 @@ function isGameOver() {
 }
 
 function triggerGameOver() {
+  if (gameOver) return;
   gameOver = true;
 
   const isNewBest = score > bestScore;
@@ -1116,17 +1227,18 @@ function triggerGameOver() {
 
   awardCoins(calculateEndRunCoinReward(score), 'Run complete');
   if (isNewBest) awardCoins(COIN_REWARDS.personalBestBonus, 'New best');
+  ensureRunSummary().stats.personalBest = isNewBest;
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const td = JSON.parse(localStorage.getItem('bst-today') || '{"d":"","s":0}');
   todayScore = (td.d === todayKey) ? Math.max(td.s, score) : score;
   localStorage.setItem('bst-today', JSON.stringify({ d: todayKey, s: todayScore }));
   updateScoreUI();
+  evaluateRunObjectives();
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
-    document.getElementById('go-score').textContent = `Score: ${score}`;
-    document.getElementById('go-best').textContent  = `Best: ${bestScore}`;
+    renderGameOverSummary();
     showOverlay('ov-gameover');
   });
 }
@@ -1164,7 +1276,9 @@ function showChooseCarefullyMsg() {
 
 // ── New round / restart ────────────────────────────────────
 function newRound() {
+  ensureRunSummary().stats.racksCompleted += 1;
   awardCoins(COIN_REWARDS.roundCompletion, 'Rack complete');
+  evaluateRunObjectives();
 
   used    = Array(rackSize).fill(false);
   pieces  = smartPieces();
@@ -1184,6 +1298,7 @@ function startNewGame() {
   combo    = 0;
   gameOver = false;
   coinToastOffset = 0;
+  runSummary = createDefaultRunSummary();
   used     = Array(rackSize).fill(false);
   pieces   = smartPieces();
 

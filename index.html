@@ -121,11 +121,35 @@
 
     <!-- Game-over overlay -->
     <div id="ov-gameover" class="overlay" hidden>
-      <div class="ov-card">
+      <div class="ov-card ov-card--summary">
         <h2>Game Over</h2>
-        <p id="go-score"></p>
-        <p id="go-best"></p>
-        <button class="pill-btn wide" id="btn-new">New Game</button>
+        <p class="summary-intro">Your run rewards are ready.</p>
+        <div class="run-summary" aria-label="Run rewards summary">
+          <div class="summary-stat summary-stat--score">
+            <span class="summary-label">Score</span>
+            <strong id="go-score">0</strong>
+          </div>
+          <div class="summary-stat">
+            <span class="summary-label">Best</span>
+            <strong id="go-best">0</strong>
+          </div>
+          <div class="summary-stat summary-stat--coins">
+            <span class="summary-label">Coins this run</span>
+            <strong id="go-coins-earned">0</strong>
+          </div>
+          <div class="summary-stat">
+            <span class="summary-label">Total coins</span>
+            <strong id="go-coin-total">0</strong>
+          </div>
+        </div>
+        <section class="run-objectives" aria-labelledby="go-objectives-title">
+          <div class="run-objectives__header">
+            <h3 id="go-objectives-title">Completed objectives</h3>
+            <span id="go-objective-count" class="run-objectives__count">0 cleared</span>
+          </div>
+          <ul id="go-objectives-list" class="run-objectives__list"></ul>
+        </section>
+        <button class="pill-btn wide summary-primary-btn" id="btn-new">Start next run</button>
       </div>
     </div>
 
