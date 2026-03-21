@@ -177,8 +177,126 @@ let extendedPieces = false;
 let darkMode     = false;
 let colorSetting = 'orange';   // 'orange','blue','green','purple','red','teal','pink','random'
 let rackSize     = 3;          // number of pieces shown in the rack (1–3)
+let progressionState = null;
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
+const PROGRESSION_STORAGE_KEY = 'bst-progression';
+const PROGRESSION_STATE_VERSION = 1;
+
+function clampWholeNumber(value, fallback) {
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+function uniqueStringList(value, fallback) {
+  if (!Array.isArray(value)) return fallback.slice();
+  return [...new Set(value.filter(item => typeof item === 'string' && item.trim() !== ''))];
+}
+
+function createDefaultProgressionState() {
+  return {
+    version: PROGRESSION_STATE_VERSION,
+    coins: {
+      balance: 0,
+      lifetimeEarned: 0,
+      lifetimeSpent: 0,
+    },
+    unlocks: {
+      equippedTheme: 'classic',
+      ownedThemes: ['classic'],
+      seenRewardIds: [],
+    },
+    dailyMissions: {
+      date: '',
+      missions: [],
+      completedIds: [],
+      claimedIds: [],
+      refreshCount: 0,
+    },
+    streak: {
+      current: 0,
+      best: 0,
+      lastActiveDate: '',
+      lastRewardDate: '',
+      freezes: 0,
+    },
+  };
+}
+
+function sanitiseMissionState(value) {
+  const src = value && typeof value === 'object' ? value : {};
+  return {
+    date: typeof src.date === 'string' ? src.date : '',
+    missions: Array.isArray(src.missions) ? src.missions : [],
+    completedIds: uniqueStringList(src.completedIds, []),
+    claimedIds: uniqueStringList(src.claimedIds, []),
+    refreshCount: clampWholeNumber(src.refreshCount, 0),
+  };
+}
+
+function sanitiseProgressionState(rawState) {
+  const defaults = createDefaultProgressionState();
+  const src = rawState && typeof rawState === 'object' ? rawState : {};
+  const coins = src.coins && typeof src.coins === 'object' ? src.coins : {};
+  const unlocks = src.unlocks && typeof src.unlocks === 'object' ? src.unlocks : {};
+  const streak = src.streak && typeof src.streak === 'object' ? src.streak : {};
+  const ownedThemes = (() => {
+    const owned = uniqueStringList(unlocks.ownedThemes, defaults.unlocks.ownedThemes);
+    return owned.includes('classic') ? owned : ['classic', ...owned];
+  })();
+  const equippedTheme = typeof unlocks.equippedTheme === 'string' && unlocks.equippedTheme.trim() !== ''
+    ? unlocks.equippedTheme
+    : defaults.unlocks.equippedTheme;
+
+  return {
+    version: PROGRESSION_STATE_VERSION,
+    coins: {
+      balance: clampWholeNumber(coins.balance, defaults.coins.balance),
+      lifetimeEarned: clampWholeNumber(coins.lifetimeEarned, defaults.coins.lifetimeEarned),
+      lifetimeSpent: clampWholeNumber(coins.lifetimeSpent, defaults.coins.lifetimeSpent),
+    },
+    unlocks: {
+      equippedTheme: ownedThemes.includes(equippedTheme) ? equippedTheme : defaults.unlocks.equippedTheme,
+      ownedThemes,
+      seenRewardIds: uniqueStringList(unlocks.seenRewardIds, defaults.unlocks.seenRewardIds),
+    },
+    dailyMissions: sanitiseMissionState(src.dailyMissions),
+    streak: {
+      current: clampWholeNumber(streak.current, defaults.streak.current),
+      best: clampWholeNumber(streak.best, defaults.streak.best),
+      lastActiveDate: typeof streak.lastActiveDate === 'string' ? streak.lastActiveDate : '',
+      lastRewardDate: typeof streak.lastRewardDate === 'string' ? streak.lastRewardDate : '',
+      freezes: clampWholeNumber(streak.freezes, defaults.streak.freezes),
+    },
+  };
+}
+
+function saveProgressionState() {
+  localStorage.setItem(PROGRESSION_STORAGE_KEY, JSON.stringify(progressionState));
+}
+
+function loadProgressionState() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PROGRESSION_STORAGE_KEY) || 'null');
+    progressionState = sanitiseProgressionState(raw);
+  } catch (_) {
+    progressionState = createDefaultProgressionState();
+  }
+
+  saveProgressionState();
+}
+
+function updateProgressionState(updater) {
+  const draft = sanitiseProgressionState(progressionState);
+  const next = typeof updater === 'function' ? updater(draft) : draft;
+  progressionState = sanitiseProgressionState(next || draft);
+  saveProgressionState();
+  return progressionState;
+}
+
+function resetProgressionState() {
+  progressionState = createDefaultProgressionState();
+  saveProgressionState();
+}
 
 // ── Piece helpers ──────────────────────────────────────────
 function bounds(cells) {
@@ -1362,6 +1480,8 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   localStorage.removeItem('bst-best');
   localStorage.removeItem('bst-today');
   localStorage.removeItem('bst-settings');
+  localStorage.removeItem(PROGRESSION_STORAGE_KEY);
+  progressionState = createDefaultProgressionState();
 
   // Unregister service workers so new assets are fetched on next load
   if ('serviceWorker' in navigator) {
@@ -1398,6 +1518,7 @@ function init() {
   const td   = JSON.parse(localStorage.getItem('bst-today') || '{"d":"","s":0}');
   todayScore = (td.d === todayKey) ? td.s : 0;
 
+  loadProgressionState();
   loadSettings();
   applyDarkMode(darkMode);
   applyColor(colorSetting);
