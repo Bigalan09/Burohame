@@ -8,16 +8,22 @@
 // Each entry is an array of [row, col] offsets.
 // All pieces normalised: minRow = 0, minCol = 0.
 
-// Extended set – all 47 canonical pieces (current full set)
+// Extended set – all 51 canonical pieces (current full set)
 const PIECE_DEFS_EXTENDED = [
   // 1-cell
   [[0,0]],
   // Dominoes
   [[0,0],[0,1]],
   [[0,0],[1,0]],
+  // Diagonal dominoes (2-block diagonal)
+  [[0,0],[1,1]],
+  [[0,1],[1,0]],
   // Straight trominoes
   [[0,0],[0,1],[0,2]],
   [[0,0],[1,0],[2,0]],
+  // Diagonal trominoes (3-block diagonal)
+  [[0,0],[1,1],[2,2]],
+  [[0,2],[1,1],[2,0]],
   // Corner trominoes (2 canonical forms)
   [[0,0],[0,1],[1,0]],
   [[0,0],[1,0],[1,1]],
@@ -93,9 +99,15 @@ const PIECE_DEFS_STANDARD = [
   // Dominoes
   [[0,0],[0,1]],
   [[0,0],[1,0]],
+  // Diagonal dominoes (2-block diagonal)
+  [[0,0],[1,1]],
+  [[0,1],[1,0]],
   // Straight trominoes
   [[0,0],[0,1],[0,2]],
   [[0,0],[1,0],[2,0]],
+  // Diagonal trominoes (3-block diagonal)
+  [[0,0],[1,1],[2,2]],
+  [[0,2],[1,1],[2,0]],
   // Corner trominoes (2 canonical forms)
   [[0,0],[0,1],[1,0]],
   [[0,0],[1,0],[1,1]],
