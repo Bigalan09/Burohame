@@ -192,7 +192,7 @@ let dailyChallengeState = {
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 3;
+const PROGRESSION_STATE_VERSION = 4;
 const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
@@ -259,6 +259,78 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     description: 'Complete 3 runs today.',
   },
 ]);
+const COLORWAY_CATALOGUE = Object.freeze([
+  {
+    id: 'orange',
+    name: 'Orange Glow',
+    description: 'The original warm arcade tone.',
+    price: 0,
+    icon: '🟠',
+    swatches: ['#ffd08a', '#ff9500', '#e07800'],
+  },
+  {
+    id: 'blue',
+    name: 'Blue Tide',
+    description: 'Cool focus with a crisp electric edge.',
+    price: 35,
+    icon: '🔵',
+    swatches: ['#9fd3ff', '#007aff', '#005ec4'],
+  },
+  {
+    id: 'green',
+    name: 'Green Grove',
+    description: 'A calmer board feel with fresh contrast.',
+    price: 35,
+    icon: '🟢',
+    swatches: ['#a7efbc', '#34c759', '#248a3d'],
+  },
+  {
+    id: 'purple',
+    name: 'Purple Pulse',
+    description: 'A richer palette for streak-chasing sessions.',
+    price: 45,
+    icon: '🟣',
+    swatches: ['#d6aef2', '#af52de', '#8944ab'],
+  },
+  {
+    id: 'red',
+    name: 'Red Rally',
+    description: 'A bolder tone when you want a sharper board.',
+    price: 45,
+    icon: '🔴',
+    swatches: ['#ff9b94', '#ff3b30', '#d4264a'],
+  },
+  {
+    id: 'teal',
+    name: 'Teal Drift',
+    description: 'Bright sea-glass highlights with softer depth.',
+    price: 55,
+    icon: '💎',
+    swatches: ['#b8efff', '#5ac8fa', '#3aabd6'],
+  },
+  {
+    id: 'pink',
+    name: 'Pink Pop',
+    description: 'Playful contrast without losing clarity.',
+    price: 55,
+    icon: '💗',
+    swatches: ['#ffb1c3', '#ff2d55', '#d4264a'],
+  },
+  {
+    id: 'random',
+    name: 'Shuffle Glow',
+    description: 'Swap to a fresh unlocked colour every rack.',
+    price: 90,
+    icon: '🎲',
+    swatches: ['#ffd08a', '#5ac8fa', '#af52de'],
+  },
+]);
+const COLORWAY_LOOKUP = Object.freeze(
+  COLORWAY_CATALOGUE.reduce((acc, colorway) => {
+    acc[colorway.id] = colorway;
+    return acc;
+  }, {})
+);
 const COSMETIC_CATALOGUE = Object.freeze({
   blockSkins: [
     {
@@ -284,6 +356,24 @@ const COSMETIC_CATALOGUE = Object.freeze({
       name: 'Prism',
       description: 'A brighter faceted shine for high-score chasers.',
       price: 170,
+    },
+    {
+      id: 'velvet',
+      name: 'Velvet',
+      description: 'A softer matte finish with rounded edges.',
+      price: 140,
+    },
+    {
+      id: 'frost',
+      name: 'Frost',
+      description: 'Cool highlights and lighter faces for clean boards.',
+      price: 190,
+    },
+    {
+      id: 'ember',
+      name: 'Ember',
+      description: 'Deeper shadows and hotter highlights for tense runs.',
+      price: 230,
     },
   ],
 });
@@ -460,6 +550,7 @@ function createDefaultProgressionState() {
     cosmetics: {
       equippedBlockSkin: 'classic',
       ownedBlockSkins: ['classic'],
+      ownedColorways: ['orange'],
     },
     dailyMissions: {
       date: '',
@@ -530,6 +621,9 @@ function sanitiseProgressionState(rawState) {
   const ownedBlockSkins = uniqueStringList(cosmetics.ownedBlockSkins, defaults.cosmetics.ownedBlockSkins)
     .filter(id => BLOCK_SKIN_LOOKUP[id]);
   if (!ownedBlockSkins.includes('classic')) ownedBlockSkins.unshift('classic');
+  const ownedColorways = uniqueStringList(cosmetics.ownedColorways, defaults.cosmetics.ownedColorways)
+    .filter(id => COLORWAY_LOOKUP[id]);
+  if (!ownedColorways.includes('orange')) ownedColorways.unshift('orange');
   const equippedTheme = typeof unlocks.equippedTheme === 'string' && unlocks.equippedTheme.trim() !== ''
     ? unlocks.equippedTheme
     : defaults.unlocks.equippedTheme;
@@ -554,6 +648,7 @@ function sanitiseProgressionState(rawState) {
     cosmetics: {
       equippedBlockSkin,
       ownedBlockSkins,
+      ownedColorways,
     },
     dailyMissions: sanitiseMissionState(src.dailyMissions),
     dailyChallenge: sanitiseDailyChallengeState(src.dailyChallenge),
@@ -763,12 +858,40 @@ function getOwnedBlockSkins() {
   return progressionState?.cosmetics?.ownedBlockSkins || ['classic'];
 }
 
+function getOwnedColorways() {
+  return progressionState?.cosmetics?.ownedColorways || ['orange'];
+}
+
 function getEquippedBlockSkin() {
   return progressionState?.cosmetics?.equippedBlockSkin || 'classic';
 }
 
 function isBlockSkinOwned(skinId) {
   return getOwnedBlockSkins().includes(skinId);
+}
+
+function isColorwayOwned(colorId) {
+  return getOwnedColorways().includes(colorId);
+}
+
+function sanitiseColorSetting(value) {
+  return COLORWAY_LOOKUP[value] ? value : 'orange';
+}
+
+function ensureSelectedColorway(options = {}) {
+  colorSetting = sanitiseColorSetting(colorSetting);
+  if (isColorwayOwned(colorSetting)) return false;
+  if (options.preserveLegacy) {
+    updateProgressionState(state => {
+      if (!state.cosmetics.ownedColorways.includes(colorSetting)) {
+        state.cosmetics.ownedColorways.push(colorSetting);
+      }
+      return state;
+    });
+    return true;
+  }
+  colorSetting = 'orange';
+  return false;
 }
 
 function updateCosmeticLabel() {
@@ -783,6 +906,12 @@ function updateCosmeticLabel() {
 
   const dashboardFinish = document.getElementById('dashboard-finish');
   if (dashboardFinish) dashboardFinish.textContent = skin.name;
+
+  const colourNote = document.getElementById('page-colour-note');
+  if (colourNote) {
+    const owned = getOwnedColorways().length;
+    colourNote.textContent = `${owned}/${COLORWAY_CATALOGUE.length} colourways owned. Unlock more in the shop.`;
+  }
 }
 
 function applyEquippedCosmeticSkin() {
@@ -821,6 +950,40 @@ function spendCoins(amount, reason) {
 
   updateCoinUI();
   showCoinToast(-wholeAmount, reason, { spend: true });
+  return true;
+}
+
+function unlockColorway(colorId) {
+  const colorway = COLORWAY_LOOKUP[colorId];
+  if (!colorway || isColorwayOwned(colorId)) return true;
+  if (!spendCoins(colorway.price, `${colorway.name} unlocked`)) return false;
+
+  updateProgressionState(state => {
+    if (!state.cosmetics.ownedColorways.includes(colorId)) {
+      state.cosmetics.ownedColorways.push(colorId);
+    }
+    return state;
+  });
+
+  showMilestoneMoment({
+    eyebrow: 'New colourway',
+    title: `${colorway.name} unlocked`,
+    detail: 'It can be equipped straight away for future racks.',
+    major: false,
+    anchor: '.page-panel--shop',
+    announce: `${colorway.name} colourway unlocked.`,
+  });
+  updateCosmeticLabel();
+  return true;
+}
+
+function equipColorway(colorId) {
+  if (!isColorwayOwned(colorId) || !COLORWAY_LOOKUP[colorId]) return false;
+  colorSetting = colorId;
+  applyColor(colorSetting);
+  saveSettings();
+  populateSettingsPage();
+  renderDashboard();
   return true;
 }
 
@@ -1166,18 +1329,70 @@ function getCollectionSubtitle() {
   return `${ownedCount}/${totalCount} finishes owned.`;
 }
 
+function getColorwaySubtitle() {
+  const ownedCount = getOwnedColorways().length;
+  const totalCount = COLORWAY_CATALOGUE.length;
+  if (ownedCount === totalCount) return 'Every colourway is unlocked and ready to equip.';
+  return `${ownedCount}/${totalCount} colourways owned.`;
+}
+
+function getShopActionMarkup({ owned, equipped, canAfford, price, itemId, collection }) {
+  if (equipped) {
+    return '<button class="pill-btn pill-btn--secondary" type="button" disabled>Equipped</button>';
+  }
+  if (owned) {
+    return `<button class="pill-btn pill-btn--secondary" type="button" data-action="equip" data-item-id="${itemId}" data-collection="${collection}">Equip</button>`;
+  }
+  return `<button class="pill-btn${canAfford ? '' : ' pill-btn--secondary'}" type="button" data-action="unlock" data-item-id="${itemId}" data-collection="${collection}" ${canAfford ? '' : 'disabled'}>Unlock · 🪙 ${price}</button>`;
+}
+
 function renderCosmeticsCollection() {
-  const list = document.getElementById('collection-list');
+  const finishList = document.getElementById('collection-list');
+  const colorwayList = document.getElementById('colorway-list');
   const balance = document.getElementById('collection-balance');
-  const subtitle = document.getElementById('collection-subtitle');
-  if (!list || !balance || !subtitle) return;
+  const finishSubtitle = document.getElementById('collection-subtitle');
+  const colorwaySubtitle = document.getElementById('colorway-subtitle');
+  if (!finishList || !colorwayList || !balance || !finishSubtitle || !colorwaySubtitle) return;
 
   const coinBalance = getCoinBalance();
   const equippedSkin = getEquippedBlockSkin();
   balance.textContent = `🪙 ${coinBalance}`;
-  subtitle.textContent = getCollectionSubtitle();
+  finishSubtitle.textContent = getCollectionSubtitle();
+  colorwaySubtitle.textContent = getColorwaySubtitle();
 
-  list.innerHTML = '';
+  colorwayList.innerHTML = '';
+  for (const colorway of COLORWAY_CATALOGUE) {
+    const owned = isColorwayOwned(colorway.id);
+    const equipped = colorSetting === colorway.id;
+    const canAfford = coinBalance >= colorway.price;
+    const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    const costLabel = colorway.price ? `🪙 ${colorway.price}` : 'Free';
+    const card = document.createElement('article');
+    card.className = 'cosmetic-card cosmetic-card--colorway';
+    card.dataset.colorway = colorway.id;
+    if (equipped) card.classList.add('cosmetic-card--equipped');
+    if (!owned) card.classList.add('cosmetic-card--locked');
+
+    const swatches = colorway.swatches.map(swatch => `<span class="cosmetic-card__tile" style="--swatch:${swatch}"></span>`).join('');
+    const label = `${colorway.icon} ${colorway.name}`;
+    card.innerHTML = `
+      <div class="cosmetic-card__preview" aria-hidden="true">${swatches}</div>
+      <div class="cosmetic-card__body">
+        <h3>${label}</h3>
+        <p>${colorway.description}</p>
+        <div class="cosmetic-card__footer">
+          <div class="cosmetic-card__meta">
+            <strong>${status}</strong>
+            <span>${costLabel}</span>
+          </div>
+          ${getShopActionMarkup({ owned, equipped, canAfford, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
+        </div>
+      </div>
+    `;
+    colorwayList.appendChild(card);
+  }
+
+  finishList.innerHTML = '';
   for (const skin of COSMETIC_CATALOGUE.blockSkins) {
     const owned = isBlockSkinOwned(skin.id);
     const equipped = equippedSkin === skin.id;
@@ -1190,14 +1405,6 @@ function renderCosmeticsCollection() {
 
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
     const costLabel = skin.price ? `🪙 ${skin.price}` : 'Free';
-    let actionMarkup = '';
-    if (equipped) {
-      actionMarkup = '<button class="pill-btn pill-btn--secondary" type="button" disabled>Equipped</button>';
-    } else if (owned) {
-      actionMarkup = `<button class="pill-btn pill-btn--secondary" type="button" data-action="equip" data-skin-id="${skin.id}">Equip</button>`;
-    } else {
-      actionMarkup = `<button class="pill-btn${canAfford ? '' : ' pill-btn--secondary'}" type="button" data-action="unlock" data-skin-id="${skin.id}" ${canAfford ? '' : 'disabled'}>Unlock · 🪙 ${skin.price}</button>`;
-    }
 
     card.innerHTML = `
       <div class="cosmetic-card__preview" aria-hidden="true">
@@ -1213,12 +1420,12 @@ function renderCosmeticsCollection() {
             <strong>${status}</strong>
             <span>${costLabel}</span>
           </div>
-          ${actionMarkup}
+          ${getShopActionMarkup({ owned, equipped, canAfford, price: skin.price, itemId: skin.id, collection: 'finish' })}
         </div>
       </div>
     `;
 
-    list.appendChild(card);
+    finishList.appendChild(card);
   }
 }
 
@@ -1507,7 +1714,9 @@ function smartPieces() {
 // ── Colour / theme helpers ─────────────────────────────────
 function applyColor(name) {
   if (name === 'random') {
-    const pick = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+    const ownedPool = getOwnedColorways().filter(id => id !== 'random' && COLOR_NAMES.includes(id));
+    const palette = ownedPool.length ? ownedPool : ['orange'];
+    const pick = palette[Math.floor(Math.random() * palette.length)];
     document.documentElement.dataset.color = pick;
   } else {
     document.documentElement.dataset.color = name;
@@ -1539,7 +1748,7 @@ function loadSettings() {
     const s = JSON.parse(localStorage.getItem('bst-settings') || '{}');
     if (typeof s.training === 'boolean')  trainingMode   = s.training;
     if (typeof s.extended === 'boolean')  extendedPieces = s.extended;
-    if (typeof s.color === 'string')      colorSetting   = s.color;
+    if (typeof s.color === 'string')      colorSetting   = sanitiseColorSetting(s.color);
     if (typeof s.rackSize === 'number' && s.rackSize >= 1 && s.rackSize <= 3)
       rackSize = s.rackSize;
     // Respect saved dark preference; fall back to OS preference on first launch
@@ -1778,7 +1987,17 @@ function populateSettingsPage() {
   document.getElementById('page-chk-coach').checked = trainingMode;
   document.getElementById('page-chk-extended').checked = extendedPieces;
   document.getElementById('page-chk-dark').checked = darkMode;
-  document.getElementById('page-sel-color').value = colorSetting;
+
+  const colorSelect = document.getElementById('page-sel-color');
+  colorSelect.innerHTML = '';
+  for (const colorway of COLORWAY_CATALOGUE) {
+    const option = document.createElement('option');
+    option.value = colorway.id;
+    option.textContent = `${colorway.icon} ${colorway.name}${isColorwayOwned(colorway.id) ? '' : ' · shop unlock'}`;
+    option.disabled = !isColorwayOwned(colorway.id);
+    colorSelect.appendChild(option);
+  }
+  colorSelect.value = isColorwayOwned(colorSetting) ? colorSetting : 'orange';
   document.getElementById('page-sel-rack').value = String(rackSize);
   updateCosmeticLabel();
 }
@@ -1900,11 +2119,12 @@ function renderSlot(i) {
 
   slot.appendChild(inner);
 
-  // Slot number label — helps players match hint text ("play slot 2 first") to the rack
-  const label = document.createElement('span');
-  label.className = 'slot-label';
-  label.textContent = String(i + 1);
-  slot.appendChild(label);
+  if (trainingMode) {
+    const label = document.createElement('span');
+    label.className = 'slot-label';
+    label.textContent = String(i + 1);
+    slot.appendChild(label);
+  }
 
   attachDragListeners(slot, i);
 }
@@ -2759,7 +2979,8 @@ function applySettingsState(nextSettings) {
   trainingMode = nextSettings.trainingMode;
   extendedPieces = nextSettings.extendedPieces;
   darkMode = nextSettings.darkMode;
-  colorSetting = nextSettings.colorSetting;
+  const requestedColor = sanitiseColorSetting(nextSettings.colorSetting);
+  colorSetting = isColorwayOwned(requestedColor) ? requestedColor : colorSetting;
   rackSize = nextSettings.rackSize;
 
   applyDarkMode(darkMode);
@@ -2768,6 +2989,8 @@ function applySettingsState(nextSettings) {
   saveSettings();
 
   document.getElementById('coach-panel').hidden = !trainingMode;
+  renderRack();
+  updateRackPlayability();
   if (trainingMode && !prevTraining) updateTrainingPanel();
   if (!trainingMode) {
     clearHint();
@@ -2843,33 +3066,50 @@ document.getElementById('btn-missions-close').addEventListener('click', () => {
   hideOverlay('ov-missions');
 });
 
-document.getElementById('collection-list').addEventListener('click', event => {
+function handleShopAction(event) {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
 
   const action = button.dataset.action;
-  const skinId = button.dataset.skinId;
-  if (!skinId) return;
+  const itemId = button.dataset.itemId;
+  const collection = button.dataset.collection;
+  if (!itemId || !collection) return;
 
-  if (action === 'unlock') {
-    if (!unlockBlockSkin(skinId)) return;
-    equipBlockSkin(skinId);
-  } else if (action === 'equip') {
-    equipBlockSkin(skinId);
+  if (collection === 'colorway') {
+    if (action === 'unlock') {
+      if (!unlockColorway(itemId)) return;
+      equipColorway(itemId);
+    } else if (action === 'equip') {
+      equipColorway(itemId);
+    } else {
+      return;
+    }
+  } else if (collection === 'finish') {
+    if (action === 'unlock') {
+      if (!unlockBlockSkin(itemId)) return;
+      equipBlockSkin(itemId);
+    } else if (action === 'equip') {
+      equipBlockSkin(itemId);
+    } else {
+      return;
+    }
   } else {
     return;
   }
 
   renderCosmeticsCollection();
   renderDashboard();
-});
+}
+
+document.getElementById('collection-list').addEventListener('click', handleShopAction);
+document.getElementById('colorway-list').addEventListener('click', handleShopAction);
 
 document.getElementById('btn-settings-save').addEventListener('click', () => {
   applySettingsState({
     trainingMode: document.getElementById('page-chk-coach').checked,
     extendedPieces: document.getElementById('page-chk-extended').checked,
     darkMode: document.getElementById('page-chk-dark').checked,
-    colorSetting: document.getElementById('page-sel-color').value,
+    colorSetting: sanitiseColorSetting(document.getElementById('page-sel-color').value),
     rackSize: parseInt(document.getElementById('page-sel-rack').value, 10),
   });
   navigateTo('dashboard');
@@ -2939,6 +3179,7 @@ function init() {
   updateCoinUI();
   applyEquippedCosmeticSkin();
   loadSettings();
+  ensureSelectedColorway({ preserveLegacy: true });
   applyDarkMode(darkMode);
   applyColor(colorSetting);
   applyExtendedPieces(extendedPieces);

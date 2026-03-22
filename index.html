@@ -142,9 +142,20 @@
           <div>
             <p class="page-kicker">Collection</p>
             <h2>Shop</h2>
-            <p class="page-intro">Unlock finishes and equip one for your next run.</p>
+            <p class="page-intro">Spend coins on colourways and finishes, then equip your favourites for the next run.</p>
           </div>
         </header>
+
+        <div class="page-panel page-panel--shop">
+          <div class="collection-head">
+            <div>
+              <h3>Colourways</h3>
+              <p id="colorway-subtitle">Unlock new block colours for future runs.</p>
+            </div>
+            <span class="missions-count" id="collection-balance">🪙 0</span>
+          </div>
+          <div id="colorway-list" class="collection-list" aria-live="polite"></div>
+        </div>
 
         <div class="page-panel page-panel--shop">
           <div class="collection-head">
@@ -152,7 +163,6 @@
               <h3>Block finishes</h3>
               <p id="collection-subtitle">Unlock a finish with coins, then equip it.</p>
             </div>
-            <span class="missions-count" id="collection-balance">🪙 0</span>
           </div>
           <div id="collection-list" class="collection-list" aria-live="polite"></div>
         </div>
@@ -191,18 +201,12 @@
               <span class="tog-track"><span class="tog-thumb"></span></span>
             </span>
           </label>
-          <div class="setting-row">
-            <span>Block Colour</span>
-            <select id="page-sel-color">
-              <option value="orange">🟠 Orange</option>
-              <option value="blue">🔵 Blue</option>
-              <option value="green">🟢 Green</option>
-              <option value="purple">🟣 Purple</option>
-              <option value="red">🔴 Red</option>
-              <option value="teal">💎 Teal</option>
-              <option value="pink">💗 Pink</option>
-              <option value="random">🎲 Random</option>
-            </select>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Block Colour</span>
+              <small id="page-colour-note">Unlock more colourways in the shop.</small>
+            </div>
+            <select id="page-sel-color"></select>
           </div>
           <div class="setting-row">
             <span>Pieces per Round</span>
@@ -250,7 +254,7 @@
             <ul class="about-list">
               <li>Coach Mode spots risky holes and safer lanes.</li>
               <li>Combos matter, but board shape matters more.</li>
-              <li>Shop finishes are cosmetic only, so score still comes first.</li>
+              <li>Shop colourways and finishes are cosmetic only, so score still comes first.</li>
             </ul>
           </section>
 
