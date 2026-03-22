@@ -184,7 +184,7 @@ let runSummary = null;
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 1;
+const PROGRESSION_STATE_VERSION = 2;
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
   multiClearBonus: 0,
@@ -244,6 +244,44 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     description: 'Complete 3 runs today.',
   },
 ]);
+const COSMETIC_CATALOGUE = Object.freeze({
+  blockSkins: [
+    {
+      id: 'classic',
+      name: 'Classic',
+      description: 'The original polished finish.',
+      price: 0,
+      rarity: 'Starter',
+    },
+    {
+      id: 'satin',
+      name: 'Satin',
+      description: 'Soft rounded edges with a calm sheen.',
+      price: 60,
+      rarity: 'Common',
+    },
+    {
+      id: 'carbon',
+      name: 'Carbon',
+      description: 'Sharper edges with a grounded board-game feel.',
+      price: 110,
+      rarity: 'Rare',
+    },
+    {
+      id: 'prism',
+      name: 'Prism',
+      description: 'A brighter faceted shine for high-score chasers.',
+      price: 170,
+      rarity: 'Epic',
+    },
+  ],
+});
+const BLOCK_SKIN_LOOKUP = Object.freeze(
+  COSMETIC_CATALOGUE.blockSkins.reduce((acc, skin) => {
+    acc[skin.id] = skin;
+    return acc;
+  }, {})
+);
 const RUN_OBJECTIVES = Object.freeze([
   {
     id: 'first-clear',
@@ -359,6 +397,10 @@ function createDefaultProgressionState() {
       ownedThemes: ['classic'],
       seenRewardIds: [],
     },
+    cosmetics: {
+      equippedBlockSkin: 'classic',
+      ownedBlockSkins: ['classic'],
+    },
     dailyMissions: {
       date: '',
       missions: [],
@@ -397,14 +439,23 @@ function sanitiseProgressionState(rawState) {
   const src = rawState && typeof rawState === 'object' ? rawState : {};
   const coins = src.coins && typeof src.coins === 'object' ? src.coins : {};
   const unlocks = src.unlocks && typeof src.unlocks === 'object' ? src.unlocks : {};
+  const cosmetics = src.cosmetics && typeof src.cosmetics === 'object' ? src.cosmetics : {};
   const streak = src.streak && typeof src.streak === 'object' ? src.streak : {};
   const ownedThemes = (() => {
     const owned = uniqueStringList(unlocks.ownedThemes, defaults.unlocks.ownedThemes);
     return owned.includes('classic') ? owned : ['classic', ...owned];
   })();
+  const ownedBlockSkins = uniqueStringList(cosmetics.ownedBlockSkins, defaults.cosmetics.ownedBlockSkins)
+    .filter(id => BLOCK_SKIN_LOOKUP[id]);
+  if (!ownedBlockSkins.includes('classic')) ownedBlockSkins.unshift('classic');
   const equippedTheme = typeof unlocks.equippedTheme === 'string' && unlocks.equippedTheme.trim() !== ''
     ? unlocks.equippedTheme
     : defaults.unlocks.equippedTheme;
+  const equippedBlockSkin = typeof cosmetics.equippedBlockSkin === 'string'
+    && cosmetics.equippedBlockSkin.trim() !== ''
+    && ownedBlockSkins.includes(cosmetics.equippedBlockSkin)
+    ? cosmetics.equippedBlockSkin
+    : defaults.cosmetics.equippedBlockSkin;
 
   return {
     version: PROGRESSION_STATE_VERSION,
@@ -417,6 +468,10 @@ function sanitiseProgressionState(rawState) {
       equippedTheme: ownedThemes.includes(equippedTheme) ? equippedTheme : defaults.unlocks.equippedTheme,
       ownedThemes,
       seenRewardIds: uniqueStringList(unlocks.seenRewardIds, defaults.unlocks.seenRewardIds),
+    },
+    cosmetics: {
+      equippedBlockSkin,
+      ownedBlockSkins,
     },
     dailyMissions: sanitiseMissionState(src.dailyMissions),
     streak: {
@@ -536,6 +591,30 @@ function updateCoinUI() {
   coinEl.textContent = getCoinBalance();
 }
 
+function getOwnedBlockSkins() {
+  return progressionState?.cosmetics?.ownedBlockSkins || ['classic'];
+}
+
+function getEquippedBlockSkin() {
+  return progressionState?.cosmetics?.equippedBlockSkin || 'classic';
+}
+
+function isBlockSkinOwned(skinId) {
+  return getOwnedBlockSkins().includes(skinId);
+}
+
+function updateCosmeticLabel() {
+  const label = document.getElementById('equipped-cosmetic-label');
+  if (!label) return;
+  const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
+  label.textContent = `${skin.name} finish equipped`;
+}
+
+function applyEquippedCosmeticSkin() {
+  document.documentElement.dataset.cosmetic = getEquippedBlockSkin();
+  updateCosmeticLabel();
+}
+
 function awardCoins(amount, reason, options = {}) {
   const wholeAmount = Math.max(0, Math.floor(amount));
   if (!wholeAmount) return 0;
@@ -553,6 +632,49 @@ function awardCoins(amount, reason, options = {}) {
   updateCoinUI();
   if (!options.silent) showCoinToast(wholeAmount, reason);
   return wholeAmount;
+}
+
+function spendCoins(amount, reason) {
+  const wholeAmount = Math.max(0, Math.floor(amount));
+  if (!wholeAmount || getCoinBalance() < wholeAmount) return false;
+
+  updateProgressionState(state => {
+    state.coins.balance -= wholeAmount;
+    state.coins.lifetimeSpent += wholeAmount;
+    return state;
+  });
+
+  updateCoinUI();
+  showCoinToast(-wholeAmount, reason, { spend: true });
+  return true;
+}
+
+function unlockBlockSkin(skinId) {
+  const skin = BLOCK_SKIN_LOOKUP[skinId];
+  if (!skin || isBlockSkinOwned(skinId)) return true;
+  if (!spendCoins(skin.price, `${skin.name} unlocked`)) return false;
+
+  updateProgressionState(state => {
+    if (!state.cosmetics.ownedBlockSkins.includes(skinId)) {
+      state.cosmetics.ownedBlockSkins.push(skinId);
+    }
+    return state;
+  });
+
+  updateCosmeticLabel();
+  return true;
+}
+
+function equipBlockSkin(skinId) {
+  if (!isBlockSkinOwned(skinId) || !BLOCK_SKIN_LOOKUP[skinId]) return false;
+
+  updateProgressionState(state => {
+    state.cosmetics.equippedBlockSkin = skinId;
+    return state;
+  });
+
+  applyEquippedCosmeticSkin();
+  return true;
 }
 
 function calculateClearCoinReward(totalRegions, comboValue) {
@@ -573,13 +695,15 @@ function calculateEndRunCoinReward(finalScore) {
   return COIN_REWARDS.endRunBase + Math.floor(finalScore / 50) * COIN_REWARDS.endRunPer50Score;
 }
 
-function showCoinToast(amount, reason) {
+function showCoinToast(amount, reason, options = {}) {
   const anchor = document.querySelector('.coins-stat') || document.getElementById('score-wrap');
   if (!anchor) return;
 
   const toast = document.createElement('div');
-  toast.className = 'coin-toast';
-  toast.innerHTML = `<strong>🪙 +${amount}</strong><span>${reason}</span>`;
+  const isSpend = !!options.spend || amount < 0;
+  toast.className = `coin-toast${isSpend ? ' coin-toast--spend' : ''}`;
+  const prefix = amount >= 0 ? '+' : '−';
+  toast.innerHTML = `<strong>🪙 ${prefix}${Math.abs(amount)}</strong><span>${reason}</span>`;
 
   const rect = anchor.getBoundingClientRect();
   const maxLeft = Math.max(12, window.innerWidth - 232);
@@ -684,6 +808,72 @@ function renderDailyMissions() {
       </div>
     `;
     list.appendChild(item);
+  }
+}
+
+function getCollectionSubtitle() {
+  const ownedCount = getOwnedBlockSkins().length;
+  const totalCount = COSMETIC_CATALOGUE.blockSkins.length;
+  if (ownedCount === totalCount) return 'Every available finish is unlocked and ready to equip.';
+  return `Unlock new finishes with coins and equip the one that suits your run. ${ownedCount}/${totalCount} owned.`;
+}
+
+function renderCosmeticsCollection() {
+  const list = document.getElementById('collection-list');
+  const balance = document.getElementById('collection-balance');
+  const subtitle = document.getElementById('collection-subtitle');
+  if (!list || !balance || !subtitle) return;
+
+  const coinBalance = getCoinBalance();
+  const equippedSkin = getEquippedBlockSkin();
+  balance.textContent = `🪙 ${coinBalance}`;
+  subtitle.textContent = getCollectionSubtitle();
+
+  list.innerHTML = '';
+  for (const skin of COSMETIC_CATALOGUE.blockSkins) {
+    const owned = isBlockSkinOwned(skin.id);
+    const equipped = equippedSkin === skin.id;
+    const canAfford = coinBalance >= skin.price;
+    const card = document.createElement('article');
+    card.className = 'cosmetic-card';
+    card.dataset.cosmeticCard = skin.id;
+    if (owned) card.classList.add('cosmetic-card--owned');
+    if (equipped) card.classList.add('cosmetic-card--equipped');
+    if (!owned) card.classList.add('cosmetic-card--locked');
+
+    const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    let actionMarkup = '';
+    if (equipped) {
+      actionMarkup = '<button class="pill-btn pill-btn--secondary" type="button" disabled>Equipped</button>';
+    } else if (owned) {
+      actionMarkup = `<button class="pill-btn pill-btn--secondary" type="button" data-action="equip" data-skin-id="${skin.id}">Equip</button>`;
+    } else {
+      actionMarkup = `<button class="pill-btn${canAfford ? '' : ' pill-btn--secondary'}" type="button" data-action="unlock" data-skin-id="${skin.id}" ${canAfford ? '' : 'disabled'}>Unlock · 🪙 ${skin.price}</button>`;
+    }
+
+    card.innerHTML = `
+      <div class="cosmetic-card__preview" data-cosmetic="${skin.id}" aria-hidden="true">
+        <span class="cosmetic-card__tile"></span>
+        <span class="cosmetic-card__tile"></span>
+        <span class="cosmetic-card__tile"></span>
+        <span class="cosmetic-card__tile"></span>
+      </div>
+      <div class="cosmetic-card__body">
+        <div class="cosmetic-card__top">
+          <div>
+            <h3>${skin.name}</h3>
+            <p>${skin.description}</p>
+          </div>
+          <span class="cosmetic-card__rarity">${skin.rarity}</span>
+        </div>
+        <div class="cosmetic-card__footer">
+          <strong>${status}</strong>
+          ${actionMarkup}
+        </div>
+      </div>
+    `;
+
+    list.appendChild(card);
   }
 }
 
@@ -2032,11 +2222,22 @@ function openSettingsOverlay() {
   document.getElementById('chk-dark').checked = darkMode;
   document.getElementById('sel-color').value = colorSetting;
   document.getElementById('sel-rack').value = String(rackSize);
+  updateCosmeticLabel();
   showOverlay('ov-settings');
+}
+
+function openCollectionOverlay() {
+  renderCosmeticsCollection();
+  showOverlay('ov-collection');
 }
 
 document.getElementById('btn-settings').addEventListener('click', openSettingsOverlay);
 document.getElementById('btn-start-settings').addEventListener('click', openSettingsOverlay);
+document.getElementById('btn-collection').addEventListener('click', openCollectionOverlay);
+document.getElementById('btn-open-collection').addEventListener('click', () => {
+  hideOverlay('ov-settings');
+  openCollectionOverlay();
+});
 document.getElementById('btn-continue').addEventListener('click', () => {
   if (!restoreSavedGame()) return;
   closeStartOverlay();
@@ -2053,6 +2254,30 @@ document.getElementById('btn-missions').addEventListener('click', () => {
 
 document.getElementById('btn-missions-close').addEventListener('click', () => {
   hideOverlay('ov-missions');
+});
+
+document.getElementById('btn-collection-close').addEventListener('click', () => {
+  hideOverlay('ov-collection');
+});
+
+document.getElementById('collection-list').addEventListener('click', event => {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+
+  const action = button.dataset.action;
+  const skinId = button.dataset.skinId;
+  if (!skinId) return;
+
+  if (action === 'unlock') {
+    if (!unlockBlockSkin(skinId)) return;
+    equipBlockSkin(skinId);
+  } else if (action === 'equip') {
+    equipBlockSkin(skinId);
+  } else {
+    return;
+  }
+
+  renderCosmeticsCollection();
 });
 
 document.getElementById('btn-done').addEventListener('click', () => {
@@ -2122,6 +2347,7 @@ document.getElementById('btn-new').addEventListener('click', startNewGame);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   renderDailyMissions();
+  renderCosmeticsCollection();
 });
 
 // Prevent body scroll while dragging on iOS
@@ -2139,6 +2365,7 @@ function init() {
   loadProgressionState();
   ensureDailyMissionsForToday();
   updateCoinUI();
+  applyEquippedCosmeticSkin();
   loadSettings();
   applyDarkMode(darkMode);
   applyColor(colorSetting);

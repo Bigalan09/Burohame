@@ -24,12 +24,12 @@ When a user says "implement the next issue", inspect the lists below, pick the f
 
 ### TODO
 
-1. [#36 Add a cosmetics collection and unlock flow](https://github.com/Bigalan09/Burohame/issues/36)
-2. [#37 Add delight feedback for milestone moments](https://github.com/Bigalan09/Burohame/issues/37)
-3. [#38 Add a daily challenge and streak system](https://github.com/Bigalan09/Burohame/issues/38)
+1. [#37 Add delight feedback for milestone moments](https://github.com/Bigalan09/Burohame/issues/37)
+2. [#38 Add a daily challenge and streak system](https://github.com/Bigalan09/Burohame/issues/38)
 
 ### Completed
 
+- [#36 Add a cosmetics collection and unlock flow](https://github.com/Bigalan09/Burohame/issues/36)
 - [#34 Add a post-run rewards summary](https://github.com/Bigalan09/Burohame/issues/34)
 - [#35 Add daily missions with coin rewards](https://github.com/Bigalan09/Burohame/issues/35)
 - [#33 Add coins as a persistent soft currency](https://github.com/Bigalan09/Burohame/issues/33)
