@@ -193,6 +193,56 @@ const COIN_REWARDS = Object.freeze({
   endRunPer50Score: 1,
   personalBestBonus: 15,
 });
+const DAILY_MISSION_TEMPLATES = Object.freeze([
+  {
+    templateId: 'score-120',
+    kind: 'score',
+    goal: 120,
+    reward: 18,
+    title: 'Point collector',
+    description: 'Score 120 points across today’s runs.',
+  },
+  {
+    templateId: 'blocks-30',
+    kind: 'blocks',
+    goal: 30,
+    reward: 14,
+    title: 'Builder’s rhythm',
+    description: 'Place 30 blocks today.',
+  },
+  {
+    templateId: 'regions-8',
+    kind: 'regions',
+    goal: 8,
+    reward: 16,
+    title: 'Board cleaner',
+    description: 'Clear 8 regions today.',
+  },
+  {
+    templateId: 'racks-4',
+    kind: 'racks',
+    goal: 4,
+    reward: 12,
+    title: 'Rack runner',
+    description: 'Finish 4 full racks today.',
+  },
+  {
+    templateId: 'combo-4',
+    kind: 'combo',
+    goal: 4,
+    reward: 20,
+    title: 'Heat check',
+    description: 'Reach a 4× combo in a run today.',
+  },
+  {
+    templateId: 'runs-3',
+    kind: 'runs',
+    goal: 3,
+    reward: 10,
+    title: 'Keep going',
+    description: 'Complete 3 runs today.',
+  },
+]);
 const RUN_OBJECTIVES = Object.freeze([
   {
     id: 'first-clear',
@@ -235,6 +285,66 @@ function uniqueStringList(value, fallback) {
   return [...new Set(value.filter(item => typeof item === 'string' && item.trim() !== ''))];
 }
 
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function createDailyMissionEntry(template, dateKey) {
+  return {
+    id: `${dateKey}-${template.templateId}`,
+    templateId: template.templateId,
+    kind: template.kind,
+    title: template.title,
+    description: template.description,
+    goal: template.goal,
+    progress: 0,
+    reward: template.reward,
+  };
+}
+
+function createDailyMissionSet(dateKey) {
+  const seeded = DAILY_MISSION_TEMPLATES
+    .map(template => ({
+      template,
+      score: hashString(`${dateKey}:${template.templateId}`),
+    }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 3);
+
+  return seeded.map(({ template }) => createDailyMissionEntry(template, dateKey));
+}
+
+function sanitiseMissionEntry(value) {
+  const src = value && typeof value === 'object' ? value : {};
+  const id = typeof src.id === 'string' ? src.id : '';
+  const title = typeof src.title === 'string' && src.title.trim() !== ''
+    ? src.title
+    : 'Daily mission';
+
+  return {
+    id,
+    templateId: typeof src.templateId === 'string' ? src.templateId : '',
+    kind: typeof src.kind === 'string' ? src.kind : 'score',
+    title,
+    description: typeof src.description === 'string' ? src.description : '',
+    goal: Math.max(1, clampWholeNumber(src.goal, 1)),
+    progress: clampWholeNumber(src.progress, 0),
+    reward: clampWholeNumber(src.reward, 0),
+  };
+}
+
 function createDefaultProgressionState() {
   return {
     version: PROGRESSION_STATE_VERSION,
@@ -267,9 +377,14 @@ function createDefaultProgressionState() {
 
 function sanitiseMissionState(value) {
   const src = value && typeof value === 'object' ? value : {};
+  const missions = Array.isArray(src.missions)
+    ? src.missions
+      .map(sanitiseMissionEntry)
+      .filter(mission => mission.id)
+    : [];
   return {
     date: typeof src.date === 'string' ? src.date : '',
-    missions: Array.isArray(src.missions) ? src.missions : [],
+    missions,
     completedIds: uniqueStringList(src.completedIds, []),
     claimedIds: uniqueStringList(src.claimedIds, []),
     refreshCount: clampWholeNumber(src.refreshCount, 0),
@@ -477,6 +592,138 @@ function showCoinToast(amount, reason) {
 
 function awardMissionCoins(amount, missionName = 'Mission complete') {
   return awardCoins(amount, missionName);
+}
+
+function ensureDailyMissionsForToday() {
+  const todayKey = getLocalDateKey();
+  const currentDate = progressionState?.dailyMissions?.date || '';
+  if (currentDate === todayKey && progressionState?.dailyMissions?.missions?.length) {
+    return progressionState.dailyMissions;
+  }
+
+  const nextState = updateProgressionState(state => {
+    const refreshCount = clampWholeNumber(state.dailyMissions?.refreshCount, 0);
+    state.dailyMissions = {
+      date: todayKey,
+      missions: createDailyMissionSet(todayKey),
+      completedIds: [],
+      claimedIds: [],
+      refreshCount: currentDate ? refreshCount + 1 : refreshCount,
+    };
+    return state;
+  });
+
+  return nextState.dailyMissions;
+}
+
+function getDailyMissionProgressText(mission) {
+  const progress = Math.min(mission.progress, mission.goal);
+  if (mission.kind === 'combo') return `Best combo ${progress}/${mission.goal}`;
+  if (mission.kind === 'runs') return `${progress}/${mission.goal} runs completed`;
+  if (mission.kind === 'racks') return `${progress}/${mission.goal} racks completed`;
+  if (mission.kind === 'regions') return `${progress}/${mission.goal} regions cleared`;
+  if (mission.kind === 'blocks') return `${progress}/${mission.goal} blocks placed`;
+  return `${progress}/${mission.goal} points scored`;
+}
+
+function getDailyMissionCounts() {
+  const missionState = progressionState?.dailyMissions;
+  const total = missionState?.missions?.length || 0;
+  const completed = missionState?.claimedIds?.length || 0;
+  return { completed, total };
+}
+
+function renderDailyMissions() {
+  const missionState = ensureDailyMissionsForToday();
+  const list = document.getElementById('missions-list');
+  const count = document.getElementById('missions-count');
+  const subtitle = document.getElementById('missions-subtitle');
+  const badge = document.getElementById('mission-badge');
+  if (!list || !count || !subtitle || !badge) return;
+
+  const { completed, total } = getDailyMissionCounts();
+  count.textContent = `${completed}/${total} completed`;
+  subtitle.textContent = `Fresh goals for ${missionState.date}. Rewards are paid automatically when you finish them.`;
+  badge.textContent = total ? `${completed}/${total}` : '0/0';
+  badge.hidden = !total;
+
+  list.innerHTML = '';
+  if (!missionState.missions.length) {
+    const empty = document.createElement('p');
+    empty.className = 'missions-empty';
+    empty.textContent = 'No daily missions are available right now.';
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const mission of missionState.missions) {
+    const progress = Math.min(mission.progress, mission.goal);
+    const isClaimed = missionState.claimedIds.includes(mission.id);
+    const isCompleted = missionState.completedIds.includes(mission.id);
+    const item = document.createElement('article');
+    item.className = 'mission-item';
+    if (isClaimed) item.classList.add('mission-item--claimed');
+    if (isCompleted && !isClaimed) item.classList.add('mission-item--complete');
+
+    const percentage = Math.max(0, Math.min(100, Math.round((progress / mission.goal) * 100)));
+    item.innerHTML = `
+      <div class="mission-item__top">
+        <div>
+          <h3>${mission.title}</h3>
+          <p>${mission.description}</p>
+        </div>
+        <div class="mission-item__reward">🪙 ${mission.reward}</div>
+      </div>
+      <div class="mission-progress" aria-hidden="true">
+        <span style="width:${percentage}%"></span>
+      </div>
+      <div class="mission-item__footer">
+        <span>${getDailyMissionProgressText(mission)}</span>
+        <strong>${isClaimed ? 'Claimed' : isCompleted ? 'Complete' : 'In progress'}</strong>
+      </div>
+    `;
+    list.appendChild(item);
+  }
+}
+
+function updateDailyMissionProgress(kind, value, mode = 'increment') {
+  const amount = Math.max(0, Math.floor(value));
+  if (!amount) return;
+
+  ensureDailyMissionsForToday();
+  const rewardsToGrant = [];
+
+  updateProgressionState(state => {
+    const missionState = state.dailyMissions;
+    if (!missionState || !Array.isArray(missionState.missions)) return state;
+
+    for (const mission of missionState.missions) {
+      if (mission.kind !== kind) continue;
+
+      if (mode === 'max') {
+        mission.progress = Math.max(mission.progress, amount);
+      } else {
+        mission.progress += amount;
+      }
+
+      if (mission.progress >= mission.goal && !missionState.completedIds.includes(mission.id)) {
+        missionState.completedIds.push(mission.id);
+      }
+
+      if (mission.progress >= mission.goal && !missionState.claimedIds.includes(mission.id)) {
+        missionState.claimedIds.push(mission.id);
+        rewardsToGrant.push({
+          reward: mission.reward,
+          reason: `${mission.title} complete`,
+        });
+      }
+    }
+
+    return state;
+  });
+
+  renderDailyMissions();
+  rewardsToGrant.forEach(({ reward, reason }) => awardMissionCoins(reward, reason));
 }
 
 // ── Piece helpers ──────────────────────────────────────────
@@ -1028,6 +1275,8 @@ function doPlace(slotIdx, row, col) {
   // Place blocks on board
   for (const [dr, dc] of cells) board[row + dr][col + dc] = 1;
   score += cells.length;
+  updateDailyMissionProgress('blocks', cells.length);
+  updateDailyMissionProgress('score', cells.length);
   updateScoreUI();
 
   used[slotIdx] = true;
@@ -1124,6 +1373,9 @@ function doClears() {
   const summary = ensureRunSummary();
   summary.stats.regionsCleared += total;
   summary.stats.maxCombo = Math.max(summary.stats.maxCombo, combo);
+  updateDailyMissionProgress('regions', total);
+  updateDailyMissionProgress('score', pts);
+  updateDailyMissionProgress('combo', combo, 'max');
 
   const clearCoins = calculateClearCoinReward(total, combo);
   awardCoins(clearCoins, clearRewardLabel(total, combo));
@@ -1235,6 +1487,7 @@ function triggerGameOver() {
   localStorage.setItem('bst-today', JSON.stringify({ d: todayKey, s: todayScore }));
   updateScoreUI();
   evaluateRunObjectives();
+  updateDailyMissionProgress('runs', 1);
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
@@ -1279,6 +1532,7 @@ function newRound() {
   ensureRunSummary().stats.racksCompleted += 1;
   awardCoins(COIN_REWARDS.roundCompletion, 'Rack complete');
   evaluateRunObjectives();
+  updateDailyMissionProgress('racks', 1);
 
   used    = Array(rackSize).fill(false);
   pieces  = smartPieces();
@@ -1644,6 +1898,15 @@ document.getElementById('btn-settings').addEventListener('click', () => {
   showOverlay('ov-settings');
 });
 
+document.getElementById('btn-missions').addEventListener('click', () => {
+  renderDailyMissions();
+  showOverlay('ov-missions');
+});
+
+document.getElementById('btn-missions-close').addEventListener('click', () => {
+  hideOverlay('ov-missions');
+});
+
 document.getElementById('btn-done').addEventListener('click', () => {
   const prev = trainingMode;
   const prevRackSize = rackSize;
@@ -1707,6 +1970,11 @@ document.getElementById('btn-restart').addEventListener('click', startNewGame);
 
 document.getElementById('btn-new').addEventListener('click', startNewGame);
 
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  renderDailyMissions();
+});
+
 // Prevent body scroll while dragging on iOS
 document.addEventListener('touchstart', e => {
   if (e.target.closest('.slot')) e.preventDefault();
@@ -1720,6 +1988,7 @@ function init() {
   todayScore = (td.d === todayKey) ? td.s : 0;
 
   loadProgressionState();
+  ensureDailyMissionsForToday();
   updateCoinUI();
   loadSettings();
   applyDarkMode(darkMode);
@@ -1740,6 +2009,7 @@ function init() {
 
   initBoardDOM();
   initRackDOM();
+  renderDailyMissions();
   startNewGame();
 }
 
