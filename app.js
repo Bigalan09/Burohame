@@ -189,7 +189,8 @@ const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
   multiClearBonus: 0,
   comboStep: 0,
-  roundCompletion: 0,
+  roundMilestoneEvery: 10,
+  roundMilestoneReward: 12,
   endRunBase: 16,
   endRunPer50Score: 2,
   personalBestBonus: 18,
@@ -251,28 +252,24 @@ const COSMETIC_CATALOGUE = Object.freeze({
       name: 'Classic',
       description: 'The original polished finish.',
       price: 0,
-      rarity: 'Starter',
     },
     {
       id: 'satin',
       name: 'Satin',
       description: 'Soft rounded edges with a calm sheen.',
       price: 60,
-      rarity: 'Common',
     },
     {
       id: 'carbon',
       name: 'Carbon',
       description: 'Sharper edges with a grounded board-game feel.',
       price: 110,
-      rarity: 'Rare',
     },
     {
       id: 'prism',
       name: 'Prism',
       description: 'A brighter faceted shine for high-score chasers.',
       price: 170,
-      rarity: 'Epic',
     },
   ],
 });
@@ -695,6 +692,13 @@ function calculateEndRunCoinReward(finalScore) {
   return COIN_REWARDS.endRunBase + Math.floor(finalScore / 50) * COIN_REWARDS.endRunPer50Score;
 }
 
+function getRoundMilestoneReward(roundsCompleted) {
+  if (!roundsCompleted) return 0;
+  return roundsCompleted % COIN_REWARDS.roundMilestoneEvery === 0
+    ? COIN_REWARDS.roundMilestoneReward
+    : 0;
+}
+
 function showCoinToast(amount, reason, options = {}) {
   const anchor = document.querySelector('.coins-stat') || document.getElementById('score-wrap');
   if (!anchor) return;
@@ -814,8 +818,8 @@ function renderDailyMissions() {
 function getCollectionSubtitle() {
   const ownedCount = getOwnedBlockSkins().length;
   const totalCount = COSMETIC_CATALOGUE.blockSkins.length;
-  if (ownedCount === totalCount) return 'Every available finish is unlocked and ready to equip.';
-  return `Unlock new finishes with coins and equip the one that suits your run. ${ownedCount}/${totalCount} owned.`;
+  if (ownedCount === totalCount) return 'Every finish is unlocked and ready to equip.';
+  return `${ownedCount}/${totalCount} finishes owned.`;
 }
 
 function renderCosmeticsCollection() {
@@ -836,12 +840,12 @@ function renderCosmeticsCollection() {
     const canAfford = coinBalance >= skin.price;
     const card = document.createElement('article');
     card.className = 'cosmetic-card';
-    card.dataset.cosmeticCard = skin.id;
-    if (owned) card.classList.add('cosmetic-card--owned');
+    card.dataset.cosmetic = skin.id;
     if (equipped) card.classList.add('cosmetic-card--equipped');
     if (!owned) card.classList.add('cosmetic-card--locked');
 
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    const costLabel = skin.price ? `🪙 ${skin.price}` : 'Free';
     let actionMarkup = '';
     if (equipped) {
       actionMarkup = '<button class="pill-btn pill-btn--secondary" type="button" disabled>Equipped</button>';
@@ -852,22 +856,19 @@ function renderCosmeticsCollection() {
     }
 
     card.innerHTML = `
-      <div class="cosmetic-card__preview" data-cosmetic="${skin.id}" aria-hidden="true">
-        <span class="cosmetic-card__tile"></span>
+      <div class="cosmetic-card__preview" aria-hidden="true">
         <span class="cosmetic-card__tile"></span>
         <span class="cosmetic-card__tile"></span>
         <span class="cosmetic-card__tile"></span>
       </div>
       <div class="cosmetic-card__body">
-        <div class="cosmetic-card__top">
-          <div>
-            <h3>${skin.name}</h3>
-            <p>${skin.description}</p>
-          </div>
-          <span class="cosmetic-card__rarity">${skin.rarity}</span>
-        </div>
+        <h3>${skin.name}</h3>
+        <p>${skin.description}</p>
         <div class="cosmetic-card__footer">
-          <strong>${status}</strong>
+          <div class="cosmetic-card__meta">
+            <strong>${status}</strong>
+            <span>${costLabel}</span>
+          </div>
           ${actionMarkup}
         </div>
       </div>
@@ -1854,8 +1855,13 @@ function showChooseCarefullyMsg() {
 
 // ── New round / restart ────────────────────────────────────
 function newRound() {
-  ensureRunSummary().stats.racksCompleted += 1;
-  awardCoins(COIN_REWARDS.roundCompletion, 'Rack complete');
+  const summary = ensureRunSummary();
+  summary.stats.racksCompleted += 1;
+  const roundsCompleted = summary.stats.racksCompleted;
+  const roundMilestoneReward = getRoundMilestoneReward(roundsCompleted);
+  if (roundMilestoneReward) {
+    awardCoins(roundMilestoneReward, `${roundsCompleted} rounds completed`);
+  }
   evaluateRunObjectives();
   updateDailyMissionProgress('racks', 1);
 
@@ -2233,7 +2239,6 @@ function openCollectionOverlay() {
 
 document.getElementById('btn-settings').addEventListener('click', openSettingsOverlay);
 document.getElementById('btn-start-settings').addEventListener('click', openSettingsOverlay);
-document.getElementById('btn-collection').addEventListener('click', openCollectionOverlay);
 document.getElementById('btn-open-collection').addEventListener('click', () => {
   hideOverlay('ov-settings');
   openCollectionOverlay();
