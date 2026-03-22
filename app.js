@@ -1330,13 +1330,11 @@ function renderDashboard() {
     newGameBtn.textContent = hasSavedGame ? 'Start fresh run' : 'Start new run';
   }
   if (intro) {
-    intro.textContent = hasSavedGame
-      ? 'Continue where you left off, or start a fresh run from the dashboard.'
-      : 'Pick up a fresh run, visit the shop, or tune your setup before playing.';
+    intro.textContent = hasSavedGame ? 'Pick up where you left off.' : 'One tap to start playing.';
   }
   if (missionCopy) {
     missionCopy.textContent = missionCounts.total
-      ? `${missionCounts.completed}/${missionCounts.total} missions completed today.`
+      ? `${missionCounts.completed} of ${missionCounts.total} done today`
       : 'Fresh goals are on the way.';
   }
 
@@ -1360,6 +1358,14 @@ function populateSettingsPage() {
   updateCosmeticLabel();
 }
 
+function updateBottomNav() {
+  document.querySelectorAll('.bottom-nav__item').forEach(button => {
+    const isActive = button.dataset.navPage === currentPage;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-current', isActive ? 'page' : 'false');
+  });
+}
+
 function navigateTo(page) {
   currentPage = page;
   document.getElementById('app').dataset.page = page;
@@ -1370,6 +1376,7 @@ function navigateTo(page) {
   if (page === 'dashboard') renderDashboard();
   if (page === 'shop') renderCosmeticsCollection();
   if (page === 'settings') populateSettingsPage();
+  updateBottomNav();
 }
 
 // ── Board helpers ──────────────────────────────────────────
@@ -2330,15 +2337,6 @@ document.getElementById('btn-dashboard-new').addEventListener('click', () => {
   navigateTo('game');
 });
 
-document.getElementById('btn-dashboard-shop').addEventListener('click', () => {
-  navigateTo('shop');
-});
-document.getElementById('btn-dashboard-settings').addEventListener('click', () => {
-  navigateTo('settings');
-});
-document.getElementById('btn-dashboard-about').addEventListener('click', () => {
-  navigateTo('about');
-});
 document.getElementById('btn-dashboard-missions').addEventListener('click', () => {
   renderDailyMissions();
   showOverlay('ov-missions');
@@ -2347,17 +2345,13 @@ document.getElementById('btn-game-back').addEventListener('click', () => {
   saveCurrentGame();
   navigateTo('dashboard');
 });
-document.getElementById('btn-shop-back').addEventListener('click', () => {
-  navigateTo('dashboard');
-});
-document.getElementById('btn-settings-back').addEventListener('click', () => {
-  navigateTo('dashboard');
-});
-document.getElementById('btn-about-back').addEventListener('click', () => {
-  navigateTo('dashboard');
-});
 document.getElementById('btn-settings-shop').addEventListener('click', () => {
   navigateTo('shop');
+});
+document.querySelectorAll('.bottom-nav__item').forEach(button => {
+  button.addEventListener('click', () => {
+    navigateTo(button.dataset.navPage);
+  });
 });
 
 document.getElementById('btn-missions-close').addEventListener('click', () => {

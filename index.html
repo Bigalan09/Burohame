@@ -20,7 +20,7 @@
       <div class="page-scroll page-scroll--dashboard">
         <header class="page-top page-top--dashboard">
           <div>
-            <p class="page-kicker">Mobile puzzle dashboard</p>
+            <p class="page-kicker">Calm arcade puzzle</p>
             <h1>Burohame</h1>
             <p class="page-intro" id="dashboard-intro">Start a fresh run.</p>
           </div>
@@ -31,7 +31,7 @@
           </a>
         </header>
 
-        <section class="dash-hero">
+        <section class="dash-hero" aria-label="Start playing">
           <div class="dash-mark" aria-hidden="true">
             <span></span>
             <span></span>
@@ -41,6 +41,7 @@
             <button class="pill-btn wide" id="btn-dashboard-continue">Continue run</button>
             <button class="pill-btn wide pill-btn--secondary" id="btn-dashboard-new">Start new run</button>
           </div>
+          <p class="dash-hero-note">Equipped finish: <strong id="dashboard-finish">Classic</strong></p>
         </section>
 
         <section class="dashboard-stats" aria-label="Dashboard statistics">
@@ -56,35 +57,13 @@
             <span>Today</span>
             <strong id="dashboard-today">0</strong>
           </article>
-          <article class="dashboard-stat">
-            <span>Finish</span>
-            <strong id="dashboard-finish">Classic</strong>
-          </article>
         </section>
 
-        <section class="dashboard-links" aria-label="Dashboard destinations">
-          <button class="dash-link" id="btn-dashboard-shop" type="button">
-            <span class="dash-link__eyebrow">Page 3</span>
-            <strong>Shop</strong>
-            <span>Unlock and equip block finishes.</span>
-          </button>
-          <button class="dash-link" id="btn-dashboard-settings" type="button">
-            <span class="dash-link__eyebrow">Page 4</span>
-            <strong>Settings</strong>
-            <span>Tune difficulty, colour, theme and layout.</span>
-          </button>
-          <button class="dash-link" id="btn-dashboard-about" type="button">
-            <span class="dash-link__eyebrow">Page 5</span>
-            <strong>About and guide</strong>
-            <span>Learn the basics and find the project on GitHub.</span>
-          </button>
-          <button class="dash-link dash-link--mission" id="btn-dashboard-missions" type="button">
-            <span class="dashboard-mission-pill" id="mission-badge" hidden>0/0</span>
-            <span class="dash-link__eyebrow">Today</span>
-            <strong>Daily missions</strong>
-            <span id="dashboard-mission-copy">Fresh goals are on the way.</span>
-          </button>
-        </section>
+        <button class="dashboard-missions" id="btn-dashboard-missions" type="button" aria-label="Open daily missions">
+          <span class="dashboard-missions__label">Daily missions</span>
+          <strong id="dashboard-mission-copy">Fresh goals are on the way.</strong>
+          <span class="dashboard-mission-pill" id="mission-badge" hidden>0/0</span>
+        </button>
       </div>
     </section>
 
@@ -140,15 +119,10 @@
     <section class="page page--shop" data-page="shop" aria-label="Shop">
       <div class="page-scroll">
         <header class="page-top">
-          <button class="icon-btn" id="btn-shop-back" aria-label="Back to dashboard" type="button">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
           <div>
-            <p class="page-kicker">Page 3</p>
+            <p class="page-kicker">Collection</p>
             <h2>Shop</h2>
-            <p class="page-intro">Spend coins on block finishes you can equip for future runs.</p>
+            <p class="page-intro">Unlock finishes and equip one for your next run.</p>
           </div>
         </header>
 
@@ -168,15 +142,10 @@
     <section class="page page--settings" data-page="settings" aria-label="Settings">
       <div class="page-scroll">
         <header class="page-top">
-          <button class="icon-btn" id="btn-settings-back" aria-label="Back to dashboard" type="button">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
           <div>
-            <p class="page-kicker">Page 4</p>
+            <p class="page-kicker">Tune play</p>
             <h2>Settings</h2>
-            <p class="page-intro">Adjust how the game looks and how demanding each run feels.</p>
+            <p class="page-intro">Adjust how the game feels and looks.</p>
           </div>
         </header>
 
@@ -239,15 +208,10 @@
     <section class="page page--about" data-page="about" aria-label="About and guide">
       <div class="page-scroll">
         <header class="page-top">
-          <button class="icon-btn" id="btn-about-back" aria-label="Back to dashboard" type="button">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
           <div>
-            <p class="page-kicker">Page 5</p>
+            <p class="page-kicker">Guide</p>
             <h2>About and guide</h2>
-            <p class="page-intro">A quick tutorial, a few strategy notes, and where to find the project.</p>
+            <p class="page-intro">Learn the basics and find the project.</p>
           </div>
         </header>
 
@@ -349,6 +313,35 @@
       </div>
     </div>
 
+    <nav class="bottom-nav" aria-label="Primary">
+      <button class="bottom-nav__item" data-nav-page="dashboard" type="button" aria-label="Dashboard">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M3.5 8.25L10 3l6.5 5.25V16a1 1 0 0 1-1 1h-3.75v-4.5h-3.5V17H4.5a1 1 0 0 1-1-1V8.25Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+        </svg>
+        <span>Home</span>
+      </button>
+      <button class="bottom-nav__item" data-nav-page="shop" type="button" aria-label="Shop">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M5 7.25h10l-.75 9.25a1 1 0 0 1-1 .92H6.75a1 1 0 0 1-1-.92L5 7.25Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          <path d="M7.5 7.25V6a2.5 2.5 0 1 1 5 0v1.25" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+        <span>Shop</span>
+      </button>
+      <button class="bottom-nav__item" data-nav-page="settings" type="button" aria-label="Settings">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.7"/>
+          <path d="M10 2.75v2.1M10 15.15v2.1M4.87 4.87l1.48 1.48M13.65 13.65l1.48 1.48M2.75 10h2.1M15.15 10h2.1M4.87 15.13l1.48-1.48M13.65 6.35l1.48-1.48" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Settings</span>
+      </button>
+      <button class="bottom-nav__item" data-nav-page="about" type="button" aria-label="Guide">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M6 4.25h7.25a1.75 1.75 0 0 1 1.75 1.75v9.75H7.5A1.5 1.5 0 0 0 6 17.25V4.25Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          <path d="M6 4.25v13m0 0h8.25" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+        <span>Guide</span>
+      </button>
+    </nav>
   </div>
 
   <script src="app.js"></script>
