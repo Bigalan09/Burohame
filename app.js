@@ -181,12 +181,24 @@ let progressionState = null;
 let coinToastOffset = 0;
 let runSummary = null;
 let currentPage = 'dashboard';
+let currentSessionType = 'standard';
+let dailyChallengeState = {
+  date: '',
+  seed: 0,
+  targetScore: 0,
+  randomState: 0,
+};
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 2;
+const PROGRESSION_STATE_VERSION = 3;
 const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
+const DAILY_CHALLENGE_REWARD_BASE = 12;
+const DAILY_CHALLENGE_STREAK_STEP = 2;
+const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
+const DAILY_CHALLENGE_TARGET_MIN = 140;
+const DAILY_CHALLENGE_TARGET_RANGE = 51;
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
   multiClearBonus: 0,
@@ -330,6 +342,16 @@ function getLocalDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function getUTCDateKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getPreviousDateKey(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return getUTCDateKey(date);
+}
+
 function hashString(value) {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i++) {
@@ -337,6 +359,45 @@ function hashString(value) {
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
+}
+
+function getDailyChallengeSeed(dateKey) {
+  return hashString(`daily-challenge:${dateKey}`);
+}
+
+function getDailyChallengeTarget(seed) {
+  return DAILY_CHALLENGE_TARGET_MIN + (seed % DAILY_CHALLENGE_TARGET_RANGE);
+}
+
+function isDailyChallengeSession() {
+  return currentSessionType === 'daily';
+}
+
+function randomValue() {
+  if (!isDailyChallengeSession()) return Math.random();
+  const currentState = dailyChallengeState.randomState || dailyChallengeState.seed || 1;
+  dailyChallengeState.randomState = (Math.imul(currentState, 1664525) + 1013904223) >>> 0;
+  return dailyChallengeState.randomState / 4294967296;
+}
+
+function resetStandardSessionState() {
+  currentSessionType = 'standard';
+  dailyChallengeState = {
+    date: '',
+    seed: 0,
+    targetScore: 0,
+    randomState: 0,
+  };
+}
+
+function configureDailyChallengeSession(dailyState, options = {}) {
+  currentSessionType = 'daily';
+  dailyChallengeState = {
+    date: dailyState.date,
+    seed: dailyState.seed,
+    targetScore: dailyState.targetScore,
+    randomState: clampWholeNumber(options.randomState, dailyState.seed || 1) || (dailyState.seed || 1),
+  };
 }
 
 function createDailyMissionEntry(template, dateKey) {
@@ -407,6 +468,15 @@ function createDefaultProgressionState() {
       claimedIds: [],
       refreshCount: 0,
     },
+    dailyChallenge: {
+      date: '',
+      seed: 0,
+      targetScore: 0,
+      bestScore: 0,
+      completedAt: '',
+      attempts: 0,
+      rewardClaimedDate: '',
+    },
     streak: {
       current: 0,
       best: 0,
@@ -430,6 +500,19 @@ function sanitiseMissionState(value) {
     completedIds: uniqueStringList(src.completedIds, []),
     claimedIds: uniqueStringList(src.claimedIds, []),
     refreshCount: clampWholeNumber(src.refreshCount, 0),
+  };
+}
+
+function sanitiseDailyChallengeState(value) {
+  const src = value && typeof value === 'object' ? value : {};
+  return {
+    date: typeof src.date === 'string' ? src.date : '',
+    seed: clampWholeNumber(src.seed, 0),
+    targetScore: clampWholeNumber(src.targetScore, 0),
+    bestScore: clampWholeNumber(src.bestScore, 0),
+    completedAt: typeof src.completedAt === 'string' ? src.completedAt : '',
+    attempts: clampWholeNumber(src.attempts, 0),
+    rewardClaimedDate: typeof src.rewardClaimedDate === 'string' ? src.rewardClaimedDate : '',
   };
 }
 
@@ -473,6 +556,7 @@ function sanitiseProgressionState(rawState) {
       ownedBlockSkins,
     },
     dailyMissions: sanitiseMissionState(src.dailyMissions),
+    dailyChallenge: sanitiseDailyChallengeState(src.dailyChallenge),
     streak: {
       current: clampWholeNumber(streak.current, defaults.streak.current),
       best: clampWholeNumber(streak.best, defaults.streak.best),
@@ -585,12 +669,39 @@ function renderGameOverSummary() {
   const objectives = getCompletedRunObjectives();
   const objectivesList = document.getElementById('go-objectives-list');
   const objectiveCount = document.getElementById('go-objective-count');
+  const intro = document.querySelector('.summary-intro');
+  const dailySummary = document.getElementById('go-daily-summary');
+  const dailyStatus = document.getElementById('go-daily-status');
+  const dailyCopy = document.getElementById('go-daily-copy');
+  const nextRunButton = document.getElementById('btn-new');
 
   document.getElementById('go-score').textContent = String(summary.finalScore);
   document.getElementById('go-best').textContent = String(bestScore);
   document.getElementById('go-coins-earned').textContent = `+${summary.coinsEarned}`;
   document.getElementById('go-coin-total').textContent = String(getCoinBalance());
   objectiveCount.textContent = objectives.length === 1 ? '1 cleared' : `${objectives.length} cleared`;
+  if (intro) {
+    intro.textContent = isDailyChallengeSession()
+      ? 'Your daily challenge result is locked in.'
+      : 'Your run rewards are ready.';
+  }
+  if (nextRunButton) {
+    nextRunButton.textContent = isDailyChallengeSession() ? 'Play another run' : 'Start next run';
+  }
+
+  if (dailySummary && dailyStatus && dailyCopy) {
+    if (isDailyChallengeSession()) {
+      const challenge = ensureDailyChallengeForToday();
+      const complete = challenge.completedAt === challenge.date;
+      dailySummary.hidden = false;
+      dailyStatus.textContent = complete ? 'Completed' : 'Missed';
+      dailyCopy.textContent = complete
+        ? `Target ${challenge.targetScore} reached. Best score ${Math.max(challenge.bestScore, summary.finalScore)}.`
+        : `Target ${challenge.targetScore}. Best score ${Math.max(challenge.bestScore, summary.finalScore)}.`;
+    } else {
+      dailySummary.hidden = true;
+    }
+  }
 
   objectivesList.innerHTML = '';
   if (!objectives.length) {
@@ -824,6 +935,155 @@ function ensureDailyMissionsForToday() {
   });
 
   return nextState.dailyMissions;
+}
+
+function syncDisplayedStreak() {
+  const todayKey = getUTCDateKey();
+  const yesterdayKey = getPreviousDateKey(todayKey);
+
+  updateProgressionState(state => {
+    if (state.streak.lastActiveDate && ![todayKey, yesterdayKey].includes(state.streak.lastActiveDate)) {
+      state.streak.current = 0;
+    }
+    return state;
+  });
+}
+
+function ensureDailyChallengeForToday() {
+  const todayKey = getUTCDateKey();
+  const challengeSeed = getDailyChallengeSeed(todayKey);
+  const targetScore = getDailyChallengeTarget(challengeSeed);
+
+  syncDisplayedStreak();
+
+  const existing = progressionState?.dailyChallenge;
+  if (existing?.date === todayKey && existing.seed === challengeSeed && existing.targetScore === targetScore) {
+    return existing;
+  }
+
+  const nextState = updateProgressionState(state => {
+    const previous = sanitiseDailyChallengeState(state.dailyChallenge);
+    state.dailyChallenge = {
+      date: todayKey,
+      seed: challengeSeed,
+      targetScore,
+      bestScore: previous.date === todayKey ? previous.bestScore : 0,
+      completedAt: previous.date === todayKey ? previous.completedAt : '',
+      attempts: previous.date === todayKey ? previous.attempts : 0,
+      rewardClaimedDate: previous.date === todayKey ? previous.rewardClaimedDate : '',
+    };
+    return state;
+  });
+
+  return nextState.dailyChallenge;
+}
+
+function getDisplayedStreakCount() {
+  const streak = progressionState?.streak;
+  if (!streak) return 0;
+  const todayKey = getUTCDateKey();
+  const yesterdayKey = getPreviousDateKey(todayKey);
+  if (streak.lastActiveDate && ![todayKey, yesterdayKey].includes(streak.lastActiveDate)) return 0;
+  return streak.current;
+}
+
+function getDailyChallengeRewardAmount(streakCount) {
+  return DAILY_CHALLENGE_REWARD_BASE + Math.min(
+    DAILY_CHALLENGE_STREAK_BONUS_CAP,
+    Math.max(0, streakCount - 1) * DAILY_CHALLENGE_STREAK_STEP
+  );
+}
+
+function getDailyChallengeStatus(challenge = ensureDailyChallengeForToday()) {
+  const displayedStreak = getDisplayedStreakCount();
+  const complete = challenge.completedAt === challenge.date;
+  const remaining = Math.max(0, challenge.targetScore - challenge.bestScore);
+  const reward = getDailyChallengeRewardAmount(complete ? displayedStreak : Math.max(1, displayedStreak || 1));
+  return {
+    complete,
+    remaining,
+    reward,
+    streak: displayedStreak,
+  };
+}
+
+function getDailyChallengeBestLabel(challenge) {
+  if (!challenge.bestScore) return 'Best 0';
+  return `Best ${challenge.bestScore}`;
+}
+
+function markDailyChallengeAttempt() {
+  if (!isDailyChallengeSession()) return;
+  const todayChallenge = ensureDailyChallengeForToday();
+  updateProgressionState(state => {
+    if (state.dailyChallenge.date === todayChallenge.date) {
+      state.dailyChallenge.attempts += 1;
+    }
+    return state;
+  });
+}
+
+function maybeCompleteDailyChallenge() {
+  if (!isDailyChallengeSession()) return;
+
+  const challenge = ensureDailyChallengeForToday();
+  if (challenge.completedAt === challenge.date || score < challenge.targetScore) return;
+
+  const todayKey = challenge.date;
+  const yesterdayKey = getPreviousDateKey(todayKey);
+  let streakCount = 1;
+
+  updateProgressionState(state => {
+    state.dailyChallenge.bestScore = Math.max(state.dailyChallenge.bestScore, score);
+    state.dailyChallenge.completedAt = todayKey;
+
+    if (state.streak.lastActiveDate === todayKey) {
+      streakCount = Math.max(1, state.streak.current);
+    } else if (state.streak.lastActiveDate === yesterdayKey) {
+      streakCount = state.streak.current + 1;
+      state.streak.current = streakCount;
+      state.streak.lastActiveDate = todayKey;
+    } else {
+      streakCount = 1;
+      state.streak.current = 1;
+      state.streak.lastActiveDate = todayKey;
+    }
+
+    state.streak.best = Math.max(state.streak.best, state.streak.current);
+    return state;
+  });
+
+  const rewardAmount = getDailyChallengeRewardAmount(streakCount);
+  updateProgressionState(state => {
+    state.dailyChallenge.rewardClaimedDate = todayKey;
+    return state;
+  });
+  awardCoins(rewardAmount, `Daily challenge day ${streakCount}`, {
+    celebrate: true,
+    major: streakCount >= 3,
+  });
+  showMilestoneMoment({
+    eyebrow: `Daily challenge cleared`,
+    title: `Target ${challenge.targetScore} reached`,
+    detail: `Streak ${streakCount}. +${rewardAmount} coins added.`,
+    major: streakCount >= 3,
+    anchor: '#score-wrap',
+    announce: `Daily challenge complete. ${rewardAmount} coins awarded. ${streakCount} day streak.`,
+  });
+  renderDashboard();
+}
+
+function syncDailyChallengeScoreProgress() {
+  if (!isDailyChallengeSession()) return;
+  const challenge = ensureDailyChallengeForToday();
+  if (score <= challenge.bestScore) return;
+
+  updateProgressionState(state => {
+    if (state.dailyChallenge.date === challenge.date) {
+      state.dailyChallenge.bestScore = Math.max(state.dailyChallenge.bestScore, score);
+    }
+    return state;
+  });
 }
 
 function getDailyMissionProgressText(mission) {
@@ -1091,7 +1351,7 @@ function orderMatters() {
 }
 
 function randomPiece() {
-  return PIECE_DEFS[Math.floor(Math.random() * PIECE_DEFS.length)];
+  return PIECE_DEFS[Math.floor(randomValue() * PIECE_DEFS.length)];
 }
 
 // ── Difficulty-weighted piece selection ────────────────────
@@ -1107,7 +1367,7 @@ function weightedRandomPiece() {
     totalWeight += w;
     return w;
   });
-  let rand = Math.random() * totalWeight;
+  let rand = randomValue() * totalWeight;
   for (let i = 0; i < PIECE_DEFS.length; i++) {
     rand -= weights[i];
     if (rand <= 0) return PIECE_DEFS[i];
@@ -1147,7 +1407,7 @@ function canCauseClearOnBoard(cells, b) {
 function earlyPiece() {
   const pool = PIECE_DEFS.filter(p => p.length >= 3 && p.length <= 4);
   if (pool.length === 0) return weightedRandomPiece();
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(randomValue() * pool.length)];
 }
 
 // Verify the next `rounds` future rounds will still have clearing opportunities.
@@ -1224,8 +1484,8 @@ function smartPieces() {
       }
     }
     if (candidates.length > 0) {
-      const slot = Math.floor(Math.random() * rackSize);
-      p[slot] = candidates[Math.floor(Math.random() * candidates.length)];
+      const slot = Math.floor(randomValue() * rackSize);
+      p[slot] = candidates[Math.floor(randomValue() * candidates.length)];
     }
   }
 
@@ -1299,6 +1559,15 @@ function createGameSessionSnapshot() {
     score,
     combo,
     rackSize,
+    sessionType: currentSessionType,
+    dailyChallenge: isDailyChallengeSession()
+      ? {
+          date: dailyChallengeState.date,
+          seed: dailyChallengeState.seed,
+          targetScore: dailyChallengeState.targetScore,
+          randomState: dailyChallengeState.randomState,
+        }
+      : null,
     runSummary: ensureRunSummary(),
   };
 }
@@ -1355,6 +1624,15 @@ function getSavedGameSession() {
       score: clampWholeNumber(raw.score, 0),
       combo: clampWholeNumber(raw.combo, 0),
       rackSize: savedRackSize,
+      sessionType: raw.sessionType === 'daily' ? 'daily' : 'standard',
+      dailyChallenge: raw.dailyChallenge && typeof raw.dailyChallenge === 'object'
+        ? {
+            date: typeof raw.dailyChallenge.date === 'string' ? raw.dailyChallenge.date : '',
+            seed: clampWholeNumber(raw.dailyChallenge.seed, 0),
+            targetScore: clampWholeNumber(raw.dailyChallenge.targetScore, 0),
+            randomState: clampWholeNumber(raw.dailyChallenge.randomState, 0),
+          }
+        : null,
       runSummary: raw.runSummary && typeof raw.runSummary === 'object'
         ? {
             finalScore: clampWholeNumber(raw.runSummary.finalScore, 0),
@@ -1377,6 +1655,16 @@ function getSavedGameSession() {
 function restoreSavedGame() {
   const saved = getSavedGameSession();
   if (!saved) return false;
+  if (saved.sessionType === 'daily') {
+    const todayChallenge = ensureDailyChallengeForToday();
+    if (!saved.dailyChallenge || saved.dailyChallenge.date !== todayChallenge.date) {
+      clearSavedGame();
+      return false;
+    }
+    configureDailyChallengeSession(todayChallenge, { randomState: saved.dailyChallenge.randomState });
+  } else {
+    resetStandardSessionState();
+  }
 
   rackSize = saved.rackSize;
   board = saved.board;
@@ -1394,7 +1682,20 @@ function restoreSavedGame() {
   updateRackPlayability();
   updateTrainingPanel();
   updateScoreUI();
+  renderDashboard();
   return true;
+}
+
+function renderSessionModeBadge() {
+  const badge = document.getElementById('session-mode-badge');
+  if (!badge) return;
+
+  if (isDailyChallengeSession()) {
+    badge.hidden = false;
+    badge.textContent = `Daily · target ${dailyChallengeState.targetScore}`;
+  } else {
+    badge.hidden = true;
+  }
 }
 
 function renderDashboard() {
@@ -1402,30 +1703,70 @@ function renderDashboard() {
   const newGameBtn = document.getElementById('btn-dashboard-new');
   const intro = document.getElementById('dashboard-intro');
   const missionCopy = document.getElementById('dashboard-mission-copy');
+  const dailyTitle = document.getElementById('daily-challenge-title');
+  const dailyCopy = document.getElementById('daily-challenge-copy');
+  const dailyTarget = document.getElementById('daily-challenge-target');
+  const dailyBest = document.getElementById('daily-challenge-best');
+  const dailyButton = document.getElementById('btn-dashboard-daily');
+  const dailyInfoButton = document.getElementById('btn-dashboard-daily-info');
+  const dailyStreakPill = document.getElementById('daily-streak-pill');
   const hasSavedGame = !!getSavedGameSession();
+  const savedGame = getSavedGameSession();
   const missionCounts = getDailyMissionCounts();
   const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
+  const challenge = ensureDailyChallengeForToday();
+  const challengeStatus = getDailyChallengeStatus(challenge);
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
     continueBtn.disabled = !hasSavedGame;
+    continueBtn.textContent = savedGame?.sessionType === 'daily' ? 'Continue daily challenge' : 'Continue run';
   }
   if (newGameBtn) {
     newGameBtn.textContent = hasSavedGame ? 'Start fresh run' : 'Start new run';
   }
   if (intro) {
-    intro.textContent = hasSavedGame ? 'Pick up where you left off.' : 'One tap to start playing.';
+    if (savedGame?.sessionType === 'daily') {
+      intro.textContent = 'Your daily challenge is still waiting.';
+    } else {
+      intro.textContent = hasSavedGame ? 'Pick up where you left off.' : 'One tap to start playing.';
+    }
   }
   if (missionCopy) {
     missionCopy.textContent = missionCounts.total
       ? `${missionCounts.completed} of ${missionCounts.total} done today`
       : 'Fresh goals are on the way.';
   }
+  if (dailyTitle) {
+    dailyTitle.textContent = challengeStatus.complete
+      ? 'Today cleared'
+      : `Target ${challenge.targetScore}`;
+  }
+  if (dailyCopy) {
+    dailyCopy.textContent = challengeStatus.complete
+      ? `Completed on ${challenge.date}. Come back tomorrow to keep the streak alive.`
+      : challengeStatus.remaining
+        ? `${challengeStatus.remaining} points left to finish today’s shared seed.`
+        : 'A fresh seeded board is ready.';
+  }
+  if (dailyTarget) dailyTarget.textContent = `Target ${challenge.targetScore}`;
+  if (dailyBest) dailyBest.textContent = getDailyChallengeBestLabel(challenge);
+  if (dailyButton) {
+    dailyButton.textContent = challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge';
+  }
+  if (dailyInfoButton) {
+    dailyInfoButton.textContent = `${challengeStatus.reward} coin reward`;
+  }
+  if (dailyStreakPill) {
+    const dayLabel = challengeStatus.streak === 1 ? 'day' : 'days';
+    dailyStreakPill.textContent = `🔥 ${challengeStatus.streak} ${dayLabel} streak`;
+  }
 
   document.getElementById('dashboard-coins').textContent = String(getCoinBalance());
   document.getElementById('dashboard-best').textContent = String(bestScore);
   document.getElementById('dashboard-today').textContent = String(todayScore);
   document.getElementById('dashboard-finish').textContent = skin.name;
+  renderSessionModeBadge();
 }
 
 function populateQuickSettings() {
@@ -1960,6 +2301,8 @@ function triggerGameOver() {
   gameOver = true;
   clearSavedGame();
 
+  syncDailyChallengeScoreProgress();
+
   const isNewBest = score > bestScore;
   if (isNewBest) {
     bestScore = score;
@@ -1975,6 +2318,7 @@ function triggerGameOver() {
   todayScore = (td.d === todayKey) ? Math.max(td.s, score) : score;
   localStorage.setItem('bst-today', JSON.stringify({ d: todayKey, s: todayScore }));
   updateScoreUI();
+  maybeCompleteDailyChallenge();
   evaluateRunObjectives();
   updateDailyMissionProgress('runs', 1);
 
@@ -2052,7 +2396,15 @@ function newRound() {
   }
 }
 
-function startNewGame() {
+function startNewGame(options = {}) {
+  if (options.sessionType === 'daily') {
+    const challenge = ensureDailyChallengeForToday();
+    configureDailyChallengeSession(challenge, { randomState: challenge.seed });
+    markDailyChallengeAttempt();
+  } else {
+    resetStandardSessionState();
+  }
+
   board    = emptyBoard();
   score    = 0;
   combo    = 0;
@@ -2085,6 +2437,9 @@ function updateScoreUI() {
   document.getElementById('today-val').textContent  = Math.max(todayScore, score);
   document.getElementById('best-val').textContent   = Math.max(bestScore, score);
   updateCoinUI();
+  syncDailyChallengeScoreProgress();
+  maybeCompleteDailyChallenge();
+  renderSessionModeBadge();
 
   // Bump animation when score changes
   if (String(score) !== prev) {
@@ -2458,6 +2813,14 @@ document.getElementById('btn-dashboard-new').addEventListener('click', () => {
   startNewGame();
   navigateTo('game');
 });
+document.getElementById('btn-dashboard-daily').addEventListener('click', () => {
+  startNewGame({ sessionType: 'daily' });
+  navigateTo('game');
+});
+document.getElementById('btn-dashboard-daily-info').addEventListener('click', () => {
+  const challenge = ensureDailyChallengeForToday();
+  alert(`Today’s daily challenge is shared worldwide for ${challenge.date}. Reach ${challenge.targetScore} points to keep your streak and earn a coin bonus.`);
+});
 
 document.getElementById('btn-dashboard-missions').addEventListener('click', () => {
   renderDailyMissions();
@@ -2552,6 +2915,7 @@ document.getElementById('btn-new').addEventListener('click', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   renderDailyMissions();
+  ensureDailyChallengeForToday();
   renderCosmeticsCollection();
   renderDashboard();
 });
@@ -2570,6 +2934,8 @@ function init() {
 
   loadProgressionState();
   ensureDailyMissionsForToday();
+  ensureDailyChallengeForToday();
+  resetStandardSessionState();
   updateCoinUI();
   applyEquippedCosmeticSkin();
   loadSettings();
