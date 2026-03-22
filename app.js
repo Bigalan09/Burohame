@@ -186,6 +186,7 @@ const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
 const PROGRESSION_STATE_VERSION = 2;
+const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
   multiClearBonus: 0,
@@ -501,6 +502,63 @@ function ensureRunSummary() {
   return runSummary;
 }
 
+function prefersReducedMotion() {
+  return REDUCED_MOTION_QUERY.matches;
+}
+
+function announceMilestone(message) {
+  const liveRegion = document.getElementById('milestone-live');
+  if (!liveRegion) return;
+  liveRegion.textContent = '';
+  window.requestAnimationFrame(() => {
+    liveRegion.textContent = message;
+  });
+}
+
+function pulseCelebrationSurface() {
+  const boardWrap = document.getElementById('board-wrap');
+  if (!boardWrap) return;
+  boardWrap.classList.remove('board-wrap--celebrate');
+  void boardWrap.offsetWidth;
+  boardWrap.classList.add('board-wrap--celebrate');
+  boardWrap.addEventListener('animationend', () => {
+    boardWrap.classList.remove('board-wrap--celebrate');
+  }, { once: true });
+}
+
+function showMilestoneMoment({ eyebrow, title, detail = '', major = false, anchor = null, announce = '' }) {
+  const layer = document.getElementById('milestone-layer');
+  if (!layer) return;
+
+  const chip = document.createElement('section');
+  chip.className = `milestone-chip${major ? ' milestone-chip--major' : ''}`;
+
+  const resolvedAnchor = typeof anchor === 'string' ? document.querySelector(anchor) : anchor;
+  const top = resolvedAnchor
+    ? Math.max(88, resolvedAnchor.getBoundingClientRect().top - 18)
+    : 104;
+  chip.style.top = `${top}px`;
+
+  chip.innerHTML = `
+    <span class="milestone-chip__eyebrow">${eyebrow}</span>
+    <strong class="milestone-chip__title">${title}</strong>
+    ${detail ? `<span class="milestone-chip__detail">${detail}</span>` : ''}
+    <span class="milestone-chip__glow"></span>
+  `;
+
+  if (!prefersReducedMotion()) {
+    for (let i = 0; i < 6; i++) {
+      const spark = document.createElement('span');
+      spark.className = 'milestone-chip__spark';
+      chip.appendChild(spark);
+    }
+  }
+
+  layer.appendChild(chip);
+  if (announce) announceMilestone(announce);
+  chip.addEventListener('animationend', () => chip.remove(), { once: true });
+}
+
 function recordRunObjective(objectiveId) {
   const summary = ensureRunSummary();
   if (!summary.completedObjectiveIds.includes(objectiveId)) {
@@ -636,7 +694,7 @@ function awardCoins(amount, reason, options = {}) {
   }
 
   updateCoinUI();
-  if (!options.silent) showCoinToast(wholeAmount, reason);
+  if (!options.silent) showCoinToast(wholeAmount, reason, options);
   return wholeAmount;
 }
 
@@ -668,6 +726,14 @@ function unlockBlockSkin(skinId) {
   });
 
   updateCosmeticLabel();
+  showMilestoneMoment({
+    eyebrow: 'New finish',
+    title: `${skin.name} unlocked`,
+    detail: 'It is ready to equip straight away.',
+    major: true,
+    anchor: '.collection-head',
+    announce: `${skin.name} finish unlocked.`,
+  });
   return true;
 }
 
@@ -714,9 +780,15 @@ function showCoinToast(amount, reason, options = {}) {
 
   const toast = document.createElement('div');
   const isSpend = !!options.spend || amount < 0;
-  toast.className = `coin-toast${isSpend ? ' coin-toast--spend' : ''}`;
+  const isReward = !isSpend && (options.celebrate || amount >= 8);
+  const isMajor = !isSpend && (options.major || amount >= 16);
+  toast.className = `coin-toast${isSpend ? ' coin-toast--spend' : ''}${isReward ? ' coin-toast--reward' : ''}${isMajor ? ' coin-toast--major' : ''}`;
   const prefix = amount >= 0 ? '+' : '−';
-  toast.innerHTML = `<strong>🪙 ${prefix}${Math.abs(amount)}</strong><span>${reason}</span>`;
+  toast.innerHTML = `
+    <strong>🪙 ${prefix}${Math.abs(amount)}</strong>
+    <span>${reason}</span>
+    ${!isSpend && isReward ? '<span class="coin-toast__sparkles" aria-hidden="true"><i></i><i></i><i></i></span>' : ''}
+  `;
 
   const rect = anchor.getBoundingClientRect();
   const maxLeft = Math.max(12, window.innerWidth - 232);
@@ -729,7 +801,7 @@ function showCoinToast(amount, reason, options = {}) {
 }
 
 function awardMissionCoins(amount, missionName = 'Mission complete') {
-  return awardCoins(amount, missionName, { silent: true });
+  return awardCoins(amount, missionName, { silent: true, celebrate: true, major: amount >= 18 });
 }
 
 function ensureDailyMissionsForToday() {
@@ -919,6 +991,7 @@ function updateDailyMissionProgress(kind, value, mode = 'increment') {
         rewardsToGrant.push({
           reward: mission.reward,
           reason: `${mission.title} complete`,
+          missionTitle: mission.title,
         });
       }
     }
@@ -927,7 +1000,18 @@ function updateDailyMissionProgress(kind, value, mode = 'increment') {
   });
 
   renderDailyMissions();
-  rewardsToGrant.forEach(({ reward, reason }) => awardMissionCoins(reward, reason));
+  rewardsToGrant.forEach(({ reward, reason, missionTitle }) => {
+    awardMissionCoins(reward, reason);
+    showCoinToast(reward, reason, { celebrate: true, major: reward >= 18 });
+    showMilestoneMoment({
+      eyebrow: 'Daily mission',
+      title: `${missionTitle} complete`,
+      detail: `+${reward} coins added to your balance.`,
+      major: reward >= 18,
+      anchor: '#score-wrap',
+      announce: `Daily mission complete. ${missionTitle}. ${reward} coins awarded.`,
+    });
+  });
 }
 
 // ── Piece helpers ──────────────────────────────────────────
@@ -1744,10 +1828,11 @@ function doClears() {
   // Scoring: cells cleared + multi-clear bonus + combo
   let pts = cleared.size;
   if (total > 1) pts += (total - 1) * 10;
+  const summary = ensureRunSummary();
+  const isFirstClearOfRun = summary.stats.regionsCleared === 0;
   combo += total;   // combo grows by every region cleared in this move
   pts += combo * 5;
   score += pts;
-  const summary = ensureRunSummary();
   summary.stats.regionsCleared += total;
   summary.stats.maxCombo = Math.max(summary.stats.maxCombo, combo);
   updateDailyMissionProgress('regions', total);
@@ -1755,7 +1840,33 @@ function doClears() {
   updateDailyMissionProgress('combo', combo, 'max');
 
   const clearCoins = calculateClearCoinReward(total, combo);
-  awardCoins(clearCoins, clearRewardLabel(total, combo));
+  awardCoins(clearCoins, clearRewardLabel(total, combo), {
+    celebrate: total >= 2 || combo >= 3,
+    major: total >= 3 || combo >= 5,
+  });
+
+  if (isFirstClearOfRun) {
+    pulseCelebrationSurface();
+    showMilestoneMoment({
+      eyebrow: 'First clear',
+      title: 'Lovely start',
+      detail: 'You opened the board and made room to build on.',
+      anchor: '#board-wrap',
+      announce: 'First clear of the run.',
+    });
+  }
+
+  if (total >= 3) {
+    pulseCelebrationSurface();
+    showMilestoneMoment({
+      eyebrow: `${total}-region clear`,
+      title: 'That landed brilliantly',
+      detail: 'Big clears buy you space and keep the run settled.',
+      major: true,
+      anchor: '#board-wrap',
+      announce: `${total} regions cleared at once.`,
+    });
+  }
 
   for (const key of cleared) {
     const [r, c] = key.split(',').map(Number);
@@ -1912,7 +2023,18 @@ function newRound() {
   const roundsCompleted = summary.stats.racksCompleted;
   const roundMilestoneReward = getRoundMilestoneReward(roundsCompleted);
   if (roundMilestoneReward) {
-    awardCoins(roundMilestoneReward, `${roundsCompleted} rounds completed`);
+    awardCoins(roundMilestoneReward, `${roundsCompleted} rounds completed`, {
+      celebrate: true,
+      major: true,
+    });
+    showMilestoneMoment({
+      eyebrow: 'Coin reward',
+      title: `+${roundMilestoneReward} coins`,
+      detail: `${roundsCompleted} rounds completed. Nicely paced.`,
+      major: true,
+      anchor: '#score-wrap',
+      announce: `${roundMilestoneReward} coin reward for ${roundsCompleted} rounds completed.`,
+    });
   }
   evaluateRunObjectives();
   updateDailyMissionProgress('racks', 1);

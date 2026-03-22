@@ -610,12 +610,175 @@ a.icon-btn { text-decoration: none; }
   white-space: nowrap;
 }
 
+/* ===== Milestone moments ===== */
+#milestone-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3400;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes milestoneRise {
+  0% {
+    transform: translateX(-50%) translateY(10px) scale(0.97);
+    opacity: 0;
+  }
+  14% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+  86% {
+    transform: translateX(-50%) translateY(-6px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(-12px) scale(0.99);
+    opacity: 0;
+  }
+}
+
+@keyframes milestoneGlow {
+  0% {
+    transform: translate(-50%, -50%) scale(0.72);
+    opacity: 0;
+  }
+  28% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.16);
+    opacity: 0;
+  }
+}
+
+@keyframes milestoneSpark {
+  0% {
+    transform: rotate(var(--spark-angle)) translateY(0) scale(0.8);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--spark-angle)) translateY(calc(-1 * var(--spark-distance))) scale(1.04);
+    opacity: 0;
+  }
+}
+
+.milestone-chip {
+  position: fixed;
+  left: 50%;
+  width: min(308px, calc(100vw - 24px));
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--bg-card) 90%, var(--accent-hi) 10%);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  box-shadow: 0 16px 40px rgba(19, 26, 38, 0.18);
+  color: var(--text);
+  animation: milestoneRise 2.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  overflow: hidden;
+}
+
+.milestone-chip::before {
+  content: '';
+  position: absolute;
+  inset: auto auto 10px 14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-hi) 34%, transparent);
+  filter: blur(10px);
+  opacity: 0.75;
+}
+
+.milestone-chip--major {
+  background: color-mix(in srgb, var(--bg-card) 84%, var(--accent-hi) 16%);
+  border-color: color-mix(in srgb, var(--accent-hi) 36%, var(--border));
+  box-shadow: 0 18px 44px rgba(19, 26, 38, 0.2);
+}
+
+.milestone-chip__eyebrow,
+.milestone-chip__detail,
+.milestone-chip__title {
+  position: relative;
+  z-index: 1;
+}
+
+.milestone-chip__eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent-dk) 70%, var(--text));
+}
+
+.milestone-chip__title {
+  display: block;
+  margin-top: 3px;
+  font-size: 19px;
+  line-height: 1.18;
+  font-weight: 800;
+}
+
+.milestone-chip__detail {
+  display: block;
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.42;
+  color: var(--text-2);
+}
+
+.milestone-chip__glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 136px;
+  height: 136px;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent-hi) 46%, transparent) 0%, transparent 72%);
+  animation: milestoneGlow 1s ease-out forwards;
+}
+
+.milestone-chip__spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  margin-top: -3.5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-hi) 78%, #fff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-hi) 18%, transparent);
+  animation: milestoneSpark 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.milestone-chip__spark:nth-child(5) { --spark-angle: 18deg; --spark-distance: 56px; }
+.milestone-chip__spark:nth-child(6) { --spark-angle: 86deg; --spark-distance: 52px; }
+.milestone-chip__spark:nth-child(7) { --spark-angle: 140deg; --spark-distance: 48px; }
+.milestone-chip__spark:nth-child(8) { --spark-angle: 214deg; --spark-distance: 58px; }
+.milestone-chip__spark:nth-child(9) { --spark-angle: 278deg; --spark-distance: 50px; }
+.milestone-chip__spark:nth-child(10) { --spark-angle: 334deg; --spark-distance: 54px; }
+
 /* ===== Coin reward toast ===== */
 @keyframes coinToastIn {
-  0%   { transform: translateY(8px) scale(0.92); opacity: 0; }
+  0%   { transform: translateY(6px) scale(0.96); opacity: 0; }
   18%  { transform: translateY(0) scale(1); opacity: 1; }
-  82%  { transform: translateY(-18px) scale(1); opacity: 1; }
-  100% { transform: translateY(-30px) scale(0.96); opacity: 0; }
+  84%  { transform: translateY(-10px) scale(1); opacity: 1; }
+  100% { transform: translateY(-18px) scale(0.98); opacity: 0; }
 }
 .coin-toast {
   position: fixed;
@@ -629,7 +792,16 @@ a.icon-btn { text-decoration: none; }
   color: var(--text);
   pointer-events: none;
   z-index: 3200;
-  animation: coinToastIn 1.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: coinToastIn 1.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.coin-toast--reward {
+  background: color-mix(in srgb, var(--accent-hi) 18%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent-hi) 30%, var(--border));
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+}
+.coin-toast--major {
+  background: color-mix(in srgb, var(--accent-hi) 24%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent-hi) 38%, var(--border));
 }
 .coin-toast--spend {
   background: color-mix(in srgb, #ff6b60 18%, var(--bg-card));
@@ -645,6 +817,40 @@ a.icon-btn { text-decoration: none; }
   margin-top: 3px;
   font-size: 11px;
   color: var(--text-2);
+}
+
+.coin-toast__sparkles {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.coin-toast__sparkles i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-hi) 72%, #fff);
+  opacity: 0.75;
+}
+
+@keyframes boardCelebrate {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-hi) 0%, transparent);
+  }
+  30% {
+    transform: scale(1.015);
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent-hi) 14%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-hi) 0%, transparent);
+  }
+}
+
+#board-wrap.board-wrap--celebrate {
+  animation: boardCelebrate 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ===== Overlay transitions ===== */
