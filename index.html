@@ -59,6 +59,25 @@
           </article>
         </section>
 
+        <section class="dashboard-challenge" aria-label="Daily challenge">
+          <div class="dashboard-challenge__head">
+            <div>
+              <span class="dashboard-challenge__kicker">Shared daily challenge</span>
+              <h2 id="daily-challenge-title">Ready for today</h2>
+            </div>
+            <span class="dashboard-challenge__streak" id="daily-streak-pill">🔥 0 day streak</span>
+          </div>
+          <p class="dashboard-challenge__copy" id="daily-challenge-copy">A fresh seeded board is ready.</p>
+          <div class="dashboard-challenge__meta">
+            <span id="daily-challenge-target">Target 0</span>
+            <span id="daily-challenge-best">Best 0</span>
+          </div>
+          <div class="dashboard-challenge__actions">
+            <button class="pill-btn" id="btn-dashboard-daily" type="button">Play daily challenge</button>
+            <button class="pill-btn pill-btn--secondary" id="btn-dashboard-daily-info" type="button">How it works</button>
+          </div>
+        </section>
+
         <button class="dashboard-missions" id="btn-dashboard-missions" type="button" aria-label="Open daily missions">
           <span class="dashboard-missions__label">Daily missions</span>
           <strong id="dashboard-mission-copy">Fresh goals are on the way.</strong>
@@ -77,6 +96,7 @@
         <div id="score-wrap">
           <div id="score-main">0</div>
           <div id="score-sub">
+            <span id="session-mode-badge" class="session-mode-badge" hidden>Daily challenge</span>
             <span>Today&nbsp;<span id="today-val">0</span></span>
             <span>🏆&nbsp;<span id="best-val">0</span></span>
             <span class="coins-stat" aria-live="polite" aria-label="Coins">🪙&nbsp;<span id="coin-balance">0</span></span>
@@ -308,6 +328,13 @@
             <span id="go-objective-count" class="run-objectives__count">0 cleared</span>
           </div>
           <ul id="go-objectives-list" class="run-objectives__list"></ul>
+        </section>
+        <section class="summary-challenge" id="go-daily-summary" hidden>
+          <div class="summary-challenge__head">
+            <h3>Daily challenge</h3>
+            <span id="go-daily-status">In progress</span>
+          </div>
+          <p id="go-daily-copy">Today’s target is still waiting for you.</p>
         </section>
         <button class="pill-btn wide summary-primary-btn" id="btn-new" type="button">Start next run</button>
       </div>
