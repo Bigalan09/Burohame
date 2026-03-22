@@ -183,15 +183,16 @@ let runSummary = null;
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
+const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
 const PROGRESSION_STATE_VERSION = 1;
 const COIN_REWARDS = Object.freeze({
-  clearRegion: 4,
-  multiClearBonus: 3,
-  comboStep: 2,
-  roundCompletion: 2,
-  endRunBase: 10,
-  endRunPer50Score: 1,
-  personalBestBonus: 15,
+  clearRegion: 0,
+  multiClearBonus: 0,
+  comboStep: 0,
+  roundCompletion: 0,
+  endRunBase: 16,
+  endRunPer50Score: 2,
+  personalBestBonus: 18,
 });
 const DAILY_MISSION_TEMPLATES = Object.freeze([
   {
@@ -591,7 +592,7 @@ function showCoinToast(amount, reason) {
 }
 
 function awardMissionCoins(amount, missionName = 'Mission complete') {
-  return awardCoins(amount, missionName);
+  return awardCoins(amount, missionName, { silent: true });
 }
 
 function ensureDailyMissionsForToday() {
@@ -1003,6 +1004,138 @@ function loadSettings() {
   } catch (_) { /* ignore corrupt data */ }
 }
 
+function createGameSessionSnapshot() {
+  return {
+    board: board.map(row => row.slice()),
+    pieces: pieces.map(cells => cells.map(([r, c]) => [r, c])),
+    used: used.slice(),
+    score,
+    combo,
+    rackSize,
+    runSummary: ensureRunSummary(),
+  };
+}
+
+function clearSavedGame() {
+  localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
+  updateStartOverlayState();
+}
+
+function saveCurrentGame() {
+  if (gameOver || !Array.isArray(board) || board.length !== N || !pieces.length) return;
+  localStorage.setItem(GAME_SESSION_STORAGE_KEY, JSON.stringify(createGameSessionSnapshot()));
+  updateStartOverlayState();
+}
+
+function sanitiseSavedBoard(value) {
+  if (!Array.isArray(value) || value.length !== N) return emptyBoard();
+  return value.map(row => Array.isArray(row) && row.length === N
+    ? row.map(cell => cell ? 1 : 0)
+    : new Array(N).fill(0));
+}
+
+function sanitiseSavedPieces(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(cells => Array.isArray(cells)
+      ? cells
+        .filter(cell => Array.isArray(cell) && cell.length === 2)
+        .map(([r, c]) => [Math.max(0, Math.min(N - 1, Math.floor(r))), Math.max(0, Math.min(N - 1, Math.floor(c)))])
+      : [])
+    .filter(cells => cells.length);
+}
+
+function getSavedGameSession() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(GAME_SESSION_STORAGE_KEY) || 'null');
+    if (!raw || typeof raw !== 'object') return null;
+
+    const savedPieces = sanitiseSavedPieces(raw.pieces);
+    const savedRackSize = typeof raw.rackSize === 'number' && raw.rackSize >= 1 && raw.rackSize <= 3
+      ? raw.rackSize
+      : rackSize;
+
+    if (savedPieces.length !== savedRackSize) return null;
+
+    const savedUsed = Array.isArray(raw.used) && raw.used.length === savedRackSize
+      ? raw.used.map(Boolean)
+      : Array(savedRackSize).fill(false);
+
+    return {
+      board: sanitiseSavedBoard(raw.board),
+      pieces: savedPieces,
+      used: savedUsed,
+      score: clampWholeNumber(raw.score, 0),
+      combo: clampWholeNumber(raw.combo, 0),
+      rackSize: savedRackSize,
+      runSummary: raw.runSummary && typeof raw.runSummary === 'object'
+        ? {
+            finalScore: clampWholeNumber(raw.runSummary.finalScore, 0),
+            coinsEarned: clampWholeNumber(raw.runSummary.coinsEarned, 0),
+            completedObjectiveIds: uniqueStringList(raw.runSummary.completedObjectiveIds, []),
+            stats: {
+              regionsCleared: clampWholeNumber(raw.runSummary.stats?.regionsCleared, 0),
+              maxCombo: clampWholeNumber(raw.runSummary.stats?.maxCombo, 0),
+              racksCompleted: clampWholeNumber(raw.runSummary.stats?.racksCompleted, 0),
+              personalBest: !!raw.runSummary.stats?.personalBest,
+            },
+          }
+        : createDefaultRunSummary(),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function restoreSavedGame() {
+  const saved = getSavedGameSession();
+  if (!saved) return false;
+
+  rackSize = saved.rackSize;
+  board = saved.board;
+  pieces = saved.pieces;
+  used = saved.used;
+  score = saved.score;
+  combo = saved.combo;
+  gameOver = false;
+  coinToastOffset = 0;
+  runSummary = saved.runSummary;
+
+  initRackDOM();
+  renderBoard();
+  renderRack();
+  updateRackPlayability();
+  updateTrainingPanel();
+  updateScoreUI();
+  return true;
+}
+
+function updateStartOverlayState() {
+  const continueBtn = document.getElementById('btn-continue');
+  const newGameBtn = document.getElementById('btn-start-new');
+  const intro = document.getElementById('start-intro');
+  if (!continueBtn || !newGameBtn || !intro) return;
+
+  const hasSavedGame = !!getSavedGameSession();
+  continueBtn.hidden = !hasSavedGame;
+  continueBtn.disabled = !hasSavedGame;
+  continueBtn.textContent = 'Continue';
+  newGameBtn.textContent = hasSavedGame ? 'New game' : 'Start game';
+  newGameBtn.classList.toggle('pill-btn--secondary', hasSavedGame);
+  intro.textContent = hasSavedGame
+    ? 'Continue your saved run or start again.'
+    : 'Start a fresh run.';
+}
+
+function openStartOverlay() {
+  updateStartOverlayState();
+  showOverlay('ov-start');
+}
+
+function closeStartOverlay() {
+  hideOverlay('ov-start');
+}
+
 // ── Board helpers ──────────────────────────────────────────
 function emptyBoard() {
   return Array.from({ length: N }, () => new Array(N).fill(0));
@@ -1323,6 +1456,7 @@ function afterPlace() {
     // All pieces placed → new round
     setTimeout(newRound, 80);
   } else {
+    saveCurrentGame();
     if (isGameOver()) setTimeout(triggerGameOver, 150);
   }
 }
@@ -1470,6 +1604,7 @@ function isGameOver() {
 function triggerGameOver() {
   if (gameOver) return;
   gameOver = true;
+  clearSavedGame();
 
   const isNewBest = score > bestScore;
   if (isNewBest) {
@@ -1539,6 +1674,7 @@ function newRound() {
   if (colorSetting === 'random') applyColor('random');
   renderRack();
   updateRackPlayability();
+  saveCurrentGame();
   if (isGameOver()) {
     setTimeout(triggerGameOver, 150);
   } else if (rackSize > 1 && orderMatters()) {
@@ -1563,6 +1699,7 @@ function startNewGame() {
   updateRackPlayability();
   clearHint();
   updateTrainingPanel();
+  saveCurrentGame();
 
   hideOverlay('ov-gameover');
   document.getElementById('move-eval').textContent = '';
@@ -1889,13 +2026,24 @@ function hideOverlay(id) {
 }
 
 // ── Settings / overlays ────────────────────────────────────
-document.getElementById('btn-settings').addEventListener('click', () => {
+function openSettingsOverlay() {
   document.getElementById('chk-coach').checked = trainingMode;
   document.getElementById('chk-extended').checked = extendedPieces;
   document.getElementById('chk-dark').checked = darkMode;
   document.getElementById('sel-color').value = colorSetting;
   document.getElementById('sel-rack').value = String(rackSize);
   showOverlay('ov-settings');
+}
+
+document.getElementById('btn-settings').addEventListener('click', openSettingsOverlay);
+document.getElementById('btn-start-settings').addEventListener('click', openSettingsOverlay);
+document.getElementById('btn-continue').addEventListener('click', () => {
+  if (!restoreSavedGame()) return;
+  closeStartOverlay();
+});
+document.getElementById('btn-start-new').addEventListener('click', () => {
+  startNewGame();
+  closeStartOverlay();
 });
 
 document.getElementById('btn-missions').addEventListener('click', () => {
@@ -1945,6 +2093,7 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   localStorage.removeItem('bst-today');
   localStorage.removeItem('bst-settings');
   localStorage.removeItem(PROGRESSION_STORAGE_KEY);
+  localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
   progressionState = createDefaultProgressionState();
 
   // Unregister service workers so new assets are fetched on next load
@@ -2010,7 +2159,23 @@ function init() {
   initBoardDOM();
   initRackDOM();
   renderDailyMissions();
-  startNewGame();
+
+  board = emptyBoard();
+  pieces = [];
+  used = Array(rackSize).fill(true);
+  score = 0;
+  combo = 0;
+  gameOver = false;
+  runSummary = createDefaultRunSummary();
+  renderBoard();
+  updateScoreUI();
+  updateStartOverlayState();
+
+  if (getSavedGameSession()) {
+    restoreSavedGame();
+  }
+
+  openStartOverlay();
 }
 
 init();
