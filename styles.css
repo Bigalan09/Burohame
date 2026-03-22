@@ -632,19 +632,19 @@ a.icon-btn { text-decoration: none; }
 
 @keyframes milestoneRise {
   0% {
-    transform: translateX(-50%) translateY(14px) scale(0.94);
+    transform: translateX(-50%) translateY(10px) scale(0.97);
     opacity: 0;
   }
-  16% {
+  14% {
     transform: translateX(-50%) translateY(0) scale(1);
     opacity: 1;
   }
-  84% {
-    transform: translateX(-50%) translateY(-16px) scale(1);
+  86% {
+    transform: translateX(-50%) translateY(-6px) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translateX(-50%) translateY(-26px) scale(0.98);
+    transform: translateX(-50%) translateY(-12px) scale(0.99);
     opacity: 0;
   }
 }
@@ -680,14 +680,14 @@ a.icon-btn { text-decoration: none; }
 .milestone-chip {
   position: fixed;
   left: 50%;
-  width: min(280px, calc(100vw - 28px));
-  padding: 12px 14px;
+  width: min(308px, calc(100vw - 24px));
+  padding: 14px 16px;
   border-radius: 20px;
-  background: color-mix(in srgb, var(--bg-card) 84%, var(--accent-hi) 16%);
+  background: color-mix(in srgb, var(--bg-card) 90%, var(--accent-hi) 10%);
   border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
   box-shadow: 0 16px 40px rgba(19, 26, 38, 0.18);
   color: var(--text);
-  animation: milestoneRise 1.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: milestoneRise 2.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   overflow: hidden;
 }
 
@@ -704,7 +704,7 @@ a.icon-btn { text-decoration: none; }
 }
 
 .milestone-chip--major {
-  background: color-mix(in srgb, var(--bg-card) 72%, var(--accent-hi) 28%);
+  background: color-mix(in srgb, var(--bg-card) 84%, var(--accent-hi) 16%);
   border-color: color-mix(in srgb, var(--accent-hi) 36%, var(--border));
   box-shadow: 0 18px 44px rgba(19, 26, 38, 0.2);
 }
@@ -728,16 +728,16 @@ a.icon-btn { text-decoration: none; }
 .milestone-chip__title {
   display: block;
   margin-top: 3px;
-  font-size: 18px;
-  line-height: 1.1;
+  font-size: 19px;
+  line-height: 1.18;
   font-weight: 800;
 }
 
 .milestone-chip__detail {
   display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.35;
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.42;
   color: var(--text-2);
 }
 
@@ -775,10 +775,10 @@ a.icon-btn { text-decoration: none; }
 
 /* ===== Coin reward toast ===== */
 @keyframes coinToastIn {
-  0%   { transform: translateY(8px) scale(0.92); opacity: 0; }
+  0%   { transform: translateY(6px) scale(0.96); opacity: 0; }
   18%  { transform: translateY(0) scale(1); opacity: 1; }
-  82%  { transform: translateY(-18px) scale(1); opacity: 1; }
-  100% { transform: translateY(-30px) scale(0.96); opacity: 0; }
+  84%  { transform: translateY(-10px) scale(1); opacity: 1; }
+  100% { transform: translateY(-18px) scale(0.98); opacity: 0; }
 }
 .coin-toast {
   position: fixed;
@@ -792,7 +792,7 @@ a.icon-btn { text-decoration: none; }
   color: var(--text);
   pointer-events: none;
   z-index: 3200;
-  animation: coinToastIn 1.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: coinToastIn 1.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .coin-toast--reward {
   background: color-mix(in srgb, var(--accent-hi) 18%, var(--bg-card));
