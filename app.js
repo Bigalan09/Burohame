@@ -180,6 +180,7 @@ let rackSize     = 3;          // number of pieces shown in the rack (1–3)
 let progressionState = null;
 let coinToastOffset = 0;
 let runSummary = null;
+let currentPage = 'dashboard';
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
@@ -584,8 +585,9 @@ function getCoinBalance() {
 
 function updateCoinUI() {
   const coinEl = document.getElementById('coin-balance');
-  if (!coinEl) return;
-  coinEl.textContent = getCoinBalance();
+  if (coinEl) coinEl.textContent = getCoinBalance();
+  const dashboardCoinEl = document.getElementById('dashboard-coins');
+  if (dashboardCoinEl) dashboardCoinEl.textContent = String(getCoinBalance());
 }
 
 function getOwnedBlockSkins() {
@@ -601,10 +603,17 @@ function isBlockSkinOwned(skinId) {
 }
 
 function updateCosmeticLabel() {
-  const label = document.getElementById('equipped-cosmetic-label');
-  if (!label) return;
   const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
-  label.textContent = `${skin.name} finish equipped`;
+  const labelText = `${skin.name} finish equipped`;
+  const labels = [
+    document.getElementById('page-equipped-cosmetic-label'),
+  ];
+  labels.forEach(label => {
+    if (label) label.textContent = labelText;
+  });
+
+  const dashboardFinish = document.getElementById('dashboard-finish');
+  if (dashboardFinish) dashboardFinish.textContent = skin.name;
 }
 
 function applyEquippedCosmeticSkin() {
@@ -813,6 +822,9 @@ function renderDailyMissions() {
     `;
     list.appendChild(item);
   }
+
+  const missionCopy = document.getElementById('dashboard-mission-copy');
+  if (missionCopy) missionCopy.textContent = `${completed}/${total} missions completed today.`;
 }
 
 function getCollectionSubtitle() {
@@ -1209,13 +1221,13 @@ function createGameSessionSnapshot() {
 
 function clearSavedGame() {
   localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
-  updateStartOverlayState();
+  renderDashboard();
 }
 
 function saveCurrentGame() {
   if (gameOver || !Array.isArray(board) || board.length !== N || !pieces.length) return;
   localStorage.setItem(GAME_SESSION_STORAGE_KEY, JSON.stringify(createGameSessionSnapshot()));
-  updateStartOverlayState();
+  renderDashboard();
 }
 
 function sanitiseSavedBoard(value) {
@@ -1301,30 +1313,63 @@ function restoreSavedGame() {
   return true;
 }
 
-function updateStartOverlayState() {
-  const continueBtn = document.getElementById('btn-continue');
-  const newGameBtn = document.getElementById('btn-start-new');
-  const intro = document.getElementById('start-intro');
-  if (!continueBtn || !newGameBtn || !intro) return;
-
+function renderDashboard() {
+  const continueBtn = document.getElementById('btn-dashboard-continue');
+  const newGameBtn = document.getElementById('btn-dashboard-new');
+  const intro = document.getElementById('dashboard-intro');
+  const missionCopy = document.getElementById('dashboard-mission-copy');
   const hasSavedGame = !!getSavedGameSession();
-  continueBtn.hidden = !hasSavedGame;
-  continueBtn.disabled = !hasSavedGame;
-  continueBtn.textContent = 'Continue';
-  newGameBtn.textContent = hasSavedGame ? 'New game' : 'Start game';
-  newGameBtn.classList.toggle('pill-btn--secondary', hasSavedGame);
-  intro.textContent = hasSavedGame
-    ? 'Continue your saved run or start again.'
-    : 'Start a fresh run.';
+  const missionCounts = getDailyMissionCounts();
+  const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
+
+  if (continueBtn) {
+    continueBtn.hidden = !hasSavedGame;
+    continueBtn.disabled = !hasSavedGame;
+  }
+  if (newGameBtn) {
+    newGameBtn.textContent = hasSavedGame ? 'Start fresh run' : 'Start new run';
+  }
+  if (intro) {
+    intro.textContent = hasSavedGame
+      ? 'Continue where you left off, or start a fresh run from the dashboard.'
+      : 'Pick up a fresh run, visit the shop, or tune your setup before playing.';
+  }
+  if (missionCopy) {
+    missionCopy.textContent = missionCounts.total
+      ? `${missionCounts.completed}/${missionCounts.total} missions completed today.`
+      : 'Fresh goals are on the way.';
+  }
+
+  document.getElementById('dashboard-coins').textContent = String(getCoinBalance());
+  document.getElementById('dashboard-best').textContent = String(bestScore);
+  document.getElementById('dashboard-today').textContent = String(todayScore);
+  document.getElementById('dashboard-finish').textContent = skin.name;
 }
 
-function openStartOverlay() {
-  updateStartOverlayState();
-  showOverlay('ov-start');
+function populateQuickSettings() {
+  document.getElementById('quick-chk-coach').checked = trainingMode;
+  document.getElementById('quick-chk-dark').checked = darkMode;
 }
 
-function closeStartOverlay() {
-  hideOverlay('ov-start');
+function populateSettingsPage() {
+  document.getElementById('page-chk-coach').checked = trainingMode;
+  document.getElementById('page-chk-extended').checked = extendedPieces;
+  document.getElementById('page-chk-dark').checked = darkMode;
+  document.getElementById('page-sel-color').value = colorSetting;
+  document.getElementById('page-sel-rack').value = String(rackSize);
+  updateCosmeticLabel();
+}
+
+function navigateTo(page) {
+  currentPage = page;
+  document.getElementById('app').dataset.page = page;
+  document.querySelectorAll('.page').forEach(section => {
+    section.hidden = section.dataset.page !== page;
+  });
+
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'shop') renderCosmeticsCollection();
+  if (page === 'settings') populateSettingsPage();
 }
 
 // ── Board helpers ──────────────────────────────────────────
@@ -1896,6 +1941,7 @@ function startNewGame() {
   clearHint();
   updateTrainingPanel();
   saveCurrentGame();
+  renderDashboard();
 
   hideOverlay('ov-gameover');
   document.getElementById('move-eval').textContent = '';
@@ -2222,47 +2268,100 @@ function hideOverlay(id) {
 }
 
 // ── Settings / overlays ────────────────────────────────────
-function openSettingsOverlay() {
-  document.getElementById('chk-coach').checked = trainingMode;
-  document.getElementById('chk-extended').checked = extendedPieces;
-  document.getElementById('chk-dark').checked = darkMode;
-  document.getElementById('sel-color').value = colorSetting;
-  document.getElementById('sel-rack').value = String(rackSize);
-  updateCosmeticLabel();
-  showOverlay('ov-settings');
+function applySettingsState(nextSettings) {
+  const prevTraining = trainingMode;
+  const prevRackSize = rackSize;
+
+  trainingMode = nextSettings.trainingMode;
+  extendedPieces = nextSettings.extendedPieces;
+  darkMode = nextSettings.darkMode;
+  colorSetting = nextSettings.colorSetting;
+  rackSize = nextSettings.rackSize;
+
+  applyDarkMode(darkMode);
+  applyColor(colorSetting);
+  applyExtendedPieces(extendedPieces);
+  saveSettings();
+
+  document.getElementById('coach-panel').hidden = !trainingMode;
+  if (trainingMode && !prevTraining) updateTrainingPanel();
+  if (!trainingMode) {
+    clearHint();
+    document.getElementById('move-eval').textContent = '';
+    document.getElementById('strategy-note').textContent = '';
+  }
+
+  if (rackSize !== prevRackSize) {
+    initRackDOM();
+    startNewGame();
+  }
+
+  populateQuickSettings();
+  populateSettingsPage();
+  renderDashboard();
 }
 
-function openCollectionOverlay() {
-  renderCosmeticsCollection();
-  showOverlay('ov-collection');
+function openQuickSettingsOverlay() {
+  populateQuickSettings();
+  showOverlay('ov-quick-settings');
 }
 
-document.getElementById('btn-settings').addEventListener('click', openSettingsOverlay);
-document.getElementById('btn-start-settings').addEventListener('click', openSettingsOverlay);
-document.getElementById('btn-open-collection').addEventListener('click', () => {
-  hideOverlay('ov-settings');
-  openCollectionOverlay();
+document.getElementById('btn-quick-settings').addEventListener('click', openQuickSettingsOverlay);
+document.getElementById('btn-quick-settings-close').addEventListener('click', () => {
+  hideOverlay('ov-quick-settings');
 });
-document.getElementById('btn-continue').addEventListener('click', () => {
+document.getElementById('btn-quick-settings-save').addEventListener('click', () => {
+  applySettingsState({
+    trainingMode: document.getElementById('quick-chk-coach').checked,
+    extendedPieces,
+    darkMode: document.getElementById('quick-chk-dark').checked,
+    colorSetting,
+    rackSize,
+  });
+  hideOverlay('ov-quick-settings');
+});
+
+document.getElementById('btn-dashboard-continue').addEventListener('click', () => {
   if (!restoreSavedGame()) return;
-  closeStartOverlay();
+  navigateTo('game');
 });
-document.getElementById('btn-start-new').addEventListener('click', () => {
+document.getElementById('btn-dashboard-new').addEventListener('click', () => {
   startNewGame();
-  closeStartOverlay();
+  navigateTo('game');
 });
 
-document.getElementById('btn-missions').addEventListener('click', () => {
+document.getElementById('btn-dashboard-shop').addEventListener('click', () => {
+  navigateTo('shop');
+});
+document.getElementById('btn-dashboard-settings').addEventListener('click', () => {
+  navigateTo('settings');
+});
+document.getElementById('btn-dashboard-about').addEventListener('click', () => {
+  navigateTo('about');
+});
+document.getElementById('btn-dashboard-missions').addEventListener('click', () => {
   renderDailyMissions();
   showOverlay('ov-missions');
+});
+document.getElementById('btn-game-back').addEventListener('click', () => {
+  saveCurrentGame();
+  navigateTo('dashboard');
+});
+document.getElementById('btn-shop-back').addEventListener('click', () => {
+  navigateTo('dashboard');
+});
+document.getElementById('btn-settings-back').addEventListener('click', () => {
+  navigateTo('dashboard');
+});
+document.getElementById('btn-about-back').addEventListener('click', () => {
+  navigateTo('dashboard');
+});
+document.getElementById('btn-settings-shop').addEventListener('click', () => {
+  navigateTo('shop');
 });
 
 document.getElementById('btn-missions-close').addEventListener('click', () => {
   hideOverlay('ov-missions');
-});
-
-document.getElementById('btn-collection-close').addEventListener('click', () => {
-  hideOverlay('ov-collection');
 });
 
 document.getElementById('collection-list').addEventListener('click', event => {
@@ -2283,36 +2382,18 @@ document.getElementById('collection-list').addEventListener('click', event => {
   }
 
   renderCosmeticsCollection();
+  renderDashboard();
 });
 
-document.getElementById('btn-done').addEventListener('click', () => {
-  const prev = trainingMode;
-  const prevRackSize = rackSize;
-  trainingMode   = document.getElementById('chk-coach').checked;
-  extendedPieces = document.getElementById('chk-extended').checked;
-  darkMode       = document.getElementById('chk-dark').checked;
-  colorSetting   = document.getElementById('sel-color').value;
-  rackSize       = parseInt(document.getElementById('sel-rack').value, 10);
-
-  applyDarkMode(darkMode);
-  applyColor(colorSetting);
-  applyExtendedPieces(extendedPieces);
-  saveSettings();
-
-  hideOverlay('ov-settings');
-  document.getElementById('coach-panel').hidden = !trainingMode;
-  if (trainingMode && !prev) updateTrainingPanel();
-  if (!trainingMode) {
-    clearHint();
-    document.getElementById('move-eval').textContent = '';
-    document.getElementById('strategy-note').textContent = '';
-  }
-
-  // Rebuild rack and restart game if rack size changed
-  if (rackSize !== prevRackSize) {
-    initRackDOM();
-    startNewGame();
-  }
+document.getElementById('btn-settings-save').addEventListener('click', () => {
+  applySettingsState({
+    trainingMode: document.getElementById('page-chk-coach').checked,
+    extendedPieces: document.getElementById('page-chk-extended').checked,
+    darkMode: document.getElementById('page-chk-dark').checked,
+    colorSetting: document.getElementById('page-sel-color').value,
+    rackSize: parseInt(document.getElementById('page-sel-rack').value, 10),
+  });
+  navigateTo('dashboard');
 });
 
 document.getElementById('btn-clear-data').addEventListener('click', async () => {
@@ -2347,12 +2428,16 @@ document.getElementById('btn-hint').addEventListener('click', showHint);
 
 document.getElementById('btn-restart').addEventListener('click', startNewGame);
 
-document.getElementById('btn-new').addEventListener('click', startNewGame);
+document.getElementById('btn-new').addEventListener('click', () => {
+  startNewGame();
+  navigateTo('game');
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   renderDailyMissions();
   renderCosmeticsCollection();
+  renderDashboard();
 });
 
 // Prevent body scroll while dragging on iOS
@@ -2401,13 +2486,15 @@ function init() {
   runSummary = createDefaultRunSummary();
   renderBoard();
   updateScoreUI();
-  updateStartOverlayState();
 
   if (getSavedGameSession()) {
     restoreSavedGame();
   }
 
-  openStartOverlay();
+  populateQuickSettings();
+  populateSettingsPage();
+  renderDashboard();
+  navigateTo('dashboard');
 }
 
 init();
