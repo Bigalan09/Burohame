@@ -125,6 +125,7 @@ html, body {
 }
 
 #app[data-page="dashboard"] .page[data-page="dashboard"],
+#app[data-page="goals"] .page[data-page="goals"],
 #app[data-page="game"] .page[data-page="game"],
 #app[data-page="shop"] .page[data-page="shop"],
 #app[data-page="settings"] .page[data-page="settings"],
@@ -191,6 +192,10 @@ html, body {
   border-radius: 22px;
   background: color-mix(in srgb, var(--accent) 5%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--border));
+}
+
+.page-panel--goals {
+  padding: 18px 16px;
 }
 
 .dash-hero {
@@ -440,6 +445,79 @@ html, body {
 .dashboard-weekly__best-run--empty {
   background: color-mix(in srgb, var(--accent) 4%, var(--bg-card));
   color: var(--text-2);
+}
+
+.dashboard-quests {
+  margin-top: 16px;
+  padding: 18px 16px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 14%, transparent), transparent 44%),
+    color-mix(in srgb, var(--accent) 6%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+}
+
+.dashboard-quests__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-quests__kicker,
+.quest-item__kicker {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--accent-dk) 62%, var(--text-2));
+}
+
+.dashboard-quests h2 {
+  margin-top: 6px;
+  font-size: clamp(24px, 6vw, 30px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.dashboard-quests__badge {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  font-size: 12px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent-dk) 72%, var(--text));
+}
+
+.dashboard-quests__copy {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.dashboard-quests__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dashboard-quests__meta span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.dashboard-quests__list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .dashboard-missions {
@@ -1747,6 +1825,18 @@ a.icon-btn { text-decoration: none; }
   gap: 10px;
 }
 
+.missions-section + .missions-section {
+  margin-top: 18px;
+}
+
+.missions-head--nested {
+  margin-bottom: 10px;
+}
+
+.missions-head--nested h3 {
+  font-size: 15px;
+}
+
 .missions-empty {
   padding: 18px 16px;
   border-radius: 16px;
@@ -1829,6 +1919,118 @@ a.icon-btn { text-decoration: none; }
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.quest-item {
+  padding: 14px 14px 12px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+
+.quest-item--compact {
+  padding: 13px;
+}
+
+.quest-item--changed {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.quest-item--complete {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
+.quest-item__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quest-item__top h3 {
+  margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.quest-item__top p,
+.quest-item__step p {
+  margin-top: 4px;
+  margin-bottom: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.quest-item__reward {
+  flex-shrink: 0;
+  max-width: 112px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--accent-dk) 68%, var(--text));
+}
+
+.quest-item__step {
+  margin-top: 12px;
+}
+
+.quest-item__step strong,
+.quest-item__step span {
+  display: block;
+}
+
+.quest-item__step strong {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--accent-dk) 70%, var(--text));
+}
+
+.quest-item__step span {
+  margin-top: 5px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.quest-progress {
+  width: 100%;
+  height: 10px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--border));
+  overflow: hidden;
+}
+
+.quest-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-dk) 0%, var(--accent-hi) 100%);
+}
+
+.quest-item__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.quest-item__footer strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.quest-objective--changed {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
 }
 
 .collection-head {
