@@ -192,7 +192,7 @@ let dailyChallengeState = {
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 5;
+const PROGRESSION_STATE_VERSION = 6;
 const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
@@ -201,6 +201,8 @@ const SHOP_PRICE_MULTIPLIER = 2;
 const COIN_REWARD_MULTIPLIER = 0.8;
 const DAILY_CHALLENGE_TARGET_MIN = 140;
 const DAILY_CHALLENGE_TARGET_RANGE = 51;
+const ONE_MORE_RUN_RAPID_RETRY_WINDOW_MS = 4 * 60 * 1000;
+const ONE_MORE_RUN_RAPID_RETRY_LIMIT = 2;
 const WEEKLY_LADDER_COUNTED_RUNS = 4;
 const WEEKLY_COHORT_SIZE = 20;
 const WEEKLY_PROMOTION_SLOTS = 4;
@@ -1053,6 +1055,19 @@ function createDefaultProgressionState() {
       lastRewardDate: '',
       freezes: 0,
     },
+    oneMoreRun: {
+      rapidRetryChain: 0,
+      lastRunEndedAt: 0,
+      lastPromptType: '',
+      lastPromptShownAt: 0,
+      analytics: {
+        shown: 0,
+        accepted: 0,
+        dismissed: 0,
+        suppressedRapidRetry: 0,
+        suppressedNoCandidate: 0,
+      },
+    },
     weeklyLadder: createDefaultWeeklyLadderState(),
   };
 }
@@ -1070,6 +1085,25 @@ function sanitiseMissionState(value) {
     completedIds: uniqueStringList(src.completedIds, []),
     claimedIds: uniqueStringList(src.claimedIds, []),
     refreshCount: clampWholeNumber(src.refreshCount, 0),
+  };
+}
+
+function sanitiseOneMoreRunState(value) {
+  const defaults = createDefaultProgressionState().oneMoreRun;
+  const src = value && typeof value === 'object' ? value : {};
+  const analytics = src.analytics && typeof src.analytics === 'object' ? src.analytics : {};
+  return {
+    rapidRetryChain: clampWholeNumber(src.rapidRetryChain, defaults.rapidRetryChain),
+    lastRunEndedAt: clampWholeNumber(src.lastRunEndedAt, defaults.lastRunEndedAt),
+    lastPromptType: typeof src.lastPromptType === 'string' ? src.lastPromptType : '',
+    lastPromptShownAt: clampWholeNumber(src.lastPromptShownAt, defaults.lastPromptShownAt),
+    analytics: {
+      shown: clampWholeNumber(analytics.shown, defaults.analytics.shown),
+      accepted: clampWholeNumber(analytics.accepted, defaults.analytics.accepted),
+      dismissed: clampWholeNumber(analytics.dismissed, defaults.analytics.dismissed),
+      suppressedRapidRetry: clampWholeNumber(analytics.suppressedRapidRetry, defaults.analytics.suppressedRapidRetry),
+      suppressedNoCandidate: clampWholeNumber(analytics.suppressedNoCandidate, defaults.analytics.suppressedNoCandidate),
+    },
   };
 }
 
@@ -1138,6 +1172,7 @@ function sanitiseProgressionState(rawState) {
       lastRewardDate: typeof streak.lastRewardDate === 'string' ? streak.lastRewardDate : '',
       freezes: clampWholeNumber(streak.freezes, defaults.streak.freezes),
     },
+    oneMoreRun: sanitiseOneMoreRunState(src.oneMoreRun),
     weeklyLadder: sanitiseWeeklyLadderState(src.weeklyLadder),
   };
 }
@@ -1153,12 +1188,216 @@ function createDefaultRunSummary() {
       racksCompleted: 0,
       personalBest: false,
     },
+    continuePrompt: null,
   };
 }
 
 function ensureRunSummary() {
   if (!runSummary) runSummary = createDefaultRunSummary();
   return runSummary;
+}
+
+function getOneMoreRunAnalytics() {
+  return progressionState?.oneMoreRun || createDefaultProgressionState().oneMoreRun;
+}
+
+function updateOneMoreRunState(updater) {
+  updateProgressionState(state => {
+    state.oneMoreRun = sanitiseOneMoreRunState(
+      typeof updater === 'function' ? updater(sanitiseOneMoreRunState(state.oneMoreRun)) : state.oneMoreRun
+    );
+    return state;
+  });
+}
+
+function markOneMoreRunEnded() {
+  updateOneMoreRunState(state => ({
+    ...state,
+    lastRunEndedAt: Date.now(),
+  }));
+}
+
+function logOneMoreRunShown(promptType) {
+  updateOneMoreRunState(state => ({
+    ...state,
+    lastPromptType: promptType,
+    lastPromptShownAt: Date.now(),
+    analytics: {
+      ...state.analytics,
+      shown: state.analytics.shown + 1,
+    },
+  }));
+}
+
+function logOneMoreRunSuppressed(reason) {
+  updateOneMoreRunState(state => ({
+    ...state,
+    analytics: {
+      ...state.analytics,
+      suppressedRapidRetry: state.analytics.suppressedRapidRetry + (reason === 'rapid-retry' ? 1 : 0),
+      suppressedNoCandidate: state.analytics.suppressedNoCandidate + (reason === 'no-candidate' ? 1 : 0),
+    },
+  }));
+}
+
+function recordOneMoreRunAccepted(promptType) {
+  updateOneMoreRunState(state => {
+    const isRapidRetry = state.lastRunEndedAt > 0
+      && Date.now() - state.lastRunEndedAt <= ONE_MORE_RUN_RAPID_RETRY_WINDOW_MS;
+    return {
+      ...state,
+      rapidRetryChain: isRapidRetry ? state.rapidRetryChain + 1 : 1,
+      lastPromptType: promptType || state.lastPromptType,
+      analytics: {
+        ...state.analytics,
+        accepted: state.analytics.accepted + 1,
+      },
+    };
+  });
+}
+
+function recordOneMoreRunDismissed() {
+  updateOneMoreRunState(state => ({
+    ...state,
+    rapidRetryChain: 0,
+    analytics: {
+      ...state.analytics,
+      dismissed: state.analytics.dismissed + 1,
+    },
+  }));
+}
+
+function resetOneMoreRunRetryChain() {
+  updateOneMoreRunState(state => ({
+    ...state,
+    rapidRetryChain: 0,
+  }));
+}
+
+function getRemainingMissionAmount(mission) {
+  return Math.max(0, mission.goal - Math.min(mission.progress, mission.goal));
+}
+
+function isMissionCloseEnough(mission, remaining) {
+  if (remaining <= 0) return false;
+  if (mission.kind === 'runs' || mission.kind === 'racks' || mission.kind === 'regions') return remaining <= 1;
+  if (mission.kind === 'combo') return remaining <= 1;
+  if (mission.kind === 'score') return remaining <= Math.max(18, Math.ceil(mission.goal * 0.15));
+  if (mission.kind === 'blocks') return remaining <= Math.max(6, Math.ceil(mission.goal * 0.2));
+  return remaining <= 1;
+}
+
+function formatPromptGap(value, noun) {
+  if (value === 1) return `1 ${noun}`;
+  return `${value} ${noun}s`;
+}
+
+function getMissionRemainingCopy(mission, remaining) {
+  if (mission.kind === 'score') return `${remaining} points left`;
+  if (mission.kind === 'blocks') return `${remaining} blocks left`;
+  if (mission.kind === 'regions') return `${remaining} region${remaining === 1 ? '' : 's'} left`;
+  if (mission.kind === 'racks') return `${remaining} rack${remaining === 1 ? '' : 's'} left`;
+  if (mission.kind === 'combo') return `Need a ${mission.goal}× combo`;
+  if (mission.kind === 'runs') return `${remaining} run left`;
+  return `${remaining} left`;
+}
+
+function buildDailyChallengePrompt(summary) {
+  const challenge = ensureDailyChallengeForToday();
+  if (!isDailyChallengeSession() || challenge.completedAt === challenge.date) return null;
+  const remaining = Math.max(0, challenge.targetScore - summary.finalScore);
+  const threshold = Math.max(18, Math.ceil(challenge.targetScore * 0.12));
+  if (!remaining || remaining > threshold) return null;
+  return {
+    id: 'daily-challenge',
+    rank: 110,
+    sessionType: 'daily',
+    buttonLabel: 'Try daily again',
+    eyebrow: 'Near today’s target',
+    title: `${remaining} points from the daily clear`,
+    copy: `Another daily board could finish today’s ${challenge.targetScore}-point target and keep the streak moving.`,
+    meta: `Reward · ${getDailyChallengeRewardAmount(Math.max(1, getDisplayedStreakCount() || 1))} coins`,
+  };
+}
+
+function buildMissionFinishPrompt() {
+  const missionState = ensureDailyMissionsForToday();
+  const unfinished = missionState.missions.filter(mission => !missionState.claimedIds.includes(mission.id));
+  if (unfinished.length !== 1) return null;
+  const mission = unfinished[0];
+  const remaining = getRemainingMissionAmount(mission);
+  if (!isMissionCloseEnough(mission, remaining)) return null;
+  return {
+    id: 'daily-mission',
+    rank: 96,
+    sessionType: currentSessionType,
+    buttonLabel: 'One more run',
+    eyebrow: 'One mission left',
+    title: `${mission.title} is within reach`,
+    copy: `${mission.description} Only ${getMissionRemainingCopy(mission, remaining)}.`,
+    meta: `Reward · ${mission.reward} coins`,
+  };
+}
+
+function buildRoundMilestonePrompt(summary) {
+  const roundsCompleted = summary.stats.racksCompleted;
+  if (roundsCompleted < 6) return null;
+  const nextMilestone = Math.ceil((roundsCompleted + 1) / COIN_REWARDS.roundMilestoneEvery) * COIN_REWARDS.roundMilestoneEvery;
+  const gap = nextMilestone - roundsCompleted;
+  if (gap <= 0 || gap > 2) return null;
+  const reward = getRoundMilestoneReward(nextMilestone);
+  return {
+    id: 'round-milestone',
+    rank: 62,
+    sessionType: currentSessionType,
+    buttonLabel: 'Try again',
+    eyebrow: 'Good pace',
+    title: `${formatPromptGap(gap, 'rack')} from the ${nextMilestone}-rack bonus`,
+    copy: `That run reached ${roundsCompleted} racks. A steadier replay to ${nextMilestone} racks would bank +${reward} coins.`,
+    meta: 'Milestone reward',
+  };
+}
+
+function buildPersonalBestPrompt(summary) {
+  if (summary.stats.personalBest || !bestScore) return null;
+  const gap = Math.max(0, bestScore - summary.finalScore);
+  const threshold = Math.max(14, Math.ceil(bestScore * 0.1));
+  if (!gap || gap > threshold) return null;
+  return {
+    id: 'personal-best',
+    rank: 70,
+    sessionType: currentSessionType,
+    buttonLabel: 'Try again',
+    eyebrow: 'Close to a new best',
+    title: `${gap} points from your record`,
+    copy: `Your best is ${bestScore}. Another quick run could turn this into a new personal best without changing your setup.`,
+    meta: 'Personal best chase',
+  };
+}
+
+function chooseOneMoreRunPrompt(summary) {
+  const analytics = getOneMoreRunAnalytics();
+  if (analytics.rapidRetryChain >= ONE_MORE_RUN_RAPID_RETRY_LIMIT) {
+    logOneMoreRunSuppressed('rapid-retry');
+    return null;
+  }
+
+  const candidates = [
+    buildDailyChallengePrompt(summary),
+    buildMissionFinishPrompt(),
+    buildPersonalBestPrompt(summary),
+    buildRoundMilestonePrompt(summary),
+  ].filter(Boolean);
+
+  if (!candidates.length) {
+    logOneMoreRunSuppressed('no-candidate');
+    return null;
+  }
+
+  candidates.sort((left, right) => right.rank - left.rank || left.title.length - right.title.length);
+  const prompt = candidates[0];
+  logOneMoreRunShown(prompt.id);
+  return prompt;
 }
 
 function prefersReducedMotion() {
@@ -1245,6 +1484,11 @@ function renderGameOverSummary() {
   const objectivesList = document.getElementById('go-objectives-list');
   const objectiveCount = document.getElementById('go-objective-count');
   const intro = document.querySelector('.summary-intro');
+  const continuePrompt = document.getElementById('go-continue-prompt');
+  const continueEyebrow = document.getElementById('go-continue-eyebrow');
+  const continueTitle = document.getElementById('go-continue-title');
+  const continueCopy = document.getElementById('go-continue-copy');
+  const continueMeta = document.getElementById('go-continue-meta');
   const dailySummary = document.getElementById('go-daily-summary');
   const dailyStatus = document.getElementById('go-daily-status');
   const dailyCopy = document.getElementById('go-daily-copy');
@@ -1261,11 +1505,27 @@ function renderGameOverSummary() {
       ? 'Your daily challenge result is locked in.'
       : 'Your run rewards are ready.';
   }
-  if (nextRunButton) {
-    nextRunButton.textContent = isDailyChallengeSession() ? 'Play another run' : 'Start next run';
-  }
   if (dashboardButton) {
     dashboardButton.setAttribute('aria-label', isDailyChallengeSession() ? 'Back to dashboard from daily challenge summary' : 'Back to dashboard');
+  }
+  if (continuePrompt && continueEyebrow && continueTitle && continueCopy && continueMeta && nextRunButton) {
+    const prompt = summary.continuePrompt;
+    continuePrompt.hidden = !prompt;
+    if (prompt) {
+      continueEyebrow.textContent = prompt.eyebrow;
+      continueTitle.textContent = prompt.title;
+      continueCopy.textContent = prompt.copy;
+      continueMeta.textContent = prompt.meta;
+      nextRunButton.textContent = prompt.buttonLabel;
+      nextRunButton.dataset.sessionType = prompt.sessionType || currentSessionType;
+      nextRunButton.dataset.promptType = prompt.id || '';
+      nextRunButton.dataset.prompted = 'true';
+    } else {
+      nextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Start next run';
+      nextRunButton.dataset.sessionType = currentSessionType;
+      nextRunButton.dataset.promptType = '';
+      nextRunButton.dataset.prompted = 'false';
+    }
   }
 
   if (dailySummary && dailyStatus && dailyCopy) {
@@ -3123,6 +3383,7 @@ function triggerGameOver() {
   if (gameOver) return;
   gameOver = true;
   clearSavedGame();
+  markOneMoreRunEnded();
 
   syncDailyChallengeScoreProgress();
 
@@ -3145,6 +3406,7 @@ function triggerGameOver() {
   maybeCompleteDailyChallenge();
   evaluateRunObjectives();
   updateDailyMissionProgress('runs', 1);
+  ensureRunSummary().continuePrompt = chooseOneMoreRunPrompt(ensureRunSummary());
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
@@ -3221,6 +3483,12 @@ function newRound() {
 }
 
 function startNewGame(options = {}) {
+  if (options.trigger === 'prompt') {
+    recordOneMoreRunAccepted(options.promptType || '');
+  } else if (options.resetPromptChain !== false) {
+    resetOneMoreRunRetryChain();
+  }
+
   if (options.sessionType === 'daily') {
     const challenge = ensureDailyChallengeForToday();
     configureDailyChallengeSession(challenge, { randomState: challenge.seed });
@@ -3637,11 +3905,11 @@ document.getElementById('btn-dashboard-continue').addEventListener('click', () =
   navigateTo('game');
 });
 document.getElementById('btn-dashboard-new').addEventListener('click', () => {
-  startNewGame();
+  startNewGame({ resetPromptChain: true });
   navigateTo('game');
 });
 document.getElementById('btn-dashboard-daily').addEventListener('click', () => {
-  startNewGame({ sessionType: 'daily' });
+  startNewGame({ sessionType: 'daily', resetPromptChain: true });
   navigateTo('game');
 });
 document.getElementById('btn-dashboard-daily-info').addEventListener('click', () => {
@@ -3670,7 +3938,7 @@ document.getElementById('btn-bottom-nav-play').addEventListener('click', () => {
   if (getSavedGameSession()) {
     if (!restoreSavedGame()) return;
   } else {
-    startNewGame();
+    startNewGame({ resetPromptChain: true });
   }
   navigateTo('game');
 });
@@ -3758,14 +4026,22 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
 
 document.getElementById('btn-hint').addEventListener('click', showHint);
 
-document.getElementById('btn-restart').addEventListener('click', startNewGame);
+document.getElementById('btn-restart').addEventListener('click', () => {
+  startNewGame({ resetPromptChain: true });
+});
 
 document.getElementById('btn-new').addEventListener('click', () => {
-  startNewGame();
+  const button = document.getElementById('btn-new');
+  startNewGame({
+    sessionType: button.dataset.sessionType === 'daily' ? 'daily' : 'standard',
+    trigger: button.dataset.prompted === 'true' ? 'prompt' : 'manual',
+    promptType: button.dataset.promptType || '',
+  });
   navigateTo('game');
 });
 
 document.getElementById('btn-gameover-dashboard').addEventListener('click', () => {
+  if (ensureRunSummary().continuePrompt?.id) recordOneMoreRunDismissed();
   hideOverlay('ov-gameover');
   navigateTo('dashboard');
   renderDashboard();
