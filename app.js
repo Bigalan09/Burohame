@@ -195,11 +195,12 @@ const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
 const PROGRESSION_STATE_VERSION = 8;
-const DAILY_CHALLENGE_REWARD_BASE = 12;
-const DAILY_CHALLENGE_STREAK_STEP = 2;
-const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
+const DAILY_CHALLENGE_REWARD_BASE = 10;
+const DAILY_CHALLENGE_STREAK_STEP = 1;
+const DAILY_CHALLENGE_STREAK_BONUS_CAP = 6;
 const SHOP_PRICE_MULTIPLIER = 2;
-const COIN_REWARD_MULTIPLIER = 0.8;
+const COIN_REWARD_MULTIPLIER = 0.65;
+const DAILY_MISSION_VERSION = 2;
 const DAILY_CHALLENGE_TARGET_MIN = 140;
 const DAILY_CHALLENGE_TARGET_RANGE = 51;
 const ONE_MORE_RUN_RAPID_RETRY_WINDOW_MS = 4 * 60 * 1000;
@@ -214,10 +215,10 @@ const COIN_REWARDS = Object.freeze({
   multiClearBonus: 0,
   comboStep: 0,
   roundMilestoneEvery: 10,
-  roundMilestoneReward: 12,
-  endRunBase: 16,
-  endRunPer50Score: 2,
-  personalBestBonus: 18,
+  roundMilestoneReward: 8,
+  endRunBase: 10,
+  endRunPer50Score: 1,
+  personalBestBonus: 12,
 });
 function scaleShopPrice(amount) {
   if (!amount) return 0;
@@ -231,52 +232,52 @@ function scaleCoinReward(amount) {
 
 const DAILY_MISSION_TEMPLATES = Object.freeze([
   {
-    templateId: 'score-120',
+    templateId: 'score-160',
     kind: 'score',
-    goal: 120,
+    goal: 160,
     reward: scaleCoinReward(18),
     title: 'Point collector',
-    description: 'Score 120 points across today’s runs.',
+    description: 'Score 160 points across today’s runs.',
   },
   {
-    templateId: 'blocks-30',
+    templateId: 'blocks-36',
     kind: 'blocks',
-    goal: 30,
+    goal: 36,
     reward: scaleCoinReward(14),
     title: 'Builder’s rhythm',
-    description: 'Place 30 blocks today.',
+    description: 'Place 36 blocks today.',
   },
   {
-    templateId: 'regions-8',
+    templateId: 'regions-10',
     kind: 'regions',
-    goal: 8,
+    goal: 10,
     reward: scaleCoinReward(16),
     title: 'Board cleaner',
-    description: 'Clear 8 regions today.',
+    description: 'Clear 10 regions today.',
   },
   {
-    templateId: 'racks-4',
+    templateId: 'racks-5',
     kind: 'racks',
-    goal: 4,
+    goal: 5,
     reward: scaleCoinReward(12),
     title: 'Rack runner',
-    description: 'Finish 4 full racks today.',
+    description: 'Finish 5 full racks today.',
   },
   {
-    templateId: 'combo-4',
+    templateId: 'combo-5',
     kind: 'combo',
-    goal: 4,
+    goal: 5,
     reward: scaleCoinReward(20),
     title: 'Heat check',
-    description: 'Reach a 4× combo in a run today.',
+    description: 'Reach a 5× combo in a run today.',
   },
   {
-    templateId: 'runs-3',
+    templateId: 'runs-4',
     kind: 'runs',
-    goal: 3,
+    goal: 4,
     reward: scaleCoinReward(10),
     title: 'Keep going',
-    description: 'Complete 3 runs today.',
+    description: 'Complete 4 runs today.',
   },
 ]);
 
@@ -1613,6 +1614,7 @@ function createDefaultProgressionState() {
       completedIds: [],
       claimedIds: [],
       refreshCount: 0,
+      templateVersion: DAILY_MISSION_VERSION,
     },
     dailyChallenge: {
       date: '',
@@ -1665,6 +1667,7 @@ function sanitiseMissionState(value) {
     completedIds: uniqueStringList(src.completedIds, []),
     claimedIds: uniqueStringList(src.claimedIds, []),
     refreshCount: clampWholeNumber(src.refreshCount, 0),
+    templateVersion: clampWholeNumber(src.templateVersion, 0),
   };
 }
 
@@ -2580,7 +2583,10 @@ function awardMissionCoins(amount, missionName = 'Mission complete') {
 function ensureDailyMissionsForToday() {
   const todayKey = getLocalDateKey();
   const currentDate = progressionState?.dailyMissions?.date || '';
-  if (currentDate === todayKey && progressionState?.dailyMissions?.missions?.length) {
+  const currentTemplateVersion = clampWholeNumber(progressionState?.dailyMissions?.templateVersion, 0);
+  if (currentDate === todayKey
+    && currentTemplateVersion === DAILY_MISSION_VERSION
+    && progressionState?.dailyMissions?.missions?.length) {
     return progressionState.dailyMissions;
   }
 
@@ -2592,6 +2598,7 @@ function ensureDailyMissionsForToday() {
       completedIds: [],
       claimedIds: [],
       refreshCount: currentDate ? refreshCount + 1 : refreshCount,
+      templateVersion: DAILY_MISSION_VERSION,
     };
     return state;
   });
