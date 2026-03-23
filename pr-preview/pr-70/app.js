@@ -2499,14 +2499,11 @@ function renderDailyMissions() {
   const list = document.getElementById('missions-list');
   const count = document.getElementById('missions-count');
   const subtitle = document.getElementById('missions-subtitle');
-  const badge = document.getElementById('mission-badge');
-  if (!list || !count || !subtitle || !badge) return;
+  if (!list || !count || !subtitle) return;
 
   const { completed, total } = getDailyMissionCounts();
   count.textContent = `${completed}/${total} completed`;
-  subtitle.textContent = `Fresh goals for ${missionState.date}. Rewards are paid automatically when you finish them.`;
-  badge.textContent = total ? `${completed}/${total}` : '0/0';
-  badge.hidden = !total;
+  subtitle.textContent = `Daily missions refresh on ${missionState.date}. Weekly quest chains and league progress sit below.`;
 
   list.innerHTML = '';
   if (!missionState.missions.length) {
@@ -3356,7 +3353,7 @@ function renderDashboard() {
   const savedGame = getSavedGameSession();
   const missionCounts = getDailyMissionCounts();
   const questStatus = getQuestBoardStatus();
-  const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
+  const weeklyStatus = getWeeklyLadderStatus();
   const challenge = ensureDailyChallengeForToday();
   const challengeStatus = getDailyChallengeStatus(challenge);
 
@@ -3385,11 +3382,11 @@ function renderDashboard() {
   }
   if (missionCopy) {
     missionCopy.textContent = missionCounts.total
-      ? `${missionCounts.completed}/${missionCounts.total} daily · ${questStatus.completed}/${questStatus.total} quest chains`
-      : `${questStatus.completed}/${questStatus.total} quest chains active`;
+      ? `${missionCounts.completed}/${missionCounts.total} daily missions · ${questStatus.completed}/${questStatus.total} quest chains · ${weeklyStatus.league.name} week`
+      : `${questStatus.completed}/${questStatus.total} quest chains active · ${weeklyStatus.league.name} week`;
   }
   if (goalsButtonLabel) {
-    goalsButtonLabel.textContent = 'Goals board';
+    goalsButtonLabel.textContent = 'Open progress board';
   }
   if (dailyTitle) {
     dailyTitle.textContent = challengeStatus.complete
@@ -3419,7 +3416,6 @@ function renderDashboard() {
   document.getElementById('dashboard-coins').textContent = String(getCoinBalance());
   document.getElementById('dashboard-best').textContent = String(bestScore);
   document.getElementById('dashboard-today').textContent = String(todayScore);
-  document.getElementById('dashboard-finish').textContent = skin.name;
   renderSessionModeBadge();
   renderQuestBoard();
   renderWeeklyLadder();
