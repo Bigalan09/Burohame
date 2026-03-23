@@ -29,7 +29,6 @@ After implementing an issue, also tidy the GitHub issue queue so the repository 
 
 ### TODO
 
-- [#52 Add weekly ladders and leagues for multi-day retention](https://github.com/Bigalan09/Burohame/issues/52)
 - [#53 Add a mastery track with permanent unlocks](https://github.com/Bigalan09/Burohame/issues/53)
 - [#54 Add contextual one-more-run prompts after game over](https://github.com/Bigalan09/Burohame/issues/54)
 - [#55 Add multi-step quest chains on top of daily missions](https://github.com/Bigalan09/Burohame/issues/55)
@@ -37,6 +36,7 @@ After implementing an issue, also tidy the GitHub issue queue so the repository 
 
 ### Completed
 
+- [#52 Add weekly ladders and leagues for multi-day retention](https://github.com/Bigalan09/Burohame/issues/52)
 - [#38 Add a daily challenge and streak system](https://github.com/Bigalan09/Burohame/issues/38)
 - [#37 Add delight feedback for milestone moments](https://github.com/Bigalan09/Burohame/issues/37)
 - [#36 Add a cosmetics collection and unlock flow](https://github.com/Bigalan09/Burohame/issues/36)
