@@ -272,7 +272,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'blue',
     name: 'Blue Tide',
     description: 'Cool focus with a crisp electric edge.',
-    price: 35,
+    price: 46,
     icon: '🔵',
     swatches: ['#9fd3ff', '#007aff', '#005ec4'],
   },
@@ -280,7 +280,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'green',
     name: 'Green Grove',
     description: 'A calmer board feel with fresh contrast.',
-    price: 35,
+    price: 46,
     icon: '🟢',
     swatches: ['#a7efbc', '#34c759', '#248a3d'],
   },
@@ -288,7 +288,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'purple',
     name: 'Purple Pulse',
     description: 'A richer palette for streak-chasing sessions.',
-    price: 45,
+    price: 59,
     icon: '🟣',
     swatches: ['#d6aef2', '#af52de', '#8944ab'],
   },
@@ -296,7 +296,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'red',
     name: 'Red Rally',
     description: 'A bolder tone when you want a sharper board.',
-    price: 45,
+    price: 59,
     icon: '🔴',
     swatches: ['#ff9b94', '#ff3b30', '#d4264a'],
   },
@@ -304,7 +304,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'teal',
     name: 'Teal Drift',
     description: 'Bright sea-glass highlights with softer depth.',
-    price: 55,
+    price: 72,
     icon: '💎',
     swatches: ['#b8efff', '#5ac8fa', '#3aabd6'],
   },
@@ -312,7 +312,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'pink',
     name: 'Pink Pop',
     description: 'Playful contrast without losing clarity.',
-    price: 55,
+    price: 72,
     icon: '💗',
     swatches: ['#ffb1c3', '#ff2d55', '#d4264a'],
   },
@@ -320,7 +320,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'random',
     name: 'Shuffle Glow',
     description: 'Swap to a fresh unlocked colour every rack.',
-    price: 90,
+    price: 117,
     icon: '🎲',
     swatches: ['#ffd08a', '#5ac8fa', '#af52de'],
   },
@@ -343,37 +343,37 @@ const COSMETIC_CATALOGUE = Object.freeze({
       id: 'satin',
       name: 'Satin',
       description: 'Soft rounded edges with a calm sheen.',
-      price: 60,
+      price: 78,
     },
     {
       id: 'carbon',
       name: 'Carbon',
       description: 'Sharper edges with a grounded board-game feel.',
-      price: 110,
+      price: 143,
     },
     {
       id: 'prism',
       name: 'Prism',
       description: 'A brighter faceted shine for high-score chasers.',
-      price: 170,
+      price: 221,
     },
     {
       id: 'velvet',
       name: 'Velvet',
       description: 'A softer matte finish with rounded edges.',
-      price: 140,
+      price: 182,
     },
     {
       id: 'frost',
       name: 'Frost',
       description: 'Cool highlights and lighter faces for clean boards.',
-      price: 190,
+      price: 247,
     },
     {
       id: 'ember',
       name: 'Ember',
       description: 'Deeper shadows and hotter highlights for tense runs.',
-      price: 230,
+      price: 299,
     },
   ],
 });
@@ -1517,24 +1517,43 @@ function canPlaceOnBoard(cells, row, col, b) {
   return true;
 }
 
-// Try placing each piece (in the given slot order) at its first available
-// position and return whether all can be placed.
+function placePieceOnBoard(b, cells, row, col) {
+  const nextBoard = b.map(boardRow => [...boardRow]);
+  for (const [dr, dc] of cells) nextBoard[row + dr][col + dc] = 1;
+  return applyClears(nextBoard, getClearsOnBoard(nextBoard));
+}
+
+function boardStateKey(b) {
+  return b.map(row => row.join('')).join('|');
+}
+
+// Try placing each piece in the supplied slot order, exploring every valid
+// placement so the warning only appears when the order genuinely matters.
 function canFitAllInOrder(order) {
-  let b = board.map(r => [...r]);
-  for (const i of order) {
-    let placed = false;
-    outer: for (let r = 0; r < N; r++) {
+  const memo = new Map();
+
+  function search(orderIdx, b) {
+    if (orderIdx >= order.length) return true;
+
+    const key = `${orderIdx}:${boardStateKey(b)}`;
+    if (memo.has(key)) return memo.get(key);
+
+    const cells = pieces[order[orderIdx]];
+    for (let r = 0; r < N; r++) {
       for (let c = 0; c < N; c++) {
-        if (!canPlaceOnBoard(pieces[i], r, c, b)) continue;
-        for (const [dr, dc] of pieces[i]) b[r + dr][c + dc] = 1;
-        b = applyClears(b, getClearsOnBoard(b));
-        placed = true;
-        break outer;
+        if (!canPlaceOnBoard(cells, r, c, b)) continue;
+        if (search(orderIdx + 1, placePieceOnBoard(b, cells, r, c))) {
+          memo.set(key, true);
+          return true;
+        }
       }
     }
-    if (!placed) return false;
+
+    memo.set(key, false);
+    return false;
   }
-  return true;
+
+  return search(0, board.map(row => [...row]));
 }
 
 // Returns true when only some orderings allow all pieces to be placed –
@@ -2132,9 +2151,18 @@ function renderSlot(i) {
 // Grey out any piece that cannot be placed anywhere on the current board.
 function updateRackPlayability() {
   for (let i = 0; i < rackSize; i++) {
-    if (used[i]) continue;
     const slot = document.getElementById(`slot-${i}`);
-    if (slot) slot.classList.toggle('unplayable', !canPlaceAnywhere(pieces[i]));
+    if (!slot) continue;
+
+    if (used[i]) {
+      slot.classList.remove('unplayable');
+      slot.removeAttribute('aria-disabled');
+      continue;
+    }
+
+    const playable = canPlaceAnywhere(pieces[i]);
+    slot.classList.toggle('unplayable', !playable);
+    slot.setAttribute('aria-disabled', playable ? 'false' : 'true');
   }
 }
 
@@ -2580,6 +2608,21 @@ function showChooseCarefullyMsg() {
   msg.addEventListener('animationend', () => msg.remove(), { once: true });
 }
 
+function updateOrientationState() {
+  const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+  const isCompactHeight = window.innerHeight <= 560;
+  document.body.classList.toggle('portrait-blocked', isLandscape && isCompactHeight);
+}
+
+async function tryLockPortrait() {
+  if (!screen.orientation || typeof screen.orientation.lock !== 'function') return;
+  try {
+    await screen.orientation.lock('portrait');
+  } catch (error) {
+    // Ignore browsers that only allow locking in installed or fullscreen contexts.
+  }
+}
+
 // ── New round / restart ────────────────────────────────────
 function newRound() {
   const summary = ensureRunSummary();
@@ -2991,6 +3034,7 @@ function applySettingsState(nextSettings) {
   document.getElementById('coach-panel').hidden = !trainingMode;
   renderRack();
   updateRackPlayability();
+  updateOrientationState();
   if (trainingMode && !prevTraining) updateTrainingPanel();
   if (!trainingMode) {
     clearHint();
@@ -3184,6 +3228,10 @@ function init() {
   applyColor(colorSetting);
   applyExtendedPieces(extendedPieces);
   document.getElementById('coach-panel').hidden = !trainingMode;
+  updateOrientationState();
+  tryLockPortrait();
+  window.addEventListener('resize', updateOrientationState);
+  window.addEventListener('orientationchange', updateOrientationState);
 
   // Follow OS dark-mode changes dynamically when the user hasn't set
   // an explicit preference (i.e. no saved 'dark' key in settings yet).
