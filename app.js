@@ -192,7 +192,7 @@ let dailyChallengeState = {
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 7;
+const PROGRESSION_STATE_VERSION = 8;
 const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
@@ -584,42 +584,56 @@ const COSMETIC_CATALOGUE = Object.freeze({
       name: 'Classic',
       description: 'The original polished finish.',
       price: 0,
+      unlockSource: 'default',
     },
     {
       id: 'satin',
       name: 'Satin',
       description: 'Soft rounded edges with a calm sheen.',
       price: scaleShopPrice(60),
+      unlockSource: 'shop',
     },
     {
       id: 'carbon',
       name: 'Carbon',
       description: 'Sharper edges with a grounded board-game feel.',
       price: scaleShopPrice(110),
+      unlockSource: 'shop',
     },
     {
       id: 'prism',
       name: 'Prism',
       description: 'A brighter faceted shine for high-score chasers.',
       price: scaleShopPrice(170),
+      unlockSource: 'shop',
     },
     {
       id: 'velvet',
       name: 'Velvet',
       description: 'A softer matte finish with rounded edges.',
       price: scaleShopPrice(140),
+      unlockSource: 'shop',
     },
     {
       id: 'frost',
       name: 'Frost',
       description: 'Cool highlights and lighter faces for clean boards.',
       price: scaleShopPrice(190),
+      unlockSource: 'shop',
     },
     {
       id: 'ember',
       name: 'Ember',
       description: 'Deeper shadows and hotter highlights for tense runs.',
       price: scaleShopPrice(230),
+      unlockSource: 'shop',
+    },
+    {
+      id: 'heirloom',
+      name: 'Heirloom',
+      description: 'A gallery-grade finish awarded for completing the full core album.',
+      price: 0,
+      unlockSource: 'album',
     },
   ],
 });
@@ -629,6 +643,90 @@ const BLOCK_SKIN_LOOKUP = Object.freeze(
     return acc;
   }, {})
 );
+const COLLECTION_SET_CATALOGUE = Object.freeze([
+  {
+    id: 'sunrise-studio',
+    season: 'Core album · Set 1',
+    title: 'Sunrise Studio',
+    description: 'Warm, playful tones for softer boards and brighter openings.',
+    completionReward: {
+      type: 'badge',
+      id: 'sunrise-studio-badge',
+      name: 'Sunrise ribbon',
+      detail: 'A woven album ribbon for finishing the whole Sunrise Studio set.',
+    },
+    items: [
+      { type: 'colorway', id: 'orange' },
+      { type: 'colorway', id: 'pink' },
+      { type: 'finish', id: 'satin' },
+      { type: 'finish', id: 'velvet' },
+    ],
+  },
+  {
+    id: 'tidal-archive',
+    season: 'Core album · Set 2',
+    title: 'Tidal Archive',
+    description: 'Cool sea-glass palettes and crisp finishes for cleaner sessions.',
+    completionReward: {
+      type: 'badge',
+      id: 'tidal-archive-badge',
+      name: 'Tidal seal',
+      detail: 'A polished seal marking every item in the Tidal Archive set as owned.',
+    },
+    items: [
+      { type: 'colorway', id: 'blue' },
+      { type: 'colorway', id: 'teal' },
+      { type: 'colorway', id: 'random' },
+      { type: 'finish', id: 'frost' },
+      { type: 'finish', id: 'prism' },
+    ],
+  },
+  {
+    id: 'afterglow-arcade',
+    season: 'Core album · Set 3',
+    title: 'Afterglow Arcade',
+    description: 'Bolder evening colours and sharper finishes for dramatic boards.',
+    completionReward: {
+      type: 'badge',
+      id: 'afterglow-arcade-badge',
+      name: 'Afterglow crest',
+      detail: 'A prestige crest that marks the Afterglow Arcade set as complete.',
+    },
+    items: [
+      { type: 'colorway', id: 'green' },
+      { type: 'colorway', id: 'purple' },
+      { type: 'colorway', id: 'red' },
+      { type: 'finish', id: 'carbon' },
+      { type: 'finish', id: 'ember' },
+    ],
+  },
+]);
+const COLLECTION_SET_LOOKUP = Object.freeze(
+  COLLECTION_SET_CATALOGUE.reduce((acc, set) => {
+    acc[set.id] = set;
+    return acc;
+  }, {})
+);
+const COLLECTION_ITEM_TO_SET = Object.freeze(
+  COLLECTION_SET_CATALOGUE.reduce((acc, set) => {
+    set.items.forEach(item => {
+      acc[`${item.type}:${item.id}`] = set.id;
+    });
+    return acc;
+  }, {})
+);
+const COLLECTION_ALBUM_GOAL = Object.freeze({
+  id: 'core-album',
+  title: 'Core album',
+  description: 'Complete every themed set in the core binder to unlock the Heirloom finish.',
+  setIds: COLLECTION_SET_CATALOGUE.map(set => set.id),
+  reward: {
+    type: 'finish',
+    id: 'heirloom',
+    name: 'Heirloom',
+    detail: 'Exclusive finish for completing every themed set in the album.',
+  },
+});
 const RUN_OBJECTIVES = Object.freeze([
   {
     id: 'first-clear',
@@ -878,6 +976,7 @@ function applyWeeklyUnlockReward(reward) {
     }
     return state;
   });
+  evaluateCollectionAlbumRewards();
   updateCosmeticLabel();
 }
 
@@ -1505,6 +1604,7 @@ function createDefaultProgressionState() {
       equippedBlockSkin: 'classic',
       ownedBlockSkins: ['classic'],
       ownedColorways: ['orange'],
+      earnedSetBadges: [],
     },
     dailyMissions: {
       date: '',
@@ -1544,6 +1644,10 @@ function createDefaultProgressionState() {
     },
     questBoard: createDefaultQuestBoardState(),
     weeklyLadder: createDefaultWeeklyLadderState(),
+    collectionAlbum: {
+      completedSetIds: [],
+      claimedGoalIds: [],
+    },
   };
 }
 
@@ -1602,6 +1706,7 @@ function sanitiseProgressionState(rawState) {
   const unlocks = src.unlocks && typeof src.unlocks === 'object' ? src.unlocks : {};
   const cosmetics = src.cosmetics && typeof src.cosmetics === 'object' ? src.cosmetics : {};
   const streak = src.streak && typeof src.streak === 'object' ? src.streak : {};
+  const collectionAlbum = src.collectionAlbum && typeof src.collectionAlbum === 'object' ? src.collectionAlbum : {};
   const ownedThemes = (() => {
     const owned = uniqueStringList(unlocks.ownedThemes, defaults.unlocks.ownedThemes);
     return owned.includes('classic') ? owned : ['classic', ...owned];
@@ -1637,6 +1742,7 @@ function sanitiseProgressionState(rawState) {
       equippedBlockSkin,
       ownedBlockSkins,
       ownedColorways,
+      earnedSetBadges: uniqueStringList(cosmetics.earnedSetBadges, defaults.cosmetics.earnedSetBadges),
     },
     dailyMissions: sanitiseMissionState(src.dailyMissions),
     dailyChallenge: sanitiseDailyChallengeState(src.dailyChallenge),
@@ -1650,6 +1756,12 @@ function sanitiseProgressionState(rawState) {
     oneMoreRun: sanitiseOneMoreRunState(src.oneMoreRun),
     questBoard: sanitiseQuestBoardState(src.questBoard),
     weeklyLadder: sanitiseWeeklyLadderState(src.weeklyLadder),
+    collectionAlbum: {
+      completedSetIds: uniqueStringList(collectionAlbum.completedSetIds, defaults.collectionAlbum.completedSetIds)
+        .filter(id => COLLECTION_SET_LOOKUP[id]),
+      claimedGoalIds: uniqueStringList(collectionAlbum.claimedGoalIds, defaults.collectionAlbum.claimedGoalIds)
+        .filter(id => id === COLLECTION_ALBUM_GOAL.id),
+    },
   };
 }
 
@@ -2099,6 +2211,127 @@ function isColorwayOwned(colorId) {
   return getOwnedColorways().includes(colorId);
 }
 
+function isCollectionItemOwned(item, sourceState = progressionState) {
+  if (!item) return false;
+  if (item.type === 'colorway') return (sourceState?.cosmetics?.ownedColorways || []).includes(item.id);
+  if (item.type === 'finish') return (sourceState?.cosmetics?.ownedBlockSkins || []).includes(item.id);
+  return false;
+}
+
+function getCollectionItemMeta(item) {
+  if (!item) return null;
+  if (item.type === 'colorway') return COLORWAY_LOOKUP[item.id] || null;
+  if (item.type === 'finish') return BLOCK_SKIN_LOOKUP[item.id] || null;
+  return null;
+}
+
+function getCollectionSetForItem(itemType, itemId) {
+  const setId = COLLECTION_ITEM_TO_SET[`${itemType}:${itemId}`];
+  return setId ? COLLECTION_SET_LOOKUP[setId] || null : null;
+}
+
+function getCollectionAlbumStatus(sourceState = progressionState) {
+  const completedSetIds = new Set(sourceState?.collectionAlbum?.completedSetIds || []);
+  const earnedBadgeIds = new Set(sourceState?.cosmetics?.earnedSetBadges || []);
+  const setStatuses = COLLECTION_SET_CATALOGUE.map(set => {
+    const itemStatuses = set.items.map(item => {
+      const meta = getCollectionItemMeta(item);
+      return {
+        ...item,
+        meta,
+        owned: isCollectionItemOwned(item, sourceState),
+      };
+    });
+    const ownedCount = itemStatuses.filter(item => item.owned).length;
+    const totalCount = itemStatuses.length;
+    const missingItems = itemStatuses.filter(item => !item.owned);
+    const isComplete = ownedCount === totalCount;
+    return {
+      set,
+      itemStatuses,
+      ownedCount,
+      totalCount,
+      missingItems,
+      remainingCount: totalCount - ownedCount,
+      isComplete,
+      isRecordedComplete: completedSetIds.has(set.id),
+      rewardEarned: earnedBadgeIds.has(set.completionReward.id),
+    };
+  });
+
+  const completedCount = setStatuses.filter(status => status.isComplete).length;
+  const grandRewardOwned = (sourceState?.cosmetics?.ownedBlockSkins || []).includes(COLLECTION_ALBUM_GOAL.reward.id);
+  const grandRewardClaimed = (sourceState?.collectionAlbum?.claimedGoalIds || []).includes(COLLECTION_ALBUM_GOAL.id);
+  const spotlightSet = setStatuses
+    .filter(status => !status.isComplete)
+    .sort((left, right) => left.remainingCount - right.remainingCount || right.ownedCount - left.ownedCount)[0] || null;
+
+  return {
+    setStatuses,
+    completedCount,
+    totalSets: COLLECTION_SET_CATALOGUE.length,
+    spotlightSet,
+    allSetsComplete: completedCount === COLLECTION_SET_CATALOGUE.length,
+    grandRewardOwned,
+    grandRewardClaimed,
+  };
+}
+
+function evaluateCollectionAlbumRewards() {
+  const status = getCollectionAlbumStatus();
+  const newlyCompletedSets = status.setStatuses.filter(setStatus => setStatus.isComplete && !setStatus.isRecordedComplete);
+  const shouldClaimGrandReward = status.allSetsComplete && !status.grandRewardClaimed;
+
+  if (!newlyCompletedSets.length && !shouldClaimGrandReward) return;
+
+  updateProgressionState(state => {
+    newlyCompletedSets.forEach(setStatus => {
+      if (!state.collectionAlbum.completedSetIds.includes(setStatus.set.id)) {
+        state.collectionAlbum.completedSetIds.push(setStatus.set.id);
+      }
+      const badgeId = setStatus.set.completionReward.id;
+      if (!state.cosmetics.earnedSetBadges.includes(badgeId)) {
+        state.cosmetics.earnedSetBadges.push(badgeId);
+      }
+    });
+
+    if (shouldClaimGrandReward) {
+      if (!state.collectionAlbum.claimedGoalIds.includes(COLLECTION_ALBUM_GOAL.id)) {
+        state.collectionAlbum.claimedGoalIds.push(COLLECTION_ALBUM_GOAL.id);
+      }
+      if (!state.cosmetics.ownedBlockSkins.includes(COLLECTION_ALBUM_GOAL.reward.id)) {
+        state.cosmetics.ownedBlockSkins.push(COLLECTION_ALBUM_GOAL.reward.id);
+      }
+    }
+
+    return state;
+  });
+
+  newlyCompletedSets.forEach(setStatus => {
+    showMilestoneMoment({
+      eyebrow: 'Set complete',
+      title: `${setStatus.set.title} finished`,
+      detail: `${setStatus.set.completionReward.name} earned. ${setStatus.set.completionReward.detail}`,
+      major: true,
+      anchor: '.page-panel--album',
+      announce: `${setStatus.set.title} set complete. ${setStatus.set.completionReward.name} earned.`,
+    });
+  });
+
+  if (shouldClaimGrandReward) {
+    showMilestoneMoment({
+      eyebrow: 'Album complete',
+      title: `${COLLECTION_ALBUM_GOAL.reward.name} unlocked`,
+      detail: COLLECTION_ALBUM_GOAL.reward.detail,
+      major: true,
+      anchor: '.page-panel--album',
+      announce: `${COLLECTION_ALBUM_GOAL.reward.name} finish unlocked for completing the collection album.`,
+    });
+  }
+
+  updateCosmeticLabel();
+}
+
 function sanitiseColorSetting(value) {
   return COLORWAY_LOOKUP[value] ? value : 'orange';
 }
@@ -2131,6 +2364,12 @@ function updateCosmeticLabel() {
 
   const dashboardFinish = document.getElementById('dashboard-finish');
   if (dashboardFinish) dashboardFinish.textContent = skin.name;
+
+  const badgeCount = progressionState?.cosmetics?.earnedSetBadges?.length || 0;
+  const badgeLabel = document.getElementById('dashboard-album-badge');
+  if (badgeLabel) {
+    badgeLabel.textContent = badgeCount ? `${badgeCount} album badge${badgeCount === 1 ? '' : 's'} earned` : 'No album badges yet';
+  }
 
   const colourNote = document.getElementById('page-colour-note');
   if (colourNote) {
@@ -2198,6 +2437,7 @@ function unlockColorway(colorId) {
     anchor: '.page-panel--shop',
     announce: `${colorway.name} colourway unlocked.`,
   });
+  evaluateCollectionAlbumRewards();
   updateCosmeticLabel();
   return true;
 }
@@ -2233,6 +2473,7 @@ function unlockBlockSkin(skinId) {
     anchor: '.collection-head',
     announce: `${skin.name} finish unlocked.`,
   });
+  evaluateCollectionAlbumRewards();
   return true;
 }
 
@@ -2702,7 +2943,7 @@ function getCollectionSubtitle() {
   const ownedCount = getOwnedBlockSkins().length;
   const totalCount = COSMETIC_CATALOGUE.blockSkins.length;
   if (ownedCount === totalCount) return 'Every finish is unlocked and ready to equip.';
-  return `${ownedCount}/${totalCount} finishes owned.`;
+  return `${ownedCount}/${totalCount} finishes owned, including album rewards.`;
 }
 
 function getColorwaySubtitle() {
@@ -2719,28 +2960,94 @@ function getShopActionMarkup({ owned, equipped, canAfford, price, itemId, collec
   if (owned) {
     return `<button class="pill-btn pill-btn--secondary" type="button" data-action="equip" data-item-id="${itemId}" data-collection="${collection}">Equip</button>`;
   }
+  if (!price) {
+    return '<button class="pill-btn pill-btn--secondary" type="button" disabled>Album reward</button>';
+  }
   return `<button class="pill-btn${canAfford ? '' : ' pill-btn--secondary'}" type="button" data-action="unlock" data-item-id="${itemId}" data-collection="${collection}" ${canAfford ? '' : 'disabled'}>Unlock · 🪙 ${price}</button>`;
 }
 
 function renderCosmeticsCollection() {
+  const albumList = document.getElementById('collection-album-list');
+  const albumCount = document.getElementById('collection-album-count');
+  const albumSubtitle = document.getElementById('collection-album-subtitle');
+  const albumSpotlight = document.getElementById('collection-album-spotlight');
+  const albumGoalTitle = document.getElementById('collection-album-goal-title');
+  const albumGoalCopy = document.getElementById('collection-album-goal-copy');
   const finishList = document.getElementById('collection-list');
   const colorwayList = document.getElementById('colorway-list');
   const balance = document.getElementById('collection-balance');
   const finishSubtitle = document.getElementById('collection-subtitle');
   const colorwaySubtitle = document.getElementById('colorway-subtitle');
-  if (!finishList || !colorwayList || !balance || !finishSubtitle || !colorwaySubtitle) return;
+  if (!finishList || !colorwayList || !balance || !finishSubtitle || !colorwaySubtitle || !albumList || !albumCount || !albumSubtitle || !albumSpotlight || !albumGoalTitle || !albumGoalCopy) return;
 
   const coinBalance = getCoinBalance();
   const equippedSkin = getEquippedBlockSkin();
+  const albumStatus = getCollectionAlbumStatus();
   balance.textContent = `🪙 ${coinBalance}`;
   finishSubtitle.textContent = getCollectionSubtitle();
   colorwaySubtitle.textContent = getColorwaySubtitle();
+  albumCount.textContent = `${albumStatus.completedCount}/${albumStatus.totalSets} sets complete`;
+  albumSubtitle.textContent = albumStatus.allSetsComplete
+    ? 'The binder is complete. Your Heirloom finish is ready in the collection below.'
+    : 'Finish themed sets to earn prestige badges, then complete the full binder for an exclusive finish.';
+  albumGoalTitle.textContent = COLLECTION_ALBUM_GOAL.reward.name;
+  albumGoalCopy.textContent = albumStatus.grandRewardOwned
+    ? 'Album reward unlocked and ready to equip from Block finishes.'
+    : `${albumStatus.completedCount}/${albumStatus.totalSets} sets finished. ${COLLECTION_ALBUM_GOAL.description}`;
+  if (albumStatus.spotlightSet) {
+    const nextNames = albumStatus.spotlightSet.missingItems
+      .slice(0, 2)
+      .map(item => item.meta?.name || item.id)
+      .join(' · ');
+    albumSpotlight.textContent = albumStatus.spotlightSet.remainingCount === 1
+      ? `${albumStatus.spotlightSet.set.title} is one item away · ${nextNames}`
+      : `${albumStatus.spotlightSet.set.title} needs ${albumStatus.spotlightSet.remainingCount} more items · ${nextNames}`;
+  } else {
+    albumSpotlight.textContent = 'Every set reward has been banked. Enjoy the complete album.';
+  }
+
+  albumList.innerHTML = '';
+  albumStatus.setStatuses.forEach(setStatus => {
+    const card = document.createElement('article');
+    card.className = `album-card${setStatus.isComplete ? ' album-card--complete' : ''}`;
+    const missingSummary = setStatus.missingItems.length
+      ? `Missing ${setStatus.missingItems.map(item => item.meta?.name || item.id).join(', ')}.`
+      : 'Everything in this set is owned.';
+    const badgeState = setStatus.rewardEarned ? 'Badge earned' : 'Badge waiting';
+    const itemMarkup = setStatus.itemStatuses.map(item => `
+      <li class="album-card__item${item.owned ? ' is-owned' : ''}">
+        <span>${item.meta?.name || item.id}</span>
+        <strong>${item.owned ? 'Owned' : 'Locked'}</strong>
+      </li>
+    `).join('');
+    card.innerHTML = `
+      <div class="album-card__head">
+        <div>
+          <span class="album-card__season">${setStatus.set.season}</span>
+          <h3>${setStatus.set.title}</h3>
+          <p>${setStatus.set.description}</p>
+        </div>
+        <span class="album-card__count">${setStatus.ownedCount}/${setStatus.totalCount}</span>
+      </div>
+      <div class="album-card__reward">
+        <strong>${setStatus.set.completionReward.name}</strong>
+        <span>${badgeState}</span>
+      </div>
+      <ul class="album-card__items">${itemMarkup}</ul>
+      <div class="album-card__footer">
+        <span>${missingSummary}</span>
+        <strong>${setStatus.isComplete ? 'Set complete' : `${setStatus.remainingCount} to go`}</strong>
+      </div>
+    `;
+    albumList.appendChild(card);
+  });
 
   colorwayList.innerHTML = '';
   for (const colorway of COLORWAY_CATALOGUE) {
     const owned = isColorwayOwned(colorway.id);
     const equipped = colorSetting === colorway.id;
     const canAfford = coinBalance >= colorway.price;
+    const set = getCollectionSetForItem('colorway', colorway.id);
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
     const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
     const costLabel = colorway.price ? `🪙 ${colorway.price}` : 'Free';
@@ -2763,6 +3070,7 @@ function renderCosmeticsCollection() {
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
             <span>${costLabel}</span>
+            ${set ? `<span>${set.title}</span>` : ''}
           </div>
           ${getShopActionMarkup({ owned, equipped, canAfford, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
         </div>
@@ -2776,6 +3084,7 @@ function renderCosmeticsCollection() {
     const owned = isBlockSkinOwned(skin.id);
     const equipped = equippedSkin === skin.id;
     const canAfford = coinBalance >= skin.price;
+    const set = getCollectionSetForItem('finish', skin.id);
     const card = document.createElement('article');
     card.className = 'cosmetic-card';
     card.dataset.cosmetic = skin.id;
@@ -2801,6 +3110,7 @@ function renderCosmeticsCollection() {
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
             <span>${costLabel}</span>
+            <span>${set ? set.title : skin.unlockSource === 'album' ? 'Album grand reward' : 'Core collection'}</span>
           </div>
           ${getShopActionMarkup({ owned, equipped, canAfford, price: skin.price, itemId: skin.id, collection: 'finish' })}
         </div>
@@ -3392,6 +3702,33 @@ function renderWeeklyLadder() {
   }
 }
 
+function renderCollectionAlbumTeaser() {
+  const title = document.getElementById('dashboard-album-title');
+  const copy = document.getElementById('dashboard-album-copy');
+  const progress = document.getElementById('dashboard-album-progress');
+  const reward = document.getElementById('dashboard-album-reward');
+  if (!title || !copy || !progress || !reward) return;
+
+  const albumStatus = getCollectionAlbumStatus();
+  const spotlight = albumStatus.spotlightSet;
+  title.textContent = albumStatus.allSetsComplete
+    ? 'Collection album complete'
+    : spotlight
+      ? spotlight.set.title
+      : 'Collection album';
+  copy.textContent = albumStatus.allSetsComplete
+    ? 'Every themed set is complete. Your Heirloom finish is waiting in the shop collection.'
+    : spotlight && spotlight.remainingCount === 1
+      ? `One more unlock completes ${spotlight.set.title}.`
+      : spotlight
+        ? `${spotlight.remainingCount} more items will finish ${spotlight.set.title}.`
+        : 'Browse themed sets and work towards album rewards.';
+  progress.textContent = `${albumStatus.completedCount}/${albumStatus.totalSets} sets complete`;
+  reward.textContent = albumStatus.grandRewardOwned
+    ? `${COLLECTION_ALBUM_GOAL.reward.name} unlocked`
+    : `Grand reward · ${COLLECTION_ALBUM_GOAL.reward.name}`;
+}
+
 function renderDashboard() {
   const continueBtn = document.getElementById('btn-dashboard-continue');
   const newGameBtn = document.getElementById('btn-dashboard-new');
@@ -3434,6 +3771,7 @@ function renderDashboard() {
   renderDailyMissions();
   renderQuestBoard();
   renderWeeklyLadder();
+  renderCollectionAlbumTeaser();
 }
 
 function populateQuickSettings() {
@@ -4538,6 +4876,9 @@ document.getElementById('btn-dashboard-quests-page').addEventListener('click', (
 document.getElementById('btn-dashboard-missions-page').addEventListener('click', () => {
   navigateTo('missions');
 });
+document.getElementById('btn-dashboard-album-page').addEventListener('click', () => {
+  navigateTo('shop');
+});
 document.getElementById('btn-dashboard-daily-play').addEventListener('click', () => {
   startNewGame({ sessionType: 'daily', resetPromptChain: true });
   navigateTo('game');
@@ -4699,6 +5040,7 @@ function init() {
   todayScore = (td.d === todayKey) ? td.s : 0;
 
   loadProgressionState();
+  evaluateCollectionAlbumRewards();
   ensureDailyMissionsForToday();
   ensureDailyChallengeForToday();
   ensureQuestBoardForCurrentCycle();
