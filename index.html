@@ -62,6 +62,19 @@
           </article>
         </section>
 
+        <button class="album-teaser" id="btn-dashboard-album-page" type="button" aria-label="Open collection album">
+          <div>
+            <span class="album-teaser__kicker">Collection album</span>
+            <strong id="dashboard-album-title">Collection album</strong>
+            <p id="dashboard-album-copy">Browse themed cosmetic sets and track completion rewards.</p>
+          </div>
+          <div class="album-teaser__meta">
+            <span id="dashboard-album-progress">0/0 sets complete</span>
+            <span id="dashboard-album-reward">Grand reward</span>
+            <span id="dashboard-album-badge">No album badges yet</span>
+          </div>
+        </button>
+
         <section class="dashboard-retention" aria-label="Extras">
           <section class="dashboard-challenge" aria-label="Daily challenge status">
             <div class="dashboard-challenge__head">
@@ -308,6 +321,24 @@
         </header>
 
         <div class="page-panel page-panel--shop">
+          <div class="collection-head">
+            <div>
+              <h3>Collection album</h3>
+              <p id="collection-album-subtitle">Finish themed sets to bank prestige rewards.</p>
+            </div>
+            <span class="missions-count" id="collection-album-count">0/0 sets complete</span>
+          </div>
+          <div class="album-goal">
+            <div>
+              <strong id="collection-album-goal-title">Heirloom</strong>
+              <p id="collection-album-goal-copy">Complete the full album to unlock an exclusive finish.</p>
+            </div>
+            <span class="album-goal__spotlight" id="collection-album-spotlight">A featured set will appear here.</span>
+          </div>
+          <div id="collection-album-list" class="album-list" aria-live="polite"></div>
+        </div>
+
+        <div class="page-panel page-panel--shop page-panel--album">
           <div class="collection-head">
             <div>
               <h3>Colourways</h3>
