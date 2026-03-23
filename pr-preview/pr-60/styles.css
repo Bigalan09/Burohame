@@ -449,13 +449,14 @@ a.icon-btn { text-decoration: none; }
   right: 12px;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
   gap: 8px;
-  padding: 8px;
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--bg-card) 88%, var(--bg));
+  padding: 10px 8px 8px;
+  border-radius: 26px;
+  background: color-mix(in srgb, var(--bg-card) 90%, var(--bg));
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--border));
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  box-shadow: 0 12px 34px rgba(0,0,0,0.08);
   backdrop-filter: blur(14px);
 }
 
@@ -476,6 +477,7 @@ a.icon-btn { text-decoration: none; }
   gap: 6px;
   font: inherit;
   cursor: pointer;
+  transition: transform 180ms ease, color 180ms ease, background-color 180ms ease, opacity 180ms ease;
 }
 
 .bottom-nav__item span {
@@ -491,6 +493,54 @@ a.icon-btn { text-decoration: none; }
 
 .bottom-nav__item:active {
   opacity: 0.75;
+}
+
+.bottom-nav__item--play {
+  position: relative;
+  z-index: 1;
+  padding-top: 0;
+  color: color-mix(in srgb, var(--accent-dk) 82%, var(--text));
+  transform: translateY(-18px);
+}
+
+.bottom-nav__item--play:hover,
+.bottom-nav__item--play:focus-visible {
+  transform: translateY(-20px) scale(1.02);
+}
+
+.bottom-nav__item--play:active {
+  transform: translateY(-16px) scale(0.98);
+  opacity: 1;
+}
+
+.bottom-nav__play-disc {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-hi) 88%, white) 0%, var(--accent) 100%);
+  color: color-mix(in srgb, var(--accent-dk) 72%, #40250e);
+  box-shadow: 0 14px 28px rgba(224,120,0,0.22), inset 0 1px 1px rgba(255,255,255,0.55);
+  border: 1px solid color-mix(in srgb, var(--accent-hi) 46%, rgba(255,255,255,0.6));
+}
+
+.bottom-nav__item--play span:last-child {
+  color: color-mix(in srgb, var(--accent-dk) 74%, var(--text));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav__item {
+    transition: none;
+  }
+
+  .bottom-nav__item--play,
+  .bottom-nav__item--play:hover,
+  .bottom-nav__item--play:focus-visible,
+  .bottom-nav__item--play:active {
+    transform: translateY(-18px);
+  }
 }
 
 .mission-btn {

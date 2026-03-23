@@ -2036,12 +2036,32 @@ function populateSettingsPage() {
   updateCosmeticLabel();
 }
 
+function updatePrimaryPlayButton() {
+  const playButton = document.getElementById('btn-bottom-nav-play');
+  const playLabel = document.getElementById('bottom-nav-play-label');
+  if (!playButton || !playLabel) return;
+
+  const savedGame = getSavedGameSession();
+  const isDaily = savedGame?.sessionType === 'daily';
+  const label = isDaily ? 'Resume daily' : savedGame ? 'Resume' : 'Play';
+  const ariaLabel = isDaily
+    ? 'Resume daily challenge'
+    : savedGame
+      ? 'Resume saved run'
+      : 'Start new run';
+
+  playLabel.textContent = label;
+  playButton.setAttribute('aria-label', ariaLabel);
+}
+
 function updateBottomNav() {
-  document.querySelectorAll('.bottom-nav__item').forEach(button => {
+  document.querySelectorAll('.bottom-nav__item[data-nav-page]').forEach(button => {
     const isActive = button.dataset.navPage === currentPage;
     button.classList.toggle('is-active', isActive);
     button.setAttribute('aria-current', isActive ? 'page' : 'false');
   });
+
+  updatePrimaryPlayButton();
 }
 
 function navigateTo(page) {
@@ -3090,10 +3110,19 @@ document.getElementById('btn-game-back').addEventListener('click', () => {
 document.getElementById('btn-settings-shop').addEventListener('click', () => {
   navigateTo('shop');
 });
-document.querySelectorAll('.bottom-nav__item').forEach(button => {
+document.querySelectorAll('.bottom-nav__item[data-nav-page]').forEach(button => {
   button.addEventListener('click', () => {
     navigateTo(button.dataset.navPage);
   });
+});
+
+document.getElementById('btn-bottom-nav-play').addEventListener('click', () => {
+  if (getSavedGameSession()) {
+    if (!restoreSavedGame()) return;
+  } else {
+    startNewGame();
+  }
+  navigateTo('game');
 });
 
 document.getElementById('btn-missions-close').addEventListener('click', () => {
