@@ -1,5 +1,36 @@
 # Codex Agent Instructions
 
+## Project snapshot
+
+Burohame is a mobile-first 9×9 block puzzle game built as a plain static web app with HTML, CSS, and vanilla JavaScript. The current live product is a single-page experience with dashboard, game, weekly leaderboard, quest chains, daily missions, shop, settings, and about pages, plus PWA support and GitHub Pages deployment.
+
+### Core game
+
+- Place three pieces per round on a 9×9 board with no rotation.
+- Clear full rows, columns, and 3×3 boxes for points.
+- Chain clears to build combo bonuses.
+- Support both the standard piece set and the extended piece set.
+- Offer Coach Mode guidance with move hints, board-health feedback, and quality callouts.
+
+### Progression and retention systems currently in the game
+
+- Persistent local progression state saved in browser storage.
+- Coins as the soft currency, with tuned rewards and scaled shop prices.
+- Daily challenge runs with streak tracking and daily coin rewards.
+- Daily missions that auto-pay rewards when completed.
+- Weekly ladder leagues based on a player’s best four runs in the current week.
+- Quest chains with sequential steps and final rewards.
+- Post-run rewards summary and contextual one-more-run prompts.
+- Mastery progression and permanent unlocks.
+- Cosmetic collection systems including colourways, finishes, themed sets, set badges, and a full collection album reward.
+
+### Current technical shape
+
+- No framework and no build step.
+- Main app files live at the repository root: `index.html`, `styles.css`, `app.js`, `sw.js`, and static assets.
+- GitHub Actions handle CI, PR previews, CodeQL, and production deployment to GitHub Pages.
+- Weekly leaderboard data is still local and simulated client-side. It is not yet multiplayer or backed by shared persistent storage.
+
 ## Branch and PR workflow
 
 When you are asked to make repository changes, follow this sequence unless the user explicitly tells you otherwise:
@@ -28,6 +59,7 @@ To avoid duplicate pull requests and UI confusion, use these rules whenever Code
 - Do not rewrite unrelated files.
 - Prefer small, reviewable commits.
 - Summarise the checks you ran in the final response.
+- When project state changes materially, update this file so it remains a reliable snapshot of the game and release plan.
 
 ## Ordered issue queue for retention and delight work
 
@@ -39,6 +71,10 @@ After implementing an issue, also tidy the GitHub issue queue so the repository 
 - if `TODO` becomes empty, add the next suitable open GitHub issue to `TODO` before the next implementation request.
 
 ### TODO
+
+- [#83 Make the weekly leaderboard multiplayer with a pluggable hosted backend](https://github.com/Bigalan09/Burohame/issues/83)
+  - Use Supabase first for the release milestone.
+  - Keep reads and writes behind an adapter so the storage layer can later be swapped for self-hosted services or other APIs if scaling needs change.
 
 ### Completed
 
