@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="screen-orientation" content="portrait">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Burohame">
   <meta name="mobile-web-app-capable" content="yes">
@@ -15,13 +14,6 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="orientation-guard" aria-live="polite" role="status">
-    <div class="orientation-guard__panel">
-      <span class="orientation-guard__icon" aria-hidden="true">📱</span>
-      <h2>Rotate back to portrait</h2>
-      <p>Burohame is optimised for portrait play only.</p>
-    </div>
-  </div>
   <div id="app" data-page="dashboard">
 
     <section class="page page--dashboard" data-page="dashboard" aria-label="Dashboard">
@@ -49,7 +41,10 @@
             <button class="pill-btn wide" id="btn-dashboard-continue">Continue run</button>
             <button class="pill-btn wide pill-btn--secondary" id="btn-dashboard-new">Start new run</button>
           </div>
-          <p class="dash-hero-note">Equipped finish: <strong id="dashboard-finish">Classic</strong></p>
+          <div class="dash-hero-meta" aria-label="Current dashboard status">
+            <p class="dash-hero-note">Equipped finish: <strong id="dashboard-finish">Classic</strong></p>
+            <span class="dash-hero-chip" id="dashboard-run-state">Ready for a fresh run</span>
+          </div>
         </section>
 
         <section class="dashboard-stats" aria-label="Dashboard statistics">
@@ -314,6 +309,11 @@
 
     <div id="ov-gameover" class="overlay" hidden>
       <div class="ov-card ov-card--summary">
+        <button class="summary-close-btn" id="btn-gameover-dashboard" type="button" aria-label="Back to dashboard">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
         <h2>Game Over</h2>
         <p class="summary-intro">Your run rewards are ready.</p>
         <div class="run-summary" aria-label="Run rewards summary">

@@ -272,7 +272,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'blue',
     name: 'Blue Tide',
     description: 'Cool focus with a crisp electric edge.',
-    price: 46,
+    price: 35,
     icon: '🔵',
     swatches: ['#9fd3ff', '#007aff', '#005ec4'],
   },
@@ -280,7 +280,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'green',
     name: 'Green Grove',
     description: 'A calmer board feel with fresh contrast.',
-    price: 46,
+    price: 35,
     icon: '🟢',
     swatches: ['#a7efbc', '#34c759', '#248a3d'],
   },
@@ -288,7 +288,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'purple',
     name: 'Purple Pulse',
     description: 'A richer palette for streak-chasing sessions.',
-    price: 59,
+    price: 45,
     icon: '🟣',
     swatches: ['#d6aef2', '#af52de', '#8944ab'],
   },
@@ -296,7 +296,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'red',
     name: 'Red Rally',
     description: 'A bolder tone when you want a sharper board.',
-    price: 59,
+    price: 45,
     icon: '🔴',
     swatches: ['#ff9b94', '#ff3b30', '#d4264a'],
   },
@@ -304,7 +304,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'teal',
     name: 'Teal Drift',
     description: 'Bright sea-glass highlights with softer depth.',
-    price: 72,
+    price: 55,
     icon: '💎',
     swatches: ['#b8efff', '#5ac8fa', '#3aabd6'],
   },
@@ -312,7 +312,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'pink',
     name: 'Pink Pop',
     description: 'Playful contrast without losing clarity.',
-    price: 72,
+    price: 55,
     icon: '💗',
     swatches: ['#ffb1c3', '#ff2d55', '#d4264a'],
   },
@@ -320,7 +320,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'random',
     name: 'Shuffle Glow',
     description: 'Swap to a fresh unlocked colour every rack.',
-    price: 117,
+    price: 90,
     icon: '🎲',
     swatches: ['#ffd08a', '#5ac8fa', '#af52de'],
   },
@@ -343,37 +343,37 @@ const COSMETIC_CATALOGUE = Object.freeze({
       id: 'satin',
       name: 'Satin',
       description: 'Soft rounded edges with a calm sheen.',
-      price: 78,
+      price: 60,
     },
     {
       id: 'carbon',
       name: 'Carbon',
       description: 'Sharper edges with a grounded board-game feel.',
-      price: 143,
+      price: 110,
     },
     {
       id: 'prism',
       name: 'Prism',
       description: 'A brighter faceted shine for high-score chasers.',
-      price: 221,
+      price: 170,
     },
     {
       id: 'velvet',
       name: 'Velvet',
       description: 'A softer matte finish with rounded edges.',
-      price: 182,
+      price: 140,
     },
     {
       id: 'frost',
       name: 'Frost',
       description: 'Cool highlights and lighter faces for clean boards.',
-      price: 247,
+      price: 190,
     },
     {
       id: 'ember',
       name: 'Ember',
       description: 'Deeper shadows and hotter highlights for tense runs.',
-      price: 299,
+      price: 230,
     },
   ],
 });
@@ -769,6 +769,7 @@ function renderGameOverSummary() {
   const dailyStatus = document.getElementById('go-daily-status');
   const dailyCopy = document.getElementById('go-daily-copy');
   const nextRunButton = document.getElementById('btn-new');
+  const dashboardButton = document.getElementById('btn-gameover-dashboard');
 
   document.getElementById('go-score').textContent = String(summary.finalScore);
   document.getElementById('go-best').textContent = String(bestScore);
@@ -782,6 +783,9 @@ function renderGameOverSummary() {
   }
   if (nextRunButton) {
     nextRunButton.textContent = isDailyChallengeSession() ? 'Play another run' : 'Start next run';
+  }
+  if (dashboardButton) {
+    dashboardButton.setAttribute('aria-label', isDailyChallengeSession() ? 'Back to dashboard from daily challenge summary' : 'Back to dashboard');
   }
 
   if (dailySummary && dailyStatus && dailyCopy) {
@@ -1366,6 +1370,7 @@ function renderCosmeticsCollection() {
     const equipped = colorSetting === colorway.id;
     const canAfford = coinBalance >= colorway.price;
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
     const costLabel = colorway.price ? `🪙 ${colorway.price}` : 'Free';
     const card = document.createElement('article');
     card.className = 'cosmetic-card cosmetic-card--colorway';
@@ -1378,11 +1383,13 @@ function renderCosmeticsCollection() {
     card.innerHTML = `
       <div class="cosmetic-card__preview" aria-hidden="true">${swatches}</div>
       <div class="cosmetic-card__body">
-        <h3>${label}</h3>
+        <div class="cosmetic-card__head">
+          <h3>${label}</h3>
+          <span class="cosmetic-card__state ${stateClass}">${status}</span>
+        </div>
         <p>${colorway.description}</p>
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
-            <strong>${status}</strong>
             <span>${costLabel}</span>
           </div>
           ${getShopActionMarkup({ owned, equipped, canAfford, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
@@ -1404,6 +1411,7 @@ function renderCosmeticsCollection() {
     if (!owned) card.classList.add('cosmetic-card--locked');
 
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
     const costLabel = skin.price ? `🪙 ${skin.price}` : 'Free';
 
     card.innerHTML = `
@@ -1413,11 +1421,13 @@ function renderCosmeticsCollection() {
         <span class="cosmetic-card__tile"></span>
       </div>
       <div class="cosmetic-card__body">
-        <h3>${skin.name}</h3>
+        <div class="cosmetic-card__head">
+          <h3>${skin.name}</h3>
+          <span class="cosmetic-card__state ${stateClass}">${status}</span>
+        </div>
         <p>${skin.description}</p>
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
-            <strong>${status}</strong>
             <span>${costLabel}</span>
           </div>
           ${getShopActionMarkup({ owned, equipped, canAfford, price: skin.price, itemId: skin.id, collection: 'finish' })}
@@ -1517,43 +1527,24 @@ function canPlaceOnBoard(cells, row, col, b) {
   return true;
 }
 
-function placePieceOnBoard(b, cells, row, col) {
-  const nextBoard = b.map(boardRow => [...boardRow]);
-  for (const [dr, dc] of cells) nextBoard[row + dr][col + dc] = 1;
-  return applyClears(nextBoard, getClearsOnBoard(nextBoard));
-}
-
-function boardStateKey(b) {
-  return b.map(row => row.join('')).join('|');
-}
-
-// Try placing each piece in the supplied slot order, exploring every valid
-// placement so the warning only appears when the order genuinely matters.
+// Try placing each piece (in the given slot order) at its first available
+// position and return whether all can be placed.
 function canFitAllInOrder(order) {
-  const memo = new Map();
-
-  function search(orderIdx, b) {
-    if (orderIdx >= order.length) return true;
-
-    const key = `${orderIdx}:${boardStateKey(b)}`;
-    if (memo.has(key)) return memo.get(key);
-
-    const cells = pieces[order[orderIdx]];
-    for (let r = 0; r < N; r++) {
+  let b = board.map(r => [...r]);
+  for (const i of order) {
+    let placed = false;
+    outer: for (let r = 0; r < N; r++) {
       for (let c = 0; c < N; c++) {
-        if (!canPlaceOnBoard(cells, r, c, b)) continue;
-        if (search(orderIdx + 1, placePieceOnBoard(b, cells, r, c))) {
-          memo.set(key, true);
-          return true;
-        }
+        if (!canPlaceOnBoard(pieces[i], r, c, b)) continue;
+        for (const [dr, dc] of pieces[i]) b[r + dr][c + dc] = 1;
+        b = applyClears(b, getClearsOnBoard(b));
+        placed = true;
+        break outer;
       }
     }
-
-    memo.set(key, false);
-    return false;
+    if (!placed) return false;
   }
-
-  return search(0, board.map(row => [...row]));
+  return true;
 }
 
 // Returns true when only some orderings allow all pieces to be placed –
@@ -1938,6 +1929,7 @@ function renderDashboard() {
   const dailyButton = document.getElementById('btn-dashboard-daily');
   const dailyInfoButton = document.getElementById('btn-dashboard-daily-info');
   const dailyStreakPill = document.getElementById('daily-streak-pill');
+  const runState = document.getElementById('dashboard-run-state');
   const hasSavedGame = !!getSavedGameSession();
   const savedGame = getSavedGameSession();
   const missionCounts = getDailyMissionCounts();
@@ -1952,6 +1944,14 @@ function renderDashboard() {
   }
   if (newGameBtn) {
     newGameBtn.textContent = hasSavedGame ? 'Start fresh run' : 'Start new run';
+    newGameBtn.classList.toggle('pill-btn--secondary', hasSavedGame);
+  }
+  if (runState) {
+    runState.textContent = savedGame?.sessionType === 'daily'
+      ? 'Daily challenge ready to resume'
+      : hasSavedGame
+        ? 'Saved run ready to continue'
+        : 'Ready for a fresh run';
   }
   if (intro) {
     if (savedGame?.sessionType === 'daily') {
@@ -2151,18 +2151,9 @@ function renderSlot(i) {
 // Grey out any piece that cannot be placed anywhere on the current board.
 function updateRackPlayability() {
   for (let i = 0; i < rackSize; i++) {
+    if (used[i]) continue;
     const slot = document.getElementById(`slot-${i}`);
-    if (!slot) continue;
-
-    if (used[i]) {
-      slot.classList.remove('unplayable');
-      slot.removeAttribute('aria-disabled');
-      continue;
-    }
-
-    const playable = canPlaceAnywhere(pieces[i]);
-    slot.classList.toggle('unplayable', !playable);
-    slot.setAttribute('aria-disabled', playable ? 'false' : 'true');
+    if (slot) slot.classList.toggle('unplayable', !canPlaceAnywhere(pieces[i]));
   }
 }
 
@@ -2608,21 +2599,6 @@ function showChooseCarefullyMsg() {
   msg.addEventListener('animationend', () => msg.remove(), { once: true });
 }
 
-function updateOrientationState() {
-  const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-  const isCompactHeight = window.innerHeight <= 560;
-  document.body.classList.toggle('portrait-blocked', isLandscape && isCompactHeight);
-}
-
-async function tryLockPortrait() {
-  if (!screen.orientation || typeof screen.orientation.lock !== 'function') return;
-  try {
-    await screen.orientation.lock('portrait');
-  } catch (error) {
-    // Ignore browsers that only allow locking in installed or fullscreen contexts.
-  }
-}
-
 // ── New round / restart ────────────────────────────────────
 function newRound() {
   const summary = ensureRunSummary();
@@ -3034,7 +3010,6 @@ function applySettingsState(nextSettings) {
   document.getElementById('coach-panel').hidden = !trainingMode;
   renderRack();
   updateRackPlayability();
-  updateOrientationState();
   if (trainingMode && !prevTraining) updateTrainingPanel();
   if (!trainingMode) {
     clearHint();
@@ -3196,6 +3171,12 @@ document.getElementById('btn-new').addEventListener('click', () => {
   navigateTo('game');
 });
 
+document.getElementById('btn-gameover-dashboard').addEventListener('click', () => {
+  hideOverlay('ov-gameover');
+  navigateTo('dashboard');
+  renderDashboard();
+});
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   renderDailyMissions();
@@ -3228,10 +3209,6 @@ function init() {
   applyColor(colorSetting);
   applyExtendedPieces(extendedPieces);
   document.getElementById('coach-panel').hidden = !trainingMode;
-  updateOrientationState();
-  tryLockPortrait();
-  window.addEventListener('resize', updateOrientationState);
-  window.addEventListener('orientationchange', updateOrientationState);
 
   // Follow OS dark-mode changes dynamically when the user hasn't set
   // an explicit preference (i.e. no saved 'dark' key in settings yet).
