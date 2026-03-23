@@ -192,7 +192,7 @@ let dailyChallengeState = {
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 4;
+const PROGRESSION_STATE_VERSION = 5;
 const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
@@ -201,6 +201,10 @@ const SHOP_PRICE_MULTIPLIER = 2;
 const COIN_REWARD_MULTIPLIER = 0.8;
 const DAILY_CHALLENGE_TARGET_MIN = 140;
 const DAILY_CHALLENGE_TARGET_RANGE = 51;
+const WEEKLY_LADDER_COUNTED_RUNS = 4;
+const WEEKLY_COHORT_SIZE = 20;
+const WEEKLY_PROMOTION_SLOTS = 4;
+const WEEKLY_RELEGATION_SLOTS = 4;
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
   multiClearBonus: 0,
@@ -271,6 +275,60 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     description: 'Complete 3 runs today.',
   },
 ]);
+
+const WEEKLY_LEAGUES = Object.freeze([
+  {
+    id: 'bronze',
+    name: 'Bronze',
+    badge: '🥉',
+    tier: 0,
+    previewCoins: scaleCoinReward(18),
+    holdCoins: scaleCoinReward(16),
+    promotionCoins: scaleCoinReward(28),
+    relegationCoins: scaleCoinReward(12),
+    scoreRange: [280, 620],
+  },
+  {
+    id: 'silver',
+    name: 'Silver',
+    badge: '🥈',
+    tier: 1,
+    previewCoins: scaleCoinReward(24),
+    holdCoins: scaleCoinReward(20),
+    promotionCoins: scaleCoinReward(34),
+    relegationCoins: scaleCoinReward(14),
+    scoreRange: [420, 800],
+  },
+  {
+    id: 'gold',
+    name: 'Gold',
+    badge: '🥇',
+    tier: 2,
+    previewCoins: scaleCoinReward(30),
+    holdCoins: scaleCoinReward(24),
+    promotionCoins: scaleCoinReward(42),
+    relegationCoins: scaleCoinReward(16),
+    scoreRange: [560, 980],
+  },
+  {
+    id: 'diamond',
+    name: 'Diamond',
+    badge: '💎',
+    tier: 3,
+    previewCoins: scaleCoinReward(36),
+    holdCoins: scaleCoinReward(30),
+    promotionCoins: scaleCoinReward(48),
+    relegationCoins: scaleCoinReward(18),
+    scoreRange: [720, 1180],
+  },
+]);
+const WEEKLY_LEAGUE_LOOKUP = Object.freeze(
+  WEEKLY_LEAGUES.reduce((acc, league) => {
+    acc[league.id] = league;
+    return acc;
+  }, {})
+);
+
 const COLORWAY_CATALOGUE = Object.freeze([
   {
     id: 'orange',
@@ -454,6 +512,414 @@ function getPreviousDateKey(dateKey) {
   return getUTCDateKey(date);
 }
 
+
+function getUTCWeekStart(date = new Date()) {
+  const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() - day + 1);
+  utcDate.setUTCHours(0, 0, 0, 0);
+  return utcDate;
+}
+
+function getUTCWeekId(date = new Date()) {
+  const weekStart = getUTCWeekStart(date);
+  return getUTCDateKey(weekStart);
+}
+
+function getNextUTCWeekStart(date = new Date()) {
+  const nextStart = getUTCWeekStart(date);
+  nextStart.setUTCDate(nextStart.getUTCDate() + 7);
+  return nextStart;
+}
+
+function getUTCWeekCountdown(now = new Date()) {
+  const msRemaining = Math.max(0, getNextUTCWeekStart(now).getTime() - now.getTime());
+  const totalHours = Math.floor(msRemaining / 3600000);
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return days > 0 ? `${days}d ${hours}h left` : `${Math.max(1, hours)}h left`;
+}
+
+function formatOrdinal(value) {
+  const remainder10 = value % 10;
+  const remainder100 = value % 100;
+  if (remainder10 === 1 && remainder100 !== 11) return `${value}st`;
+  if (remainder10 === 2 && remainder100 !== 12) return `${value}nd`;
+  if (remainder10 === 3 && remainder100 !== 13) return `${value}rd`;
+  return `${value}th`;
+}
+
+function getLeagueById(leagueId) {
+  return WEEKLY_LEAGUE_LOOKUP[leagueId] || WEEKLY_LEAGUES[0];
+}
+
+function getLeagueIndex(leagueId) {
+  return WEEKLY_LEAGUES.findIndex(league => league.id === leagueId);
+}
+
+function getAdjacentLeagueId(leagueId, direction) {
+  const currentIndex = Math.max(0, getLeagueIndex(leagueId));
+  const nextIndex = Math.max(0, Math.min(WEEKLY_LEAGUES.length - 1, currentIndex + direction));
+  return WEEKLY_LEAGUES[nextIndex].id;
+}
+
+function sanitiseWeeklyBestRuns(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(score => clampWholeNumber(score, 0))
+    .filter(score => score > 0)
+    .sort((a, b) => b - a)
+    .slice(0, WEEKLY_LADDER_COUNTED_RUNS);
+}
+
+function createDefaultWeeklyResult() {
+  return {
+    weekId: '',
+    leagueId: 'bronze',
+    outcome: '',
+    rank: 0,
+    totalScore: 0,
+    coinsAwarded: 0,
+    unlockType: '',
+    unlockId: '',
+    unlockName: '',
+  };
+}
+
+function sanitiseWeeklyResult(value) {
+  const src = value && typeof value === 'object' ? value : {};
+  return {
+    weekId: typeof src.weekId === 'string' ? src.weekId : '',
+    leagueId: typeof src.leagueId === 'string' ? src.leagueId : 'bronze',
+    outcome: typeof src.outcome === 'string' ? src.outcome : '',
+    rank: clampWholeNumber(src.rank, 0),
+    totalScore: clampWholeNumber(src.totalScore, 0),
+    coinsAwarded: clampWholeNumber(src.coinsAwarded, 0),
+    unlockType: typeof src.unlockType === 'string' ? src.unlockType : '',
+    unlockId: typeof src.unlockId === 'string' ? src.unlockId : '',
+    unlockName: typeof src.unlockName === 'string' ? src.unlockName : '',
+  };
+}
+
+function createDefaultWeeklyLadderState() {
+  return {
+    currentWeekId: '',
+    leagueId: 'bronze',
+    bestRuns: [],
+    lastSettledWeekId: '',
+    pendingResult: createDefaultWeeklyResult(),
+    history: [],
+  };
+}
+
+function sanitiseWeeklyLadderState(value) {
+  const src = value && typeof value === 'object' ? value : {};
+  const history = Array.isArray(src.history)
+    ? src.history.map(sanitiseWeeklyResult).filter(entry => entry.weekId)
+    : [];
+  return {
+    currentWeekId: typeof src.currentWeekId === 'string' ? src.currentWeekId : '',
+    leagueId: typeof src.leagueId === 'string' && WEEKLY_LEAGUE_LOOKUP[src.leagueId] ? src.leagueId : 'bronze',
+    bestRuns: sanitiseWeeklyBestRuns(src.bestRuns),
+    lastSettledWeekId: typeof src.lastSettledWeekId === 'string' ? src.lastSettledWeekId : '',
+    pendingResult: sanitiseWeeklyResult(src.pendingResult),
+    history: history.slice(-6),
+  };
+}
+
+function buildWeeklyRewardPreview(leagueId, outcome) {
+  const league = getLeagueById(leagueId);
+  if (outcome === 'promoted') {
+    return {
+      coins: league.promotionCoins,
+      unlockHint: 'Bonus unlock if your collection still has something locked.',
+    };
+  }
+  if (outcome === 'relegated') {
+    return {
+      coins: league.relegationCoins,
+      unlockHint: 'A softer landing still pays a few coins.',
+    };
+  }
+  return {
+    coins: league.holdCoins,
+    unlockHint: 'Steady weeks still pay out coins at the reset.',
+  };
+}
+
+function getWeeklyZoneForRank(rank, leagueId) {
+  if (rank <= WEEKLY_PROMOTION_SLOTS) {
+    return leagueId === 'diamond' ? 'summit' : 'promotion';
+  }
+  if (rank > WEEKLY_COHORT_SIZE - WEEKLY_RELEGATION_SLOTS) {
+    return leagueId === 'bronze' ? 'safe' : 'relegation';
+  }
+  return 'hold';
+}
+
+function getWeeklyZoneLabel(zone) {
+  if (zone === 'promotion') return 'Promotion zone';
+  if (zone === 'summit') return 'Summit zone';
+  if (zone === 'relegation') return 'Relegation zone';
+  return 'Hold zone';
+}
+
+function chooseWeeklyUnlockReward() {
+  const ownedColorways = new Set(getOwnedColorways());
+  const lockedColorway = COLORWAY_CATALOGUE.find(colorway => colorway.price > 0 && !ownedColorways.has(colorway.id));
+  if (lockedColorway) {
+    return {
+      type: 'colorway',
+      id: lockedColorway.id,
+      name: lockedColorway.name,
+    };
+  }
+
+  const ownedSkins = new Set(getOwnedBlockSkins());
+  const lockedSkin = COSMETIC_CATALOGUE.blockSkins.find(skin => skin.price > 0 && !ownedSkins.has(skin.id));
+  if (lockedSkin) {
+    return {
+      type: 'finish',
+      id: lockedSkin.id,
+      name: lockedSkin.name,
+    };
+  }
+
+  return null;
+}
+
+function applyWeeklyUnlockReward(reward) {
+  if (!reward?.id || !reward?.type) return;
+  updateProgressionState(state => {
+    if (reward.type === 'colorway') {
+      if (!state.cosmetics.ownedColorways.includes(reward.id)) {
+        state.cosmetics.ownedColorways.push(reward.id);
+      }
+    } else if (reward.type === 'finish') {
+      if (!state.cosmetics.ownedBlockSkins.includes(reward.id)) {
+        state.cosmetics.ownedBlockSkins.push(reward.id);
+      }
+    }
+    return state;
+  });
+  updateCosmeticLabel();
+}
+
+function buildWeeklyCohort(weekId, leagueId, playerScore) {
+  const league = getLeagueById(leagueId);
+  const [minScore, maxScore] = league.scoreRange;
+  const spread = Math.max(60, maxScore - minScore);
+  const opponents = [];
+
+  for (let index = 0; index < WEEKLY_COHORT_SIZE - 1; index++) {
+    const seed = hashString(`weekly:${weekId}:${leagueId}:${index}`);
+    const percentile = (seed % 1000) / 999;
+    const wave = Math.sin(((seed >>> 3) % 360) * (Math.PI / 180));
+    const score = Math.round(minScore + percentile * spread + wave * 28);
+    opponents.push({
+      id: `shadow-${index + 1}`,
+      score: Math.max(0, score),
+    });
+  }
+
+  const entries = [...opponents, { id: 'you', score: Math.max(0, Math.round(playerScore)) }]
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.id === 'you' ? -1 : right.id === 'you' ? 1 : left.id.localeCompare(right.id);
+    })
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }));
+
+  const playerEntry = entries.find(entry => entry.id === 'you') || { score: playerScore, rank: WEEKLY_COHORT_SIZE };
+  const promotionCutoffEntry = entries[WEEKLY_PROMOTION_SLOTS - 1];
+  const holdCutoffEntry = entries[Math.max(0, WEEKLY_COHORT_SIZE - WEEKLY_RELEGATION_SLOTS - 1)];
+  const safeRank = Math.max(1, WEEKLY_COHORT_SIZE - WEEKLY_RELEGATION_SLOTS);
+  return {
+    entries,
+    playerEntry,
+    promotionCutoffScore: promotionCutoffEntry ? promotionCutoffEntry.score : playerScore,
+    safeCutoffScore: holdCutoffEntry ? holdCutoffEntry.score : playerScore,
+    safeRank,
+  };
+}
+
+function getWeeklyRankBand(rank) {
+  if (rank <= WEEKLY_PROMOTION_SLOTS) return 'Front pack';
+  if (rank <= 10) return 'Upper mid-table';
+  if (rank <= WEEKLY_COHORT_SIZE - WEEKLY_RELEGATION_SLOTS) return 'Steady pack';
+  return 'Pressure pack';
+}
+
+function settleWeeklyOutcome(weekId, leagueId, bestRuns) {
+  const totalScore = bestRuns.reduce((sum, value) => sum + value, 0);
+  const cohort = buildWeeklyCohort(weekId, leagueId, totalScore);
+  const rank = cohort.playerEntry.rank;
+  const zone = getWeeklyZoneForRank(rank, leagueId);
+  let outcome = 'held';
+  let nextLeagueId = leagueId;
+
+  if (zone === 'promotion') {
+    outcome = 'promoted';
+    nextLeagueId = getAdjacentLeagueId(leagueId, 1);
+  } else if (zone === 'relegation') {
+    outcome = 'relegated';
+    nextLeagueId = getAdjacentLeagueId(leagueId, -1);
+  }
+
+  const rewardPreview = buildWeeklyRewardPreview(leagueId, outcome);
+  const unlockReward = outcome === 'promoted' ? chooseWeeklyUnlockReward() : null;
+
+  return {
+    outcome,
+    nextLeagueId,
+    rewardCoins: rewardPreview.coins,
+    unlockReward,
+    result: {
+      weekId,
+      leagueId,
+      outcome,
+      rank,
+      totalScore,
+      coinsAwarded: rewardPreview.coins,
+      unlockType: unlockReward?.type || '',
+      unlockId: unlockReward?.id || '',
+      unlockName: unlockReward?.name || '',
+    },
+  };
+}
+
+function showWeeklySettlementMoment(settlement) {
+  if (!settlement?.result?.weekId) return;
+  const nextLeague = getLeagueById(settlement.nextLeagueId);
+  const league = getLeagueById(settlement.result.leagueId);
+  const detailParts = [
+    `${formatOrdinal(settlement.result.rank)} of ${WEEKLY_COHORT_SIZE}`,
+    `+${settlement.rewardCoins} coins`,
+  ];
+  if (settlement.unlockReward) detailParts.push(`${settlement.unlockReward.name} unlocked`);
+  showCoinToast(settlement.rewardCoins, `Weekly ${settlement.outcome}`, {
+    celebrate: settlement.outcome !== 'relegated',
+    major: settlement.outcome === 'promoted',
+  });
+  showMilestoneMoment({
+    eyebrow: 'Weekly ladder',
+    title: settlement.outcome === 'promoted'
+      ? `${nextLeague.badge} Promoted to ${nextLeague.name}`
+      : settlement.outcome === 'relegated'
+        ? `${nextLeague.badge} Moved down to ${nextLeague.name}`
+        : `${league.badge} ${league.name} held`,
+    detail: detailParts.join(' · '),
+    major: settlement.outcome === 'promoted',
+    anchor: '.dashboard-weekly',
+    announce: `Weekly ladder ${settlement.outcome}. Rank ${settlement.result.rank}. ${settlement.rewardCoins} coins awarded.`,
+  });
+}
+
+function ensureWeeklyLadderForCurrentWeek() {
+  const currentWeekId = getUTCWeekId();
+  const existing = progressionState?.weeklyLadder ? sanitiseWeeklyLadderState(progressionState.weeklyLadder) : createDefaultWeeklyLadderState();
+  if (existing.currentWeekId === currentWeekId) {
+    return existing;
+  }
+
+  const settlement = existing.currentWeekId && existing.currentWeekId !== currentWeekId && existing.lastSettledWeekId !== existing.currentWeekId
+    ? settleWeeklyOutcome(existing.currentWeekId, existing.leagueId, existing.bestRuns)
+    : null;
+
+  const nextState = updateProgressionState(state => {
+    const weekly = sanitiseWeeklyLadderState(state.weeklyLadder);
+    if (!weekly.currentWeekId) {
+      weekly.currentWeekId = currentWeekId;
+      state.weeklyLadder = weekly;
+      return state;
+    }
+
+    if (settlement) {
+      weekly.leagueId = settlement.nextLeagueId;
+      weekly.lastSettledWeekId = weekly.currentWeekId;
+      weekly.pendingResult = settlement.result;
+      weekly.history = [...weekly.history, settlement.result].slice(-6);
+    }
+
+    weekly.currentWeekId = currentWeekId;
+    weekly.bestRuns = [];
+    state.weeklyLadder = weekly;
+    return state;
+  });
+
+  if (settlement) {
+    awardCoins(settlement.rewardCoins, `Weekly ${settlement.outcome}`, {
+      silent: true,
+      celebrate: settlement.outcome !== 'relegated',
+      major: settlement.outcome === 'promoted',
+    });
+    if (settlement.unlockReward) applyWeeklyUnlockReward(settlement.unlockReward);
+    showWeeklySettlementMoment(settlement);
+  }
+
+  renderCosmeticsCollection();
+  return nextState.weeklyLadder;
+}
+
+function recordWeeklyRunScore(finalScore) {
+  const scoreValue = Math.max(0, Math.round(finalScore));
+  if (!scoreValue) return;
+  ensureWeeklyLadderForCurrentWeek();
+  updateProgressionState(state => {
+    const weekly = sanitiseWeeklyLadderState(state.weeklyLadder);
+    const scores = [...weekly.bestRuns, scoreValue].sort((a, b) => b - a).slice(0, WEEKLY_LADDER_COUNTED_RUNS);
+    weekly.bestRuns = scores;
+    state.weeklyLadder = weekly;
+    return state;
+  });
+}
+
+function getWeeklyLadderStatus() {
+  const weekly = ensureWeeklyLadderForCurrentWeek();
+  const countedRuns = sanitiseWeeklyBestRuns(weekly.bestRuns);
+  const totalScore = countedRuns.reduce((sum, value) => sum + value, 0);
+  const cohort = buildWeeklyCohort(weekly.currentWeekId, weekly.leagueId, totalScore);
+  const rank = cohort.playerEntry.rank;
+  const zone = getWeeklyZoneForRank(rank, weekly.leagueId);
+  const league = getLeagueById(weekly.leagueId);
+  const promotionGap = Math.max(0, cohort.promotionCutoffScore + 1 - totalScore);
+  const safetyGap = Math.max(0, cohort.safeCutoffScore + 1 - totalScore);
+  const projectedOutcome = zone === 'promotion'
+    ? (weekly.leagueId === 'diamond' ? 'held' : 'promoted')
+    : zone === 'relegation'
+      ? (weekly.leagueId === 'bronze' ? 'held' : 'relegated')
+      : 'held';
+  return {
+    weekly,
+    league,
+    countedRuns,
+    totalScore,
+    rank,
+    rankLabel: `${formatOrdinal(rank)} of ${WEEKLY_COHORT_SIZE}`,
+    zone,
+    zoneLabel: getWeeklyZoneLabel(zone),
+    rankBand: getWeeklyRankBand(rank),
+    promotionGap,
+    safetyGap,
+    countdown: getUTCWeekCountdown(),
+    projectedOutcome,
+    rewardPreview: buildWeeklyRewardPreview(weekly.leagueId, projectedOutcome),
+  };
+}
+
+function describeWeeklyResult(result) {
+  if (!result?.weekId) return '';
+  if (result.outcome === 'promoted') {
+    return `${formatOrdinal(result.rank)} in ${getLeagueById(result.leagueId).name}. ${result.coinsAwarded} coins banked.`;
+  }
+  if (result.outcome === 'relegated') {
+    return `${formatOrdinal(result.rank)} last week. ${result.coinsAwarded} coins softened the drop.`;
+  }
+  return `${formatOrdinal(result.rank)} last week. ${result.coinsAwarded} coins for holding steady.`;
+}
+
 function hashString(value) {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i++) {
@@ -587,6 +1053,7 @@ function createDefaultProgressionState() {
       lastRewardDate: '',
       freezes: 0,
     },
+    weeklyLadder: createDefaultWeeklyLadderState(),
   };
 }
 
@@ -671,6 +1138,7 @@ function sanitiseProgressionState(rawState) {
       lastRewardDate: typeof streak.lastRewardDate === 'string' ? streak.lastRewardDate : '',
       freezes: clampWholeNumber(streak.freezes, defaults.streak.freezes),
     },
+    weeklyLadder: sanitiseWeeklyLadderState(src.weeklyLadder),
   };
 }
 
@@ -1932,6 +2400,86 @@ function renderSessionModeBadge() {
   }
 }
 
+
+function renderWeeklyLadder() {
+  const title = document.getElementById('weekly-ladder-title');
+  const countdown = document.getElementById('weekly-ladder-countdown');
+  const copy = document.getElementById('weekly-ladder-copy');
+  const leagueEl = document.getElementById('weekly-ladder-league');
+  const scoreEl = document.getElementById('weekly-ladder-score');
+  const rankEl = document.getElementById('weekly-ladder-rank');
+  const bandEl = document.getElementById('weekly-ladder-band');
+  const zoneEl = document.getElementById('weekly-ladder-zone');
+  const runsEl = document.getElementById('weekly-ladder-runs');
+  const nextStepEl = document.getElementById('weekly-ladder-next-step');
+  const rewardEl = document.getElementById('weekly-ladder-reward');
+  const bestRunsEl = document.getElementById('weekly-best-runs');
+  const resultBanner = document.getElementById('weekly-result-banner');
+  const resultTitle = document.getElementById('weekly-result-title');
+  const resultCopy = document.getElementById('weekly-result-copy');
+  if (!title || !countdown || !copy || !leagueEl || !scoreEl || !rankEl || !bandEl || !zoneEl || !runsEl || !nextStepEl || !rewardEl || !bestRunsEl || !resultBanner || !resultTitle || !resultCopy) return;
+
+  const status = getWeeklyLadderStatus();
+  const { league, weekly, totalScore, rankLabel, rankBand, zoneLabel, countdown: timeRemaining, countedRuns, rewardPreview, promotionGap, safetyGap, projectedOutcome } = status;
+  title.textContent = `${league.badge} ${league.name} week`;
+  countdown.textContent = timeRemaining;
+  leagueEl.textContent = `${league.badge} ${league.name}`;
+  scoreEl.textContent = String(totalScore);
+  rankEl.textContent = rankLabel;
+  bandEl.textContent = rankBand;
+  zoneEl.textContent = zoneLabel;
+  runsEl.textContent = `${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} counted`;
+
+  if (!countedRuns.length) {
+    copy.textContent = 'Your best four runs this week count. One strong session is enough to start shaping your table.';
+    nextStepEl.textContent = 'Log a first run to join the weekly table.';
+  } else if (status.zone === 'promotion' && weekly.leagueId !== 'diamond') {
+    copy.textContent = 'You are pacing for promotion if the week ended now.';
+    nextStepEl.textContent = 'Stay in the top four to climb next Monday.';
+  } else if (status.zone === 'relegation' && weekly.leagueId !== 'bronze') {
+    copy.textContent = `The table is still recoverable. ${safetyGap} more points would lift you back towards safety.`;
+    nextStepEl.textContent = 'A cleaner run or two should be enough to settle the week.';
+  } else if (promotionGap > 0 && weekly.leagueId !== 'diamond') {
+    copy.textContent = `${promotionGap} more points would move you into the promotion places.`;
+    nextStepEl.textContent = 'Only your best four runs count, so quality still matters more than volume.';
+  } else {
+    copy.textContent = 'The ladder favours calm consistency. Keep nudging your best four upwards.';
+    nextStepEl.textContent = 'One good run can still redraw the standings before the reset.';
+  }
+
+  const rewardLine = projectedOutcome === 'promoted'
+    ? `Weekly reward preview · ${rewardPreview.coins} coins plus a bonus unlock if available`
+    : `Weekly reward preview · ${rewardPreview.coins} coins`;
+  rewardEl.textContent = rewardLine;
+
+  bestRunsEl.innerHTML = '';
+  const runsToShow = [...countedRuns];
+  while (runsToShow.length < WEEKLY_LADDER_COUNTED_RUNS) runsToShow.push(null);
+  runsToShow.forEach((value, index) => {
+    const chip = document.createElement('span');
+    chip.className = `dashboard-weekly__best-run${value ? '' : ' dashboard-weekly__best-run--empty'}`;
+    chip.textContent = value ? `Run ${index + 1} · ${value}` : `Run ${index + 1} open`;
+    bestRunsEl.appendChild(chip);
+  });
+
+  if (weekly.pendingResult?.weekId) {
+    resultBanner.hidden = false;
+    const pendingLeague = getLeagueById(weekly.pendingResult.leagueId);
+    resultTitle.textContent = weekly.pendingResult.outcome === 'promoted'
+      ? `${pendingLeague.badge} Promoted last week`
+      : weekly.pendingResult.outcome === 'relegated'
+        ? `${pendingLeague.badge} Relegated last week`
+        : `${pendingLeague.badge} Held last week`;
+    let summary = describeWeeklyResult(weekly.pendingResult);
+    if (weekly.pendingResult.unlockName) {
+      summary += ` ${weekly.pendingResult.unlockName} joined your collection.`;
+    }
+    resultCopy.textContent = summary;
+  } else {
+    resultBanner.hidden = true;
+  }
+}
+
 function renderDashboard() {
   const continueBtn = document.getElementById('btn-dashboard-continue');
   const newGameBtn = document.getElementById('btn-dashboard-new');
@@ -2010,6 +2558,7 @@ function renderDashboard() {
   document.getElementById('dashboard-today').textContent = String(todayScore);
   document.getElementById('dashboard-finish').textContent = skin.name;
   renderSessionModeBadge();
+  renderWeeklyLadder();
 }
 
 function populateQuickSettings() {
@@ -2586,6 +3135,7 @@ function triggerGameOver() {
   awardCoins(calculateEndRunCoinReward(score), 'Run complete');
   if (isNewBest) awardCoins(scaleCoinReward(COIN_REWARDS.personalBestBonus), 'New best');
   ensureRunSummary().stats.personalBest = isNewBest;
+  recordWeeklyRunScore(score);
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const td = JSON.parse(localStorage.getItem('bst-today') || '{"d":"","s":0}');
@@ -3225,6 +3775,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   renderDailyMissions();
   ensureDailyChallengeForToday();
+  ensureWeeklyLadderForCurrentWeek();
   renderCosmeticsCollection();
   renderDashboard();
 });
@@ -3244,6 +3795,7 @@ function init() {
   loadProgressionState();
   ensureDailyMissionsForToday();
   ensureDailyChallengeForToday();
+  ensureWeeklyLadderForCurrentWeek();
   resetStandardSessionState();
   updateCoinUI();
   applyEquippedCosmeticSkin();
