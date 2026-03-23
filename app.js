@@ -2555,23 +2555,9 @@ function renderDailyMissions() {
 
 function renderQuestBoard(options = {}) {
   const status = getQuestBoardStatus(options);
-  const title = document.getElementById('dashboard-quest-title');
-  const copy = document.getElementById('dashboard-quest-copy');
-  const badge = document.getElementById('dashboard-quest-badge');
-  const timer = document.getElementById('dashboard-quest-timer');
-  const list = document.getElementById('dashboard-quest-list');
   const goalsSubtitle = document.getElementById('missions-subtitle');
   const questCount = document.getElementById('quest-count');
   const questList = document.getElementById('quest-list');
-
-  if (title) title.textContent = `${status.completed}/${status.total} chains settled`;
-  if (copy) {
-    copy.textContent = status.completed === status.total
-      ? 'This week’s quest board is fully complete. Daily missions can still top up your coin flow.'
-      : 'Weekly quest chains unfold step by step across several sessions.';
-  }
-  if (badge) badge.textContent = `${status.completed}/${status.total}`;
-  if (timer) timer.textContent = status.countdown;
 
   const renderQuestItems = (target, { compact = false } = {}) => {
     if (!target) return;
@@ -2619,7 +2605,6 @@ function renderQuestBoard(options = {}) {
     });
   };
 
-  renderQuestItems(list, { compact: true });
   if (goalsSubtitle) {
     goalsSubtitle.textContent = `Daily missions refresh each day. Quest chains roll over weekly and pay out bigger rewards at the end.`;
   }
