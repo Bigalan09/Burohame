@@ -458,54 +458,94 @@
             <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <h2>Game Over</h2>
-        <p class="summary-intro">Your run rewards are ready.</p>
-        <div class="run-summary" aria-label="Run rewards summary">
-          <div class="summary-stat summary-stat--score">
-            <span class="summary-label">Score</span>
-            <strong id="go-score">0</strong>
+        <div class="summary-panel summary-panel--main" id="go-summary-main">
+          <h2>Game over</h2>
+          <p class="summary-intro">Your run rewards are ready.</p>
+          <div class="run-summary" aria-label="Run rewards summary">
+            <div class="summary-stat summary-stat--score">
+              <span class="summary-label">Score</span>
+              <strong id="go-score">0</strong>
+            </div>
+            <div class="summary-stat">
+              <span class="summary-label">Best</span>
+              <strong id="go-best">0</strong>
+            </div>
+            <div class="summary-stat summary-stat--coins summary-stat--wide">
+              <span class="summary-label">Coins this run</span>
+              <strong id="go-coins-earned">0</strong>
+            </div>
           </div>
-          <div class="summary-stat">
-            <span class="summary-label">Best</span>
-            <strong id="go-best">0</strong>
+          <p class="summary-balance">Coin balance <strong id="go-coin-total">0</strong></p>
+          <section class="summary-continue" id="go-continue-prompt" hidden aria-labelledby="go-continue-title">
+            <span class="summary-continue__eyebrow" id="go-continue-eyebrow">One more run</span>
+            <h3 id="go-continue-title">A calm nudge for the next run</h3>
+            <p id="go-continue-copy">You’re close to something meaningful, so the next run is only one tap away.</p>
+            <span class="summary-continue__meta" id="go-continue-meta">Reward · progress nearby</span>
+          </section>
+          <section class="summary-challenge" id="go-daily-summary" hidden>
+            <div class="summary-challenge__head">
+              <h3>Daily challenge</h3>
+              <span id="go-daily-status">In progress</span>
+            </div>
+            <p id="go-daily-copy">Today’s target is still waiting for you.</p>
+          </section>
+          <div class="summary-actions">
+            <button class="pill-btn wide summary-primary-btn" id="btn-new" type="button">Start next run</button>
+            <button class="pill-btn wide pill-btn--secondary" id="btn-gameover-dashboard-secondary" type="button">Back to dashboard</button>
           </div>
-          <div class="summary-stat summary-stat--coins">
-            <span class="summary-label">Coins this run</span>
-            <strong id="go-coins-earned">0</strong>
+          <button class="summary-details-btn" id="btn-gameover-details" type="button" aria-expanded="false" aria-controls="go-summary-details">View run details</button>
+        </div>
+
+        <div class="summary-panel summary-panel--details" id="go-summary-details" hidden>
+          <div class="summary-details__header">
+            <button class="summary-back-btn" id="btn-gameover-details-back" type="button">Back</button>
+            <h3>Run details</h3>
           </div>
-          <div class="summary-stat">
-            <span class="summary-label">Total coins</span>
-            <strong id="go-coin-total">0</strong>
+          <div class="summary-detail-grid" aria-label="Detailed run statistics">
+            <article class="summary-detail-card">
+              <span class="summary-label">Total coins</span>
+              <strong id="go-detail-coin-total">0</strong>
+            </article>
+            <article class="summary-detail-card">
+              <span class="summary-label">Regions cleared</span>
+              <strong id="go-detail-regions">0</strong>
+            </article>
+            <article class="summary-detail-card">
+              <span class="summary-label">Biggest clear</span>
+              <strong id="go-detail-biggest-clear">0</strong>
+            </article>
+            <article class="summary-detail-card">
+              <span class="summary-label">Best combo</span>
+              <strong id="go-detail-max-combo">0</strong>
+            </article>
+            <article class="summary-detail-card">
+              <span class="summary-label">Racks completed</span>
+              <strong id="go-detail-racks">0</strong>
+            </article>
+            <article class="summary-detail-card">
+              <span class="summary-label">Coach mode</span>
+              <strong id="go-detail-coach">Off</strong>
+            </article>
+          </div>
+          <section class="run-objectives" aria-labelledby="go-objectives-title">
+            <div class="run-objectives__header">
+              <h3 id="go-objectives-title">Completed objectives</h3>
+              <span id="go-objective-count" class="run-objectives__count">0 cleared</span>
+            </div>
+            <ul id="go-objectives-list" class="run-objectives__list"></ul>
+          </section>
+          <section class="run-objectives" id="go-quest-summary" aria-labelledby="go-quest-title">
+            <div class="run-objectives__header">
+              <h3 id="go-quest-title">Quest chain progress</h3>
+              <span id="go-quest-count" class="run-objectives__count">0 updated this run</span>
+            </div>
+            <ul id="go-quest-list" class="run-objectives__list"></ul>
+          </section>
+          <div class="summary-actions summary-actions--details">
+            <button class="pill-btn wide summary-primary-btn" id="btn-new-details" type="button">Start next run</button>
+            <button class="pill-btn wide pill-btn--secondary" id="btn-gameover-dashboard-details" type="button">Back to dashboard</button>
           </div>
         </div>
-        <section class="run-objectives" aria-labelledby="go-objectives-title">
-          <div class="run-objectives__header">
-            <h3 id="go-objectives-title">Completed objectives</h3>
-            <span id="go-objective-count" class="run-objectives__count">0 cleared</span>
-          </div>
-          <ul id="go-objectives-list" class="run-objectives__list"></ul>
-        </section>
-        <section class="run-objectives" id="go-quest-summary" aria-labelledby="go-quest-title">
-          <div class="run-objectives__header">
-            <h3 id="go-quest-title">Quest chain progress</h3>
-            <span id="go-quest-count" class="run-objectives__count">0 updated this run</span>
-          </div>
-          <ul id="go-quest-list" class="run-objectives__list"></ul>
-        </section>
-        <section class="summary-continue" id="go-continue-prompt" hidden aria-labelledby="go-continue-title">
-          <span class="summary-continue__eyebrow" id="go-continue-eyebrow">One more run</span>
-          <h3 id="go-continue-title">A calm nudge for the next run</h3>
-          <p id="go-continue-copy">You’re close to something meaningful, so the next run is only one tap away.</p>
-          <span class="summary-continue__meta" id="go-continue-meta">Reward · progress nearby</span>
-        </section>
-        <section class="summary-challenge" id="go-daily-summary" hidden>
-          <div class="summary-challenge__head">
-            <h3>Daily challenge</h3>
-            <span id="go-daily-status">In progress</span>
-          </div>
-          <p id="go-daily-copy">Today’s target is still waiting for you.</p>
-        </section>
-        <button class="pill-btn wide summary-primary-btn" id="btn-new" type="button">Start next run</button>
       </div>
     </div>
 
