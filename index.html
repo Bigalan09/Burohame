@@ -23,6 +23,10 @@
             <p class="page-kicker">9×9 block puzzle</p>
             <h1>Burohame</h1>
             <p class="page-intro" id="dashboard-intro">boo-roh-hah-meh</p>
+            <div class="dashboard-title-row">
+              <span class="dashboard-flair-badge" id="dashboard-flair-badge">✦ Seed glint</span>
+              <span class="dashboard-title-label" id="dashboard-title-label">Quiet starter · Classic equipped</span>
+            </div>
           </div>
           <a class="icon-btn" href="https://github.com/Bigalan09/Burohame" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
             <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -79,6 +83,21 @@
             <button class="pill-btn" id="btn-dashboard-daily" type="button">Play daily challenge</button>
             <button class="pill-btn pill-btn--secondary" id="btn-dashboard-daily-info" type="button">How it works</button>
           </div>
+        </section>
+
+        <section class="dashboard-mastery" aria-label="Mastery track">
+          <div class="dashboard-mastery__head">
+            <div>
+              <span class="dashboard-mastery__kicker">Mastery track</span>
+              <h2 id="dashboard-mastery-level">Level 1</h2>
+            </div>
+            <span class="dashboard-mastery__pill">Permanent unlocks</span>
+          </div>
+          <p class="dashboard-mastery__copy" id="dashboard-mastery-progress">0 focus to go</p>
+          <div class="dashboard-mastery__bar" aria-hidden="true">
+            <span id="dashboard-mastery-bar"></span>
+          </div>
+          <p class="dashboard-mastery__next" id="dashboard-mastery-next">Next · Colourway</p>
         </section>
 
         <section class="dashboard-weekly" aria-label="Weekly ladder and leagues">
@@ -189,6 +208,35 @@
             <p class="page-intro">Spend coins on colourways and finishes, then equip your favourites for the next run.</p>
           </div>
         </header>
+
+        <div class="page-panel page-panel--shop page-panel--mastery">
+          <div class="collection-head collection-head--mastery">
+            <div>
+              <h3>Mastery track</h3>
+              <p id="mastery-track-subtitle">Every run adds permanent focus progress.</p>
+            </div>
+            <span class="missions-count" id="mastery-level">Level 1</span>
+          </div>
+          <div class="mastery-track-meta">
+            <strong id="mastery-total-points">0 focus earned</strong>
+            <span id="mastery-next-reward">Next reward · Colourway</span>
+          </div>
+          <div class="mastery-track-bar" aria-hidden="true">
+            <span id="mastery-progress-bar"></span>
+          </div>
+          <p class="mastery-track-copy" id="mastery-progress-copy">0 focus to level 2</p>
+          <div id="mastery-road-list" class="mastery-road-list" aria-live="polite"></div>
+        </div>
+
+        <div class="page-panel page-panel--shop">
+          <div class="collection-head">
+            <div>
+              <h3>Mastery collection</h3>
+              <p id="mastery-collection-subtitle">Permanent rewards unlocked from the mastery road.</p>
+            </div>
+          </div>
+          <div id="mastery-collection-list" class="collection-list" aria-live="polite"></div>
+        </div>
 
         <div class="page-panel page-panel--shop">
           <div class="collection-head">
@@ -375,6 +423,23 @@
             <strong id="go-coin-total">0</strong>
           </div>
         </div>
+        <section class="summary-mastery" aria-labelledby="go-mastery-title">
+          <div class="summary-mastery__head">
+            <div>
+              <h3 id="go-mastery-title">Mastery progress</h3>
+              <p id="go-mastery-copy">Every run advances the permanent road.</p>
+            </div>
+            <div class="summary-mastery__stats">
+              <strong id="go-mastery-earned">+0</strong>
+              <span id="go-mastery-level">Level 1</span>
+            </div>
+          </div>
+          <div class="summary-mastery__bar" aria-hidden="true">
+            <span id="go-mastery-bar"></span>
+          </div>
+          <div id="go-mastery-breakdown" class="summary-mastery__breakdown"></div>
+          <ul id="go-mastery-unlocks" class="summary-mastery__unlocks"></ul>
+        </section>
         <section class="run-objectives" aria-labelledby="go-objectives-title">
           <div class="run-objectives__header">
             <h3 id="go-objectives-title">Completed objectives</h3>
