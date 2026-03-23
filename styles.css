@@ -286,6 +286,162 @@ html, body {
   color: var(--text);
 }
 
+
+.dashboard-weekly {
+  margin-top: 16px;
+  padding: 18px 16px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 16%, transparent), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, var(--bg-card)) 0%, color-mix(in srgb, var(--accent) 3%, var(--bg-card)) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+
+.dashboard-weekly__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-weekly__kicker {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--accent-dk) 62%, var(--text-2));
+}
+
+.dashboard-weekly h2 {
+  margin-top: 6px;
+  font-size: clamp(24px, 6vw, 30px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.dashboard-weekly__countdown {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  font-size: 12px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent-dk) 78%, var(--text));
+}
+
+.dashboard-weekly__copy {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.dashboard-weekly__result {
+  margin-top: 14px;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 11%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+}
+
+.dashboard-weekly__result strong {
+  font-size: 14px;
+}
+
+.dashboard-weekly__result span {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.dashboard-weekly__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.dashboard-weekly__stats article {
+  padding: 12px 10px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--border));
+}
+
+.dashboard-weekly__stats span {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+
+.dashboard-weekly__stats strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 19px;
+  line-height: 1.1;
+}
+
+.dashboard-weekly__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.dashboard-weekly__meta span,
+.dashboard-weekly__best-run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+  color: color-mix(in srgb, var(--accent-dk) 70%, var(--text));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dashboard-weekly__progress {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-weekly__progress-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.dashboard-weekly__progress-copy strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.dashboard-weekly__progress-copy span {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.dashboard-weekly__best-runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashboard-weekly__best-run--empty {
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-card));
+  color: var(--text-2);
+}
+
 .dashboard-missions {
   position: relative;
   width: 100%;
@@ -2099,12 +2255,18 @@ input:checked + .tog-track .tog-thumb { transform: translateX(20px); }
 
 @media (max-width: 360px) {
   .dashboard-challenge__head,
-  .dashboard-challenge__actions {
+  .dashboard-challenge__actions,
+  .dashboard-weekly__head,
+  .dashboard-weekly__stats {
     flex-direction: column;
   }
 
   .dashboard-challenge__actions .pill-btn {
     width: 100%;
+  }
+
+  .dashboard-weekly__stats {
+    display: flex;
   }
 }
 
