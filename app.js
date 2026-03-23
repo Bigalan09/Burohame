@@ -178,10 +178,12 @@ let darkMode     = false;
 let colorSetting = 'orange';   // 'orange','blue','green','purple','red','teal','pink','random'
 let rackSize     = 3;          // number of pieces shown in the rack (1–3)
 let progressionState = null;
-let coinToastOffset = 0;
 let runSummary = null;
 let currentPage = 'dashboard';
 let currentSessionType = 'standard';
+let gameBannerQueue = [];
+let activeGameBanner = null;
+let gameBannerTimer = 0;
 let dailyChallengeState = {
   date: '',
   seed: 0,
@@ -193,7 +195,6 @@ const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
 const PROGRESSION_STATE_VERSION = 8;
-const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
@@ -1300,8 +1301,8 @@ function applyQuestChainProgress(summary) {
 
         awardedMilestones.push({
           eyebrow: chain.kicker,
-          title: `${chain.title} · ${step.title}`,
-          detail: rewardAmount ? `Step cleared. +${rewardAmount} coins added.` : 'Step cleared.',
+          title: step.title,
+          detail: rewardAmount ? `${chain.title} · +${rewardAmount} coins` : `${chain.title} updated`,
           major: false,
           announce: `${chain.title} quest step cleared.`,
         });
@@ -1335,8 +1336,8 @@ function applyQuestChainProgress(summary) {
             eyebrow: 'Quest chain complete',
             title: chain.title,
             detail: unlockReward
-              ? `Final reward: +${finalRewardCoins} coins and ${unlockReward.name} unlocked.`
-              : `Final reward: +${finalRewardCoins} coins.`,
+              ? `+${finalRewardCoins} coins · ${unlockReward.name} unlocked`
+              : `+${finalRewardCoins} coins banked`,
             major: true,
             announce: `${chain.title} quest chain complete.`,
           });
@@ -1771,6 +1772,7 @@ function createDefaultRunSummary() {
     coinsEarned: 0,
     completedObjectiveIds: [],
     questHighlightIds: [],
+    recentUpdates: [],
     stats: {
       regionsCleared: 0,
       biggestClear: 0,
@@ -1786,6 +1788,77 @@ function createDefaultRunSummary() {
 function ensureRunSummary() {
   if (!runSummary) runSummary = createDefaultRunSummary();
   return runSummary;
+}
+
+function recordRunUpdate({ title = '', detail = '' }) {
+  const nextTitle = String(title || '').trim();
+  if (!nextTitle) return;
+
+  const summary = ensureRunSummary();
+  const nextDetail = String(detail || '').trim();
+  const latest = summary.recentUpdates[summary.recentUpdates.length - 1];
+  if (latest && latest.title === nextTitle && latest.detail === nextDetail) return;
+
+  summary.recentUpdates = [...summary.recentUpdates, {
+    title: nextTitle,
+    detail: nextDetail,
+  }].slice(-4);
+}
+
+function clearGameBannerQueue() {
+  gameBannerQueue = [];
+  activeGameBanner = null;
+  if (gameBannerTimer) {
+    window.clearTimeout(gameBannerTimer);
+    gameBannerTimer = 0;
+  }
+
+  const banner = document.getElementById('game-banner');
+  if (banner) banner.hidden = true;
+}
+
+function renderNextGameBanner() {
+  if (activeGameBanner || !gameBannerQueue.length || currentPage !== 'game' || gameOver) return;
+
+  const banner = document.getElementById('game-banner');
+  const kicker = document.getElementById('game-banner-kicker');
+  const title = document.getElementById('game-banner-title');
+  if (!banner || !kicker || !title) return;
+
+  activeGameBanner = gameBannerQueue.shift();
+  kicker.textContent = activeGameBanner.kicker;
+  title.textContent = activeGameBanner.title;
+  banner.hidden = false;
+
+  gameBannerTimer = window.setTimeout(() => {
+    activeGameBanner = null;
+    banner.hidden = true;
+    gameBannerTimer = 0;
+    renderNextGameBanner();
+  }, 1000);
+}
+
+function enqueueGameBanner({ kicker = 'Update', title = '', announce = '' }) {
+  const nextTitle = String(title || '').trim();
+  if (!nextTitle) return;
+
+  if (announce) announceMilestone(announce);
+  if (currentPage !== 'game' || gameOver) return;
+
+  const nextBanner = {
+    kicker: String(kicker || 'Update').trim(),
+    title: nextTitle,
+  };
+  const latestQueued = gameBannerQueue[gameBannerQueue.length - 1];
+  if (
+    (activeGameBanner && activeGameBanner.kicker === nextBanner.kicker && activeGameBanner.title === nextBanner.title) ||
+    (latestQueued && latestQueued.kicker === nextBanner.kicker && latestQueued.title === nextBanner.title)
+  ) {
+    return;
+  }
+
+  gameBannerQueue.push(nextBanner);
+  renderNextGameBanner();
 }
 
 function getOneMoreRunAnalytics() {
@@ -1991,10 +2064,6 @@ function chooseOneMoreRunPrompt(summary) {
   return prompt;
 }
 
-function prefersReducedMotion() {
-  return REDUCED_MOTION_QUERY.matches;
-}
-
 function announceMilestone(message) {
   const liveRegion = document.getElementById('milestone-live');
   if (!liveRegion) return;
@@ -2016,36 +2085,14 @@ function pulseCelebrationSurface() {
 }
 
 function showMilestoneMoment({ eyebrow, title, detail = '', major = false, anchor = null, announce = '' }) {
-  const layer = document.getElementById('milestone-layer');
-  if (!layer) return;
-
-  const chip = document.createElement('section');
-  chip.className = `milestone-chip${major ? ' milestone-chip--major' : ''}`;
-
-  const resolvedAnchor = typeof anchor === 'string' ? document.querySelector(anchor) : anchor;
-  const top = resolvedAnchor
-    ? Math.max(88, resolvedAnchor.getBoundingClientRect().top - 18)
-    : 104;
-  chip.style.top = `${top}px`;
-
-  chip.innerHTML = `
-    <span class="milestone-chip__eyebrow">${eyebrow}</span>
-    <strong class="milestone-chip__title">${title}</strong>
-    ${detail ? `<span class="milestone-chip__detail">${detail}</span>` : ''}
-    <span class="milestone-chip__glow"></span>
-  `;
-
-  if (!prefersReducedMotion()) {
-    for (let i = 0; i < 6; i++) {
-      const spark = document.createElement('span');
-      spark.className = 'milestone-chip__spark';
-      chip.appendChild(spark);
-    }
-  }
-
-  layer.appendChild(chip);
-  if (announce) announceMilestone(announce);
-  chip.addEventListener('animationend', () => chip.remove(), { once: true });
+  void major;
+  void anchor;
+  recordRunUpdate({ title, detail });
+  enqueueGameBanner({
+    kicker: eyebrow,
+    title: detail ? `${title} · ${detail}` : title,
+    announce,
+  });
 }
 
 function recordRunObjective(objectiveId) {
@@ -2072,9 +2119,8 @@ function getCompletedRunObjectives() {
 function renderGameOverSummary() {
   const summary = ensureRunSummary();
   const objectives = getCompletedRunObjectives();
-  const objectivesList = document.getElementById('go-objectives-list');
-  const objectiveCount = document.getElementById('go-objective-count');
   const intro = document.querySelector('.summary-intro');
+  const summaryNote = document.getElementById('go-summary-note');
   const continuePrompt = document.getElementById('go-continue-prompt');
   const continueEyebrow = document.getElementById('go-continue-eyebrow');
   const continueTitle = document.getElementById('go-continue-title');
@@ -2090,14 +2136,34 @@ function renderGameOverSummary() {
   document.getElementById('go-best').textContent = String(bestScore);
   document.getElementById('go-coins-earned').textContent = `+${summary.coinsEarned}`;
   document.getElementById('go-coin-total').textContent = String(getCoinBalance());
-  objectiveCount.textContent = objectives.length === 1 ? '1 cleared' : `${objectives.length} cleared`;
   if (intro) {
     intro.textContent = isDailyChallengeSession()
-      ? 'Your daily challenge result is locked in.'
-      : 'Your run rewards are ready.';
+      ? 'Today’s score is locked in.'
+      : 'Ready for another go?';
   }
   if (dashboardButton) {
     dashboardButton.setAttribute('aria-label', isDailyChallengeSession() ? 'Back to dashboard from daily challenge summary' : 'Back to dashboard');
+  }
+  if (summaryNote) {
+    const latestUpdate = summary.recentUpdates[summary.recentUpdates.length - 1];
+    const extraCount = Math.max(0, summary.recentUpdates.length - 1);
+    if (latestUpdate) {
+      summaryNote.hidden = false;
+      summaryNote.textContent = extraCount
+        ? `${latestUpdate.title}. ${extraCount} more update${extraCount === 1 ? '' : 's'} this run.`
+        : latestUpdate.detail
+          ? `${latestUpdate.title}. ${latestUpdate.detail}.`
+          : latestUpdate.title;
+    } else if (summary.questHighlightIds.length) {
+      summaryNote.hidden = false;
+      summaryNote.textContent = `${summary.questHighlightIds.length} quest chain${summary.questHighlightIds.length === 1 ? '' : 's'} moved on this run.`;
+    } else if (objectives.length) {
+      summaryNote.hidden = false;
+      summaryNote.textContent = `${objectives.length} objective${objectives.length === 1 ? '' : 's'} cleared this run.`;
+    } else {
+      summaryNote.hidden = true;
+      summaryNote.textContent = '';
+    }
   }
   if (continuePrompt && continueEyebrow && continueTitle && continueCopy && continueMeta && nextRunButton) {
     const prompt = summary.continuePrompt;
@@ -2131,24 +2197,6 @@ function renderGameOverSummary() {
     } else {
       dailySummary.hidden = true;
     }
-  }
-
-  renderQuestRunSummary(summary);
-
-  objectivesList.innerHTML = '';
-  if (!objectives.length) {
-    const emptyItem = document.createElement('li');
-    emptyItem.className = 'run-objective run-objective--empty';
-    emptyItem.textContent = 'No objectives completed this run. Your next run can still earn coins and milestones.';
-    objectivesList.appendChild(emptyItem);
-    return;
-  }
-
-  for (const objective of objectives) {
-    const item = document.createElement('li');
-    item.className = 'run-objective';
-    item.innerHTML = `<strong>${objective.label}</strong><span>${objective.description}</span>`;
-    objectivesList.appendChild(item);
   }
 }
 
@@ -2517,29 +2565,12 @@ function getRoundMilestoneReward(roundsCompleted) {
 }
 
 function showCoinToast(amount, reason, options = {}) {
-  const anchor = document.querySelector('.coins-stat') || document.getElementById('score-wrap');
-  if (!anchor) return;
-
-  const toast = document.createElement('div');
   const isSpend = !!options.spend || amount < 0;
-  const isReward = !isSpend && (options.celebrate || amount >= 8);
-  const isMajor = !isSpend && (options.major || amount >= 16);
-  toast.className = `coin-toast${isSpend ? ' coin-toast--spend' : ''}${isReward ? ' coin-toast--reward' : ''}${isMajor ? ' coin-toast--major' : ''}`;
   const prefix = amount >= 0 ? '+' : '−';
-  toast.innerHTML = `
-    <strong>🪙 ${prefix}${Math.abs(amount)}</strong>
-    <span>${reason}</span>
-    ${!isSpend && isReward ? '<span class="coin-toast__sparkles" aria-hidden="true"><i></i><i></i><i></i></span>' : ''}
-  `;
-
-  const rect = anchor.getBoundingClientRect();
-  const maxLeft = Math.max(12, window.innerWidth - 232);
-  coinToastOffset = (coinToastOffset + 1) % 3;
-  toast.style.left = `${Math.min(maxLeft, Math.max(12, rect.left - 20 + coinToastOffset * 10))}px`;
-  toast.style.top = `${Math.max(12, rect.bottom + 8 + coinToastOffset * 6)}px`;
-
-  document.body.appendChild(toast);
-  toast.addEventListener('animationend', () => toast.remove(), { once: true });
+  enqueueGameBanner({
+    kicker: isSpend ? 'Spent' : 'Coins',
+    title: `🪙 ${prefix}${Math.abs(amount)} · ${reason}`,
+  });
 }
 
 function awardMissionCoins(amount, missionName = 'Mission complete') {
@@ -2691,13 +2722,14 @@ function maybeCompleteDailyChallenge() {
     return state;
   });
   awardCoins(rewardAmount, `Daily challenge day ${streakCount}`, {
+    silent: true,
     celebrate: true,
     major: streakCount >= 3,
   });
   showMilestoneMoment({
-    eyebrow: `Daily challenge cleared`,
+    eyebrow: 'Daily challenge',
     title: `Target ${challenge.targetScore} reached`,
-    detail: `Streak ${streakCount}. +${rewardAmount} coins added.`,
+    detail: `Streak ${streakCount} · +${rewardAmount} coins`,
     major: streakCount >= 3,
     anchor: '#score-wrap',
     announce: `Daily challenge complete. ${rewardAmount} coins awarded. ${streakCount} day streak.`,
@@ -2903,40 +2935,6 @@ function renderQuestBoard(options = {}) {
   setTextIfPresent('dashboard-quest-card-timer', status.countdown);
 
   renderQuestItems(questList);
-}
-
-function renderQuestRunSummary(summary) {
-  const section = document.getElementById('go-quest-summary');
-  const count = document.getElementById('go-quest-count');
-  const list = document.getElementById('go-quest-list');
-  if (!section || !count || !list) return;
-
-  const changedIds = Array.isArray(summary.questHighlightIds) ? summary.questHighlightIds : [];
-  const status = getQuestBoardStatus({ changedChainIds: changedIds });
-  const prioritised = [...status.chains].sort((left, right) => {
-    if (left.isChanged !== right.isChanged) return left.isChanged ? -1 : 1;
-    if (left.isComplete !== right.isComplete) return left.isComplete ? 1 : -1;
-    return left.chain.title.localeCompare(right.chain.title);
-  });
-
-  list.innerHTML = '';
-  const visibleChains = prioritised.slice(0, 3);
-  count.textContent = changedIds.length
-    ? `${changedIds.length} updated this run`
-    : `${status.completed}/${status.total} complete this week`;
-
-  visibleChains.forEach(item => {
-    const entry = document.createElement('li');
-    entry.className = `run-objective quest-objective${item.isChanged ? ' quest-objective--changed' : ''}`;
-    if (item.isComplete) {
-      entry.innerHTML = `<strong>${item.chain.title}</strong><span>Chain complete · ${item.finalRewardText}</span>`;
-    } else {
-      entry.innerHTML = `<strong>${item.chain.title} · ${item.currentStep.title}</strong><span>${getQuestStepProgressText(item.currentStep, item.currentProgress)} · Next ${item.nextStep ? item.nextStep.title : 'finish chain'}</span>`;
-    }
-    list.appendChild(entry);
-  });
-
-  section.hidden = !visibleChains.length;
 }
 
 function getCollectionSubtitle() {
@@ -3161,11 +3159,10 @@ function updateDailyMissionProgress(kind, value, mode = 'increment') {
   renderDailyMissions();
   rewardsToGrant.forEach(({ reward, reason, missionTitle }) => {
     awardMissionCoins(reward, reason);
-    showCoinToast(reward, reason, { celebrate: true, major: reward >= 18 });
     showMilestoneMoment({
-      eyebrow: 'Daily mission',
-      title: `${missionTitle} complete`,
-      detail: `+${reward} coins added to your balance.`,
+      eyebrow: 'Daily goal',
+      title: missionTitle,
+      detail: `Complete · +${reward} coins`,
       major: reward >= 18,
       anchor: '#score-wrap',
       announce: `Daily mission complete. ${missionTitle}. ${reward} coins awarded.`,
@@ -3540,6 +3537,16 @@ function getSavedGameSession() {
             coinsEarned: clampWholeNumber(raw.runSummary.coinsEarned, 0),
             completedObjectiveIds: uniqueStringList(raw.runSummary.completedObjectiveIds, []),
             questHighlightIds: uniqueStringList(raw.runSummary.questHighlightIds, []),
+            recentUpdates: Array.isArray(raw.runSummary.recentUpdates)
+              ? raw.runSummary.recentUpdates
+                  .filter(item => item && typeof item === 'object')
+                  .map(item => ({
+                    title: typeof item.title === 'string' ? item.title : '',
+                    detail: typeof item.detail === 'string' ? item.detail : '',
+                  }))
+                  .filter(item => item.title)
+                  .slice(-4)
+              : [],
             stats: {
               regionsCleared: clampWholeNumber(raw.runSummary.stats?.regionsCleared, 0),
               biggestClear: clampWholeNumber(raw.runSummary.stats?.biggestClear, 0),
@@ -3578,7 +3585,7 @@ function restoreSavedGame() {
   score = saved.score;
   combo = saved.combo;
   gameOver = false;
-  coinToastOffset = 0;
+  clearGameBannerQueue();
   runSummary = saved.runSummary;
 
   initRackDOM();
@@ -3827,6 +3834,7 @@ function updateBottomNav() {
 }
 
 function navigateTo(page) {
+  if (page !== 'game') clearGameBannerQueue();
   currentPage = page;
   document.getElementById('app').dataset.page = page;
   document.querySelectorAll('.page').forEach(section => {
@@ -4232,7 +4240,7 @@ function doClears() {
     showMilestoneMoment({
       eyebrow: 'First clear',
       title: 'Lovely start',
-      detail: 'You opened the board and made room to build on.',
+      detail: 'Board opened up',
       anchor: '#board-wrap',
       announce: 'First clear of the run.',
     });
@@ -4243,7 +4251,7 @@ function doClears() {
     showMilestoneMoment({
       eyebrow: `${total}-region clear`,
       title: 'That landed brilliantly',
-      detail: 'Big clears buy you space and keep the run settled.',
+      detail: 'A bigger clear bought you space',
       major: true,
       anchor: '#board-wrap',
       announce: `${total} regions cleared at once.`,
@@ -4369,6 +4377,7 @@ function triggerGameOver() {
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
+    clearGameBannerQueue();
     renderGameOverSummary();
     showOverlay('ov-gameover');
   });
@@ -4413,13 +4422,14 @@ function newRound() {
   const roundMilestoneReward = getRoundMilestoneReward(roundsCompleted);
   if (roundMilestoneReward) {
     awardCoins(roundMilestoneReward, `${roundsCompleted} rounds completed`, {
+      silent: true,
       celebrate: true,
       major: true,
     });
     showMilestoneMoment({
       eyebrow: 'Coin reward',
       title: `+${roundMilestoneReward} coins`,
-      detail: `${roundsCompleted} rounds completed. Nicely paced.`,
+      detail: `${roundsCompleted} rounds completed`,
       major: true,
       anchor: '#score-wrap',
       announce: `${roundMilestoneReward} coin reward for ${roundsCompleted} rounds completed.`,
@@ -4460,7 +4470,7 @@ function startNewGame(options = {}) {
   score    = 0;
   combo    = 0;
   gameOver = false;
-  coinToastOffset = 0;
+  clearGameBannerQueue();
   runSummary = createDefaultRunSummary();
   used     = Array(rackSize).fill(false);
   pieces   = smartPieces();
