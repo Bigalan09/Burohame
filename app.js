@@ -769,6 +769,7 @@ function renderGameOverSummary() {
   const dailyStatus = document.getElementById('go-daily-status');
   const dailyCopy = document.getElementById('go-daily-copy');
   const nextRunButton = document.getElementById('btn-new');
+  const dashboardButton = document.getElementById('btn-gameover-dashboard');
 
   document.getElementById('go-score').textContent = String(summary.finalScore);
   document.getElementById('go-best').textContent = String(bestScore);
@@ -782,6 +783,9 @@ function renderGameOverSummary() {
   }
   if (nextRunButton) {
     nextRunButton.textContent = isDailyChallengeSession() ? 'Play another run' : 'Start next run';
+  }
+  if (dashboardButton) {
+    dashboardButton.setAttribute('aria-label', isDailyChallengeSession() ? 'Back to dashboard from daily challenge summary' : 'Back to dashboard');
   }
 
   if (dailySummary && dailyStatus && dailyCopy) {
@@ -1366,6 +1370,7 @@ function renderCosmeticsCollection() {
     const equipped = colorSetting === colorway.id;
     const canAfford = coinBalance >= colorway.price;
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
     const costLabel = colorway.price ? `🪙 ${colorway.price}` : 'Free';
     const card = document.createElement('article');
     card.className = 'cosmetic-card cosmetic-card--colorway';
@@ -1378,11 +1383,13 @@ function renderCosmeticsCollection() {
     card.innerHTML = `
       <div class="cosmetic-card__preview" aria-hidden="true">${swatches}</div>
       <div class="cosmetic-card__body">
-        <h3>${label}</h3>
+        <div class="cosmetic-card__head">
+          <h3>${label}</h3>
+          <span class="cosmetic-card__state ${stateClass}">${status}</span>
+        </div>
         <p>${colorway.description}</p>
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
-            <strong>${status}</strong>
             <span>${costLabel}</span>
           </div>
           ${getShopActionMarkup({ owned, equipped, canAfford, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
@@ -1404,6 +1411,7 @@ function renderCosmeticsCollection() {
     if (!owned) card.classList.add('cosmetic-card--locked');
 
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
     const costLabel = skin.price ? `🪙 ${skin.price}` : 'Free';
 
     card.innerHTML = `
@@ -1413,11 +1421,13 @@ function renderCosmeticsCollection() {
         <span class="cosmetic-card__tile"></span>
       </div>
       <div class="cosmetic-card__body">
-        <h3>${skin.name}</h3>
+        <div class="cosmetic-card__head">
+          <h3>${skin.name}</h3>
+          <span class="cosmetic-card__state ${stateClass}">${status}</span>
+        </div>
         <p>${skin.description}</p>
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
-            <strong>${status}</strong>
             <span>${costLabel}</span>
           </div>
           ${getShopActionMarkup({ owned, equipped, canAfford, price: skin.price, itemId: skin.id, collection: 'finish' })}
@@ -1919,6 +1929,7 @@ function renderDashboard() {
   const dailyButton = document.getElementById('btn-dashboard-daily');
   const dailyInfoButton = document.getElementById('btn-dashboard-daily-info');
   const dailyStreakPill = document.getElementById('daily-streak-pill');
+  const runState = document.getElementById('dashboard-run-state');
   const hasSavedGame = !!getSavedGameSession();
   const savedGame = getSavedGameSession();
   const missionCounts = getDailyMissionCounts();
@@ -1933,6 +1944,14 @@ function renderDashboard() {
   }
   if (newGameBtn) {
     newGameBtn.textContent = hasSavedGame ? 'Start fresh run' : 'Start new run';
+    newGameBtn.classList.toggle('pill-btn--secondary', hasSavedGame);
+  }
+  if (runState) {
+    runState.textContent = savedGame?.sessionType === 'daily'
+      ? 'Daily challenge ready to resume'
+      : hasSavedGame
+        ? 'Saved run ready to continue'
+        : 'Ready for a fresh run';
   }
   if (intro) {
     if (savedGame?.sessionType === 'daily') {
@@ -3150,6 +3169,12 @@ document.getElementById('btn-restart').addEventListener('click', startNewGame);
 document.getElementById('btn-new').addEventListener('click', () => {
   startNewGame();
   navigateTo('game');
+});
+
+document.getElementById('btn-gameover-dashboard').addEventListener('click', () => {
+  hideOverlay('ov-gameover');
+  navigateTo('dashboard');
+  renderDashboard();
 });
 
 document.addEventListener('visibilitychange', () => {
