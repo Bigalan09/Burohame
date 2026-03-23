@@ -3481,6 +3481,10 @@ function navigateTo(page) {
   });
 
   if (page === 'dashboard') renderDashboard();
+  if (page === 'goals') {
+    renderDailyMissions();
+    renderQuestBoard();
+  }
   if (page === 'shop') renderCosmeticsCollection();
   if (page === 'settings') populateSettingsPage();
   updateBottomNav();
@@ -4522,7 +4526,11 @@ document.getElementById('btn-dashboard-daily-info').addEventListener('click', ()
 
 document.getElementById('btn-dashboard-missions').addEventListener('click', () => {
   renderDailyMissions();
-  showOverlay('ov-missions');
+  renderQuestBoard();
+  navigateTo('goals');
+});
+document.getElementById('btn-goals-back').addEventListener('click', () => {
+  navigateTo('dashboard');
 });
 document.getElementById('btn-game-back').addEventListener('click', () => {
   saveCurrentGame();
@@ -4547,7 +4555,7 @@ document.getElementById('btn-bottom-nav-play').addEventListener('click', () => {
 });
 
 document.getElementById('btn-missions-close').addEventListener('click', () => {
-  hideOverlay('ov-missions');
+  navigateTo('dashboard');
 });
 
 function handleShopAction(event) {
