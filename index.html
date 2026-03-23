@@ -62,6 +62,19 @@
           </article>
         </section>
 
+        <button class="album-teaser" id="btn-dashboard-album-page" type="button" aria-label="Open collection album">
+          <div>
+            <span class="album-teaser__kicker">Collection album</span>
+            <strong id="dashboard-album-title">Collection album</strong>
+            <p id="dashboard-album-copy">Browse themed cosmetic sets and track completion rewards.</p>
+          </div>
+          <div class="album-teaser__meta">
+            <span id="dashboard-album-progress">0/0 sets complete</span>
+            <span id="dashboard-album-reward">Grand reward</span>
+            <span id="dashboard-album-badge">No album badges yet</span>
+          </div>
+        </button>
+
         <section class="dashboard-retention" aria-label="Extras">
           <section class="dashboard-challenge" aria-label="Daily challenge status">
             <div class="dashboard-challenge__head">
@@ -273,6 +286,11 @@
         </div>
       </header>
 
+      <div id="game-banner" class="game-banner" hidden aria-live="polite" aria-atomic="true">
+        <span id="game-banner-kicker" class="game-banner__kicker">Update</span>
+        <strong id="game-banner-title" class="game-banner__title">A quick update appears here.</strong>
+      </div>
+
       <main id="main">
         <div id="board-wrap">
           <div id="board"></div>
@@ -308,6 +326,24 @@
         </header>
 
         <div class="page-panel page-panel--shop">
+          <div class="collection-head">
+            <div>
+              <h3>Collection album</h3>
+              <p id="collection-album-subtitle">Finish themed sets to bank prestige rewards.</p>
+            </div>
+            <span class="missions-count" id="collection-album-count">0/0 sets complete</span>
+          </div>
+          <div class="album-goal">
+            <div>
+              <strong id="collection-album-goal-title">Heirloom</strong>
+              <p id="collection-album-goal-copy">Complete the full album to unlock an exclusive finish.</p>
+            </div>
+            <span class="album-goal__spotlight" id="collection-album-spotlight">A featured set will appear here.</span>
+          </div>
+          <div id="collection-album-list" class="album-list" aria-live="polite"></div>
+        </div>
+
+        <div class="page-panel page-panel--shop page-panel--album">
           <div class="collection-head">
             <div>
               <h3>Colourways</h3>
@@ -458,8 +494,8 @@
             <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <h2>Game Over</h2>
-        <p class="summary-intro">Your run rewards are ready.</p>
+        <h2>Run complete</h2>
+        <p class="summary-intro">Ready for another go?</p>
         <div class="run-summary" aria-label="Run rewards summary">
           <div class="summary-stat summary-stat--score">
             <span class="summary-label">Score</span>
@@ -473,25 +509,9 @@
             <span class="summary-label">Coins this run</span>
             <strong id="go-coins-earned">0</strong>
           </div>
-          <div class="summary-stat">
-            <span class="summary-label">Total coins</span>
-            <strong id="go-coin-total">0</strong>
-          </div>
         </div>
-        <section class="run-objectives" aria-labelledby="go-objectives-title">
-          <div class="run-objectives__header">
-            <h3 id="go-objectives-title">Completed objectives</h3>
-            <span id="go-objective-count" class="run-objectives__count">0 cleared</span>
-          </div>
-          <ul id="go-objectives-list" class="run-objectives__list"></ul>
-        </section>
-        <section class="run-objectives" id="go-quest-summary" aria-labelledby="go-quest-title">
-          <div class="run-objectives__header">
-            <h3 id="go-quest-title">Quest chain progress</h3>
-            <span id="go-quest-count" class="run-objectives__count">0 updated this run</span>
-          </div>
-          <ul id="go-quest-list" class="run-objectives__list"></ul>
-        </section>
+        <p class="summary-total">Total coins <strong id="go-coin-total">0</strong></p>
+        <p class="summary-note" id="go-summary-note" hidden>One tidy line for this run.</p>
         <section class="summary-continue" id="go-continue-prompt" hidden aria-labelledby="go-continue-title">
           <span class="summary-continue__eyebrow" id="go-continue-eyebrow">One more run</span>
           <h3 id="go-continue-title">A calm nudge for the next run</h3>
@@ -548,7 +568,6 @@
     </nav>
   </div>
 
-  <div id="milestone-layer" aria-hidden="true"></div>
   <div id="milestone-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
   <script src="app.js"></script>
