@@ -1957,6 +1957,22 @@ function getCompletedRunObjectives() {
   return RUN_OBJECTIVES.filter(objective => summary.completedObjectiveIds.includes(objective.id));
 }
 
+function setGameOverSummaryView(view = 'main') {
+  const mainPanel = document.getElementById('go-summary-main');
+  const detailsPanel = document.getElementById('go-summary-details');
+  const detailsButton = document.getElementById('btn-gameover-details');
+  if (!mainPanel || !detailsPanel || !detailsButton) return;
+
+  const showDetails = view === 'details';
+  mainPanel.hidden = showDetails;
+  detailsPanel.hidden = !showDetails;
+  detailsButton.setAttribute('aria-expanded', showDetails ? 'true' : 'false');
+
+  if (showDetails) {
+    detailsPanel.scrollTop = 0;
+  }
+}
+
 function renderGameOverSummary() {
   const summary = ensureRunSummary();
   const objectives = getCompletedRunObjectives();
@@ -1972,12 +1988,21 @@ function renderGameOverSummary() {
   const dailyStatus = document.getElementById('go-daily-status');
   const dailyCopy = document.getElementById('go-daily-copy');
   const nextRunButton = document.getElementById('btn-new');
+  const detailNextRunButton = document.getElementById('btn-new-details');
   const dashboardButton = document.getElementById('btn-gameover-dashboard');
+  const secondaryDashboardButton = document.getElementById('btn-gameover-dashboard-secondary');
+  const detailDashboardButton = document.getElementById('btn-gameover-dashboard-details');
 
   document.getElementById('go-score').textContent = String(summary.finalScore);
   document.getElementById('go-best').textContent = String(bestScore);
   document.getElementById('go-coins-earned').textContent = `+${summary.coinsEarned}`;
   document.getElementById('go-coin-total').textContent = String(getCoinBalance());
+  setTextIfPresent('go-detail-coin-total', String(getCoinBalance()));
+  setTextIfPresent('go-detail-regions', String(summary.stats.regionsCleared));
+  setTextIfPresent('go-detail-biggest-clear', String(summary.stats.biggestClear));
+  setTextIfPresent('go-detail-max-combo', `${summary.stats.maxCombo}×`);
+  setTextIfPresent('go-detail-racks', String(summary.stats.racksCompleted));
+  setTextIfPresent('go-detail-coach', summary.stats.coachModeUsed ? 'On' : 'Off');
   objectiveCount.textContent = objectives.length === 1 ? '1 cleared' : `${objectives.length} cleared`;
   if (intro) {
     intro.textContent = isDailyChallengeSession()
@@ -1987,7 +2012,13 @@ function renderGameOverSummary() {
   if (dashboardButton) {
     dashboardButton.setAttribute('aria-label', isDailyChallengeSession() ? 'Back to dashboard from daily challenge summary' : 'Back to dashboard');
   }
-  if (continuePrompt && continueEyebrow && continueTitle && continueCopy && continueMeta && nextRunButton) {
+  if (secondaryDashboardButton) {
+    secondaryDashboardButton.textContent = 'Back to dashboard';
+  }
+  if (detailDashboardButton) {
+    detailDashboardButton.textContent = 'Back to dashboard';
+  }
+  if (continuePrompt && continueEyebrow && continueTitle && continueCopy && continueMeta && nextRunButton && detailNextRunButton) {
     const prompt = summary.continuePrompt;
     continuePrompt.hidden = !prompt;
     if (prompt) {
@@ -1996,14 +2027,22 @@ function renderGameOverSummary() {
       continueCopy.textContent = prompt.copy;
       continueMeta.textContent = prompt.meta;
       nextRunButton.textContent = prompt.buttonLabel;
+      detailNextRunButton.textContent = prompt.buttonLabel;
       nextRunButton.dataset.sessionType = prompt.sessionType || currentSessionType;
       nextRunButton.dataset.promptType = prompt.id || '';
       nextRunButton.dataset.prompted = 'true';
+      detailNextRunButton.dataset.sessionType = prompt.sessionType || currentSessionType;
+      detailNextRunButton.dataset.promptType = prompt.id || '';
+      detailNextRunButton.dataset.prompted = 'true';
     } else {
       nextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Start next run';
+      detailNextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Start next run';
       nextRunButton.dataset.sessionType = currentSessionType;
       nextRunButton.dataset.promptType = '';
       nextRunButton.dataset.prompted = 'false';
+      detailNextRunButton.dataset.sessionType = currentSessionType;
+      detailNextRunButton.dataset.promptType = '';
+      detailNextRunButton.dataset.prompted = 'false';
     }
   }
 
@@ -2022,6 +2061,7 @@ function renderGameOverSummary() {
   }
 
   renderQuestRunSummary(summary);
+  setGameOverSummaryView('main');
 
   objectivesList.innerHTML = '';
   if (!objectives.length) {
@@ -4666,12 +4706,29 @@ document.getElementById('btn-new').addEventListener('click', () => {
   navigateTo('game');
 });
 
-document.getElementById('btn-gameover-dashboard').addEventListener('click', () => {
+document.getElementById('btn-new-details').addEventListener('click', () => {
+  const button = document.getElementById('btn-new-details');
+  startNewGame({
+    sessionType: button.dataset.sessionType === 'daily' ? 'daily' : 'standard',
+    trigger: button.dataset.prompted === 'true' ? 'prompt' : 'manual',
+    promptType: button.dataset.promptType || '',
+  });
+  navigateTo('game');
+});
+
+function handleGameOverDashboardNavigation() {
   if (ensureRunSummary().continuePrompt?.id) recordOneMoreRunDismissed();
   hideOverlay('ov-gameover');
+  setGameOverSummaryView('main');
   navigateTo('dashboard');
   renderDashboard();
-});
+}
+
+document.getElementById('btn-gameover-dashboard').addEventListener('click', handleGameOverDashboardNavigation);
+document.getElementById('btn-gameover-dashboard-secondary').addEventListener('click', handleGameOverDashboardNavigation);
+document.getElementById('btn-gameover-dashboard-details').addEventListener('click', handleGameOverDashboardNavigation);
+document.getElementById('btn-gameover-details').addEventListener('click', () => setGameOverSummaryView('details'));
+document.getElementById('btn-gameover-details-back').addEventListener('click', () => setGameOverSummaryView('main'));
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;

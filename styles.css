@@ -1705,6 +1705,10 @@ a.icon-btn { text-decoration: none; }
   text-align: left;
 }
 
+.summary-panel[hidden] {
+  display: none !important;
+}
+
 .summary-close-btn {
   position: absolute;
   top: 14px;
@@ -1730,14 +1734,14 @@ a.icon-btn { text-decoration: none; }
 }
 
 .summary-intro {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .run-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .summary-stat {
@@ -1750,6 +1754,10 @@ a.icon-btn { text-decoration: none; }
 .summary-stat--score,
 .summary-stat--coins {
   background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+}
+
+.summary-stat--wide {
+  grid-column: 1 / -1;
 }
 
 .summary-label {
@@ -1769,8 +1777,23 @@ a.icon-btn { text-decoration: none; }
   color: var(--text);
 }
 
+.summary-balance {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 0;
+  padding: 0 2px;
+  font-size: 13px;
+}
+
+.summary-balance strong {
+  font-size: 18px;
+  color: var(--text);
+}
+
 .run-objectives {
-  margin-top: 4px;
+  margin-top: 16px;
 }
 
 .run-objectives__header {
@@ -1845,13 +1868,12 @@ a.icon-btn { text-decoration: none; }
 }
 
 .summary-primary-btn {
-  margin-top: 16px;
   font-size: 16px;
   padding-block: 14px;
 }
 
 .summary-continue {
-  margin-top: 14px;
+  margin-top: 16px;
   padding: 15px 16px;
   border-radius: 18px;
   background: color-mix(in srgb, var(--accent) 10%, var(--bg));
@@ -1919,6 +1941,78 @@ a.icon-btn { text-decoration: none; }
   margin-bottom: 0;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.summary-actions .wide {
+  margin-top: 0;
+}
+
+.summary-details-btn,
+.summary-back-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--accent-dk) 68%, var(--text));
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 2px 0;
+  cursor: pointer;
+}
+
+.summary-details-btn {
+  margin-top: 10px;
+}
+
+.summary-panel--details {
+  padding-top: 8px;
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.summary-details__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.summary-details__header h3 {
+  font-size: 18px;
+}
+
+.summary-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.summary-detail-card {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+
+.summary-detail-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 19px;
+  line-height: 1.05;
+}
+
+.summary-actions--details {
+  margin-top: 18px;
+  padding-top: 4px;
 }
 
 .missions-head {
