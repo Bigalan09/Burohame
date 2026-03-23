@@ -341,6 +341,7 @@ html, body {
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  isolation: isolate;
   transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -816,6 +817,7 @@ a.icon-btn { text-decoration: none; }
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--border));
   box-shadow: 0 12px 34px rgba(0,0,0,0.08);
   backdrop-filter: blur(14px);
+  z-index: 20;
 }
 
 #app[data-page="game"] .bottom-nav {
