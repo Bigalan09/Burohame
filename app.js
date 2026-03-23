@@ -192,7 +192,7 @@ let dailyChallengeState = {
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 6;
+const PROGRESSION_STATE_VERSION = 7;
 const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
@@ -207,6 +207,7 @@ const WEEKLY_LADDER_COUNTED_RUNS = 4;
 const WEEKLY_COHORT_SIZE = 20;
 const WEEKLY_PROMOTION_SLOTS = 4;
 const WEEKLY_RELEGATION_SLOTS = 4;
+const QUEST_BOARD_CHAIN_LIMIT = 3;
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
   multiClearBonus: 0,
@@ -277,6 +278,179 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     description: 'Complete 3 runs today.',
   },
 ]);
+
+const QUEST_CHAIN_TEMPLATES = Object.freeze([
+  {
+    chainId: 'score-ladder',
+    kicker: 'Score improvement chain',
+    title: 'Score ladder',
+    description: 'Raise your scoring floor with steadier, cleaner runs.',
+    summary: 'Build from a tidy warm-up into a proper breakthrough score.',
+    finalReward: {
+      coins: scaleCoinReward(32),
+      unlockHint: 'Bonus colourway or finish if your collection still has a locked piece.',
+      grantsUnlock: true,
+    },
+    steps: [
+      {
+        stepId: 'score-ladder-1',
+        title: 'Warm opening',
+        description: 'Score 90 points in a single run.',
+        metric: 'singleRunScore',
+        goal: 90,
+        mode: 'max',
+        reward: scaleCoinReward(6),
+      },
+      {
+        stepId: 'score-ladder-2',
+        title: 'Hold the pace',
+        description: 'Score 180 points across quest runs.',
+        metric: 'totalScore',
+        goal: 180,
+        mode: 'cumulative',
+        reward: scaleCoinReward(8),
+      },
+      {
+        stepId: 'score-ladder-3',
+        title: 'Break through',
+        description: 'Score 150 points in a single run.',
+        metric: 'singleRunScore',
+        goal: 150,
+        mode: 'max',
+        reward: scaleCoinReward(10),
+      },
+    ],
+  },
+  {
+    chainId: 'combo-mastery',
+    kicker: 'Combo mastery chain',
+    title: 'Combo mastery',
+    description: 'Learn to stack clears so the board opens up instead of closing in.',
+    summary: 'From small links to proper chain-building.',
+    finalReward: {
+      coins: scaleCoinReward(34),
+      unlockHint: 'Bonus colourway or finish if one is still locked.',
+      grantsUnlock: false,
+    },
+    steps: [
+      {
+        stepId: 'combo-mastery-1',
+        title: 'Link two clears',
+        description: 'Reach a 2× combo in one run.',
+        metric: 'maxCombo',
+        goal: 2,
+        mode: 'max',
+        reward: scaleCoinReward(6),
+      },
+      {
+        stepId: 'combo-mastery-2',
+        title: 'Stay composed',
+        description: 'Clear 6 regions across quest runs.',
+        metric: 'regionsCleared',
+        goal: 6,
+        mode: 'cumulative',
+        reward: scaleCoinReward(8),
+      },
+      {
+        stepId: 'combo-mastery-3',
+        title: 'Find the chain',
+        description: 'Reach a 4× combo in one run.',
+        metric: 'maxCombo',
+        goal: 4,
+        mode: 'max',
+        reward: scaleCoinReward(10),
+      },
+    ],
+  },
+  {
+    chainId: 'board-sweep',
+    kicker: 'Region-clearing chain',
+    title: 'Board sweep',
+    description: 'Make room methodically by clearing lines and boxes in the same run.',
+    summary: 'Turn scattered space into a board that breathes again.',
+    finalReward: {
+      coins: scaleCoinReward(30),
+      unlockHint: 'Large coin payout for cleaner board work.',
+      grantsUnlock: false,
+    },
+    steps: [
+      {
+        stepId: 'board-sweep-1',
+        title: 'Open the board',
+        description: 'Clear 4 regions across quest runs.',
+        metric: 'regionsCleared',
+        goal: 4,
+        mode: 'cumulative',
+        reward: scaleCoinReward(6),
+      },
+      {
+        stepId: 'board-sweep-2',
+        title: 'Double clear',
+        description: 'Clear 2 regions at once in a single move.',
+        metric: 'biggestClear',
+        goal: 2,
+        mode: 'max',
+        reward: scaleCoinReward(8),
+      },
+      {
+        stepId: 'board-sweep-3',
+        title: 'Keep it tidy',
+        description: 'Clear 9 regions across quest runs.',
+        metric: 'regionsCleared',
+        goal: 9,
+        mode: 'cumulative',
+        reward: scaleCoinReward(10),
+      },
+    ],
+  },
+  {
+    chainId: 'coach-apprentice',
+    kicker: 'Coach Mode learning chain',
+    title: 'Coach apprentice',
+    description: 'Use Coach Mode to learn healthier setups and calmer scoring lines.',
+    summary: 'A guided chain that rewards better habits, not raw grind.',
+    finalReward: {
+      coins: scaleCoinReward(28),
+      unlockHint: 'Finishing this lesson can also unlock a cosmetic if one is still waiting.',
+      grantsUnlock: true,
+    },
+    steps: [
+      {
+        stepId: 'coach-apprentice-1',
+        title: 'Check the board',
+        description: 'Finish 1 run with Coach Mode on.',
+        metric: 'coachRuns',
+        goal: 1,
+        mode: 'cumulative',
+        reward: scaleCoinReward(6),
+      },
+      {
+        stepId: 'coach-apprentice-2',
+        title: 'Use the guidance',
+        description: 'Clear 4 regions with Coach Mode across quest runs.',
+        metric: 'coachRegions',
+        goal: 4,
+        mode: 'cumulative',
+        reward: scaleCoinReward(8),
+      },
+      {
+        stepId: 'coach-apprentice-3',
+        title: 'Read the flow',
+        description: 'Reach a 3× combo in a Coach Mode run.',
+        metric: 'coachMaxCombo',
+        goal: 3,
+        mode: 'max',
+        reward: scaleCoinReward(10),
+      },
+    ],
+  },
+]);
+const QUEST_CHAIN_LOOKUP = Object.freeze(
+  QUEST_CHAIN_TEMPLATES.reduce((acc, chain) => {
+    acc[chain.chainId] = chain;
+    return acc;
+  }, {})
+);
 
 const WEEKLY_LEAGUES = Object.freeze([
   {
@@ -666,8 +840,8 @@ function getWeeklyZoneLabel(zone) {
   return 'Hold zone';
 }
 
-function chooseWeeklyUnlockReward() {
-  const ownedColorways = new Set(getOwnedColorways());
+function chooseWeeklyUnlockReward(sourceState = progressionState) {
+  const ownedColorways = new Set(sourceState?.cosmetics?.ownedColorways || getOwnedColorways());
   const lockedColorway = COLORWAY_CATALOGUE.find(colorway => colorway.price > 0 && !ownedColorways.has(colorway.id));
   if (lockedColorway) {
     return {
@@ -677,7 +851,7 @@ function chooseWeeklyUnlockReward() {
     };
   }
 
-  const ownedSkins = new Set(getOwnedBlockSkins());
+  const ownedSkins = new Set(sourceState?.cosmetics?.ownedBlockSkins || getOwnedBlockSkins());
   const lockedSkin = COSMETIC_CATALOGUE.blockSkins.find(skin => skin.price > 0 && !ownedSkins.has(skin.id));
   if (lockedSkin) {
     return {
@@ -922,6 +1096,178 @@ function describeWeeklyResult(result) {
   return `${formatOrdinal(result.rank)} last week. ${result.coinsAwarded} coins for holding steady.`;
 }
 
+function ensureQuestBoardForCurrentCycle() {
+  const currentCycleId = getQuestCycleId();
+  const existing = progressionState?.questBoard ? sanitiseQuestBoardState(progressionState.questBoard) : createDefaultQuestBoardState();
+  if (existing.cycleId === currentCycleId && existing.activeChainIds.length) {
+    return existing;
+  }
+
+  const nextState = updateProgressionState(state => {
+    const current = sanitiseQuestBoardState(state.questBoard);
+    const refreshCount = clampWholeNumber(current.refreshCount, 0);
+    state.questBoard = {
+      ...createQuestBoardForCycle(currentCycleId),
+      refreshCount: current.cycleId ? refreshCount + 1 : refreshCount,
+    };
+    return state;
+  });
+
+  return nextState.questBoard;
+}
+
+function getQuestBoardStatus(options = {}) {
+  const board = ensureQuestBoardForCurrentCycle();
+  const changedChainIds = new Set(Array.isArray(options.changedChainIds) ? options.changedChainIds : []);
+  const chains = board.activeChainIds.map(chainId => {
+    const chain = QUEST_CHAIN_LOOKUP[chainId];
+    const chainState = sanitiseQuestChainState(board.chainStates[chainId], chainId);
+    const currentStep = chain.steps[chainState.currentStepIndex] || null;
+    const nextStep = currentStep ? (chain.steps[chainState.currentStepIndex + 1] || null) : null;
+    const currentProgress = currentStep ? Math.min(chainState.currentStepProgress, currentStep.goal) : 0;
+    const progressPercent = currentStep
+      ? Math.max(0, Math.min(100, Math.round((currentProgress / currentStep.goal) * 100)))
+      : 100;
+    return {
+      chain,
+      chainState,
+      currentStep,
+      nextStep,
+      currentProgress,
+      progressPercent,
+      isComplete: !!chainState.completedAt || chainState.currentStepIndex >= chain.steps.length,
+      isChanged: changedChainIds.has(chainId),
+      finalRewardText: getQuestFinalRewardText(chain),
+    };
+  });
+
+  return {
+    board,
+    chains,
+    completed: chains.filter(item => item.isComplete).length,
+    total: chains.length,
+    countdown: getUTCWeekCountdown(),
+  };
+}
+
+function applyQuestChainProgress(summary) {
+  const board = ensureQuestBoardForCurrentCycle();
+  const changedChainIds = new Set();
+  const awardedMilestones = [];
+  const coinAwards = [];
+  const unlockRewards = [];
+
+  updateProgressionState(state => {
+    const questBoard = sanitiseQuestBoardState(state.questBoard);
+    if (questBoard.cycleId !== board.cycleId || !questBoard.activeChainIds.length) {
+      state.questBoard = createQuestBoardForCycle(board.cycleId);
+    }
+    const workingBoard = sanitiseQuestBoardState(state.questBoard);
+
+    workingBoard.activeChainIds.forEach(chainId => {
+      const chain = QUEST_CHAIN_LOOKUP[chainId];
+      const chainState = sanitiseQuestChainState(workingBoard.chainStates[chainId], chainId);
+      if (!chain || chainState.completedAt) {
+        workingBoard.chainStates[chainId] = chainState;
+        return;
+      }
+
+      let keepChecking = true;
+      while (keepChecking && chainState.currentStepIndex < chain.steps.length) {
+        const step = chain.steps[chainState.currentStepIndex];
+        const currentAmount = getQuestStepValue(step, summary);
+        const nextProgress = step.mode === 'cumulative'
+          ? Math.min(step.goal, chainState.currentStepProgress + currentAmount)
+          : Math.max(chainState.currentStepProgress, currentAmount);
+
+        if (nextProgress > chainState.currentStepProgress) {
+          changedChainIds.add(chainId);
+        }
+
+        chainState.currentStepProgress = nextProgress;
+
+        if (chainState.currentStepProgress < step.goal) {
+          keepChecking = false;
+          continue;
+        }
+
+        chainState.completedStepIds.push(step.stepId);
+        const rewardAmount = step.reward || 0;
+        if (rewardAmount) coinAwards.push({
+          amount: rewardAmount,
+          reason: `${chain.title} · ${step.title}`,
+          options: { silent: true, celebrate: true, major: rewardAmount >= 10 },
+        });
+
+        awardedMilestones.push({
+          eyebrow: chain.kicker,
+          title: `${chain.title} · ${step.title}`,
+          detail: rewardAmount ? `Step cleared. +${rewardAmount} coins added.` : 'Step cleared.',
+          major: false,
+          announce: `${chain.title} quest step cleared.`,
+        });
+
+        chainState.currentStepIndex += 1;
+        chainState.currentStepProgress = 0;
+
+        if (chainState.currentStepIndex >= chain.steps.length) {
+          chainState.completedAt = workingBoard.cycleId;
+          if (!workingBoard.completedChainIds.includes(chainId)) workingBoard.completedChainIds.push(chainId);
+          const finalRewardCoins = chain.finalReward?.coins || 0;
+          let unlockReward = null;
+          if (chain.finalReward?.grantsUnlock) {
+            unlockReward = chooseWeeklyUnlockReward(state);
+            if (unlockReward) {
+              unlockRewards.push(unlockReward);
+              if (unlockReward.type === 'colorway' && !state.cosmetics.ownedColorways.includes(unlockReward.id)) {
+                state.cosmetics.ownedColorways.push(unlockReward.id);
+              }
+              if (unlockReward.type === 'finish' && !state.cosmetics.ownedBlockSkins.includes(unlockReward.id)) {
+                state.cosmetics.ownedBlockSkins.push(unlockReward.id);
+              }
+            }
+          }
+          if (finalRewardCoins) coinAwards.push({
+            amount: finalRewardCoins,
+            reason: `${chain.title} complete`,
+            options: { silent: true, celebrate: true, major: true },
+          });
+          awardedMilestones.push({
+            eyebrow: 'Quest chain complete',
+            title: chain.title,
+            detail: unlockReward
+              ? `Final reward: +${finalRewardCoins} coins and ${unlockReward.name} unlocked.`
+              : `Final reward: +${finalRewardCoins} coins.`,
+            major: true,
+            announce: `${chain.title} quest chain complete.`,
+          });
+          keepChecking = false;
+        }
+      }
+
+      workingBoard.chainStates[chainId] = chainState;
+    });
+
+    state.questBoard = workingBoard;
+    return state;
+  });
+
+  coinAwards.forEach(entry => {
+    awardCoins(entry.amount, entry.reason, entry.options);
+  });
+  unlockRewards.forEach(reward => applyWeeklyUnlockReward(reward));
+  awardedMilestones.forEach(milestone => {
+    showMilestoneMoment({
+      ...milestone,
+      anchor: '#score-wrap',
+    });
+  });
+
+  return {
+    changedChainIds: [...changedChainIds],
+  };
+}
+
 function hashString(value) {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i++) {
@@ -1014,6 +1360,134 @@ function sanitiseMissionEntry(value) {
   };
 }
 
+function createDefaultQuestChainState(chainId = '') {
+  return {
+    chainId,
+    currentStepIndex: 0,
+    currentStepProgress: 0,
+    completedAt: '',
+    completedStepIds: [],
+  };
+}
+
+function sanitiseQuestChainState(value, fallbackChainId = '') {
+  const src = value && typeof value === 'object' ? value : {};
+  const chainId = typeof src.chainId === 'string' && QUEST_CHAIN_LOOKUP[src.chainId]
+    ? src.chainId
+    : fallbackChainId;
+  return {
+    chainId,
+    currentStepIndex: clampWholeNumber(src.currentStepIndex, 0),
+    currentStepProgress: clampWholeNumber(src.currentStepProgress, 0),
+    completedAt: typeof src.completedAt === 'string' ? src.completedAt : '',
+    completedStepIds: uniqueStringList(src.completedStepIds, []),
+  };
+}
+
+function createDefaultQuestBoardState() {
+  return {
+    cycleId: '',
+    activeChainIds: [],
+    chainStates: {},
+    completedChainIds: [],
+    refreshCount: 0,
+  };
+}
+
+function sanitiseQuestBoardState(value) {
+  const defaults = createDefaultQuestBoardState();
+  const src = value && typeof value === 'object' ? value : {};
+  const activeChainIds = uniqueStringList(src.activeChainIds, defaults.activeChainIds)
+    .filter(chainId => QUEST_CHAIN_LOOKUP[chainId])
+    .slice(0, QUEST_BOARD_CHAIN_LIMIT);
+  const rawChainStates = src.chainStates && typeof src.chainStates === 'object' ? src.chainStates : {};
+  const chainStates = {};
+
+  activeChainIds.forEach(chainId => {
+    chainStates[chainId] = sanitiseQuestChainState(rawChainStates[chainId], chainId);
+  });
+
+  return {
+    cycleId: typeof src.cycleId === 'string' ? src.cycleId : '',
+    activeChainIds,
+    chainStates,
+    completedChainIds: uniqueStringList(src.completedChainIds, [])
+      .filter(chainId => activeChainIds.includes(chainId)),
+    refreshCount: clampWholeNumber(src.refreshCount, defaults.refreshCount),
+  };
+}
+
+function getQuestCycleId(date = new Date()) {
+  return getUTCWeekId(date);
+}
+
+function createQuestBoardForCycle(cycleId) {
+  const seededIds = QUEST_CHAIN_TEMPLATES
+    .map(chain => ({
+      chainId: chain.chainId,
+      score: hashString(`${cycleId}:${chain.chainId}`),
+    }))
+    .sort((left, right) => left.score - right.score)
+    .slice(0, QUEST_BOARD_CHAIN_LIMIT)
+    .map(entry => entry.chainId);
+
+  const chainStates = {};
+  seededIds.forEach(chainId => {
+    chainStates[chainId] = createDefaultQuestChainState(chainId);
+  });
+
+  return {
+    cycleId,
+    activeChainIds: seededIds,
+    chainStates,
+    completedChainIds: [],
+    refreshCount: 0,
+  };
+}
+
+function getQuestStepValue(step, summary) {
+  if (!step || !summary) return 0;
+  switch (step.metric) {
+    case 'singleRunScore':
+      return summary.finalScore;
+    case 'totalScore':
+      return summary.finalScore;
+    case 'maxCombo':
+      return summary.stats.maxCombo;
+    case 'regionsCleared':
+      return summary.stats.regionsCleared;
+    case 'biggestClear':
+      return summary.stats.biggestClear;
+    case 'racksCompleted':
+      return summary.stats.racksCompleted;
+    case 'coachRuns':
+      return summary.stats.coachModeUsed ? 1 : 0;
+    case 'coachRegions':
+      return summary.stats.coachModeUsed ? summary.stats.regionsCleared : 0;
+    case 'coachMaxCombo':
+      return summary.stats.coachModeUsed ? summary.stats.maxCombo : 0;
+    default:
+      return 0;
+  }
+}
+
+function getQuestStepProgressText(step, progressValue) {
+  const progress = Math.min(progressValue, step.goal);
+  if (step.metric === 'singleRunScore' || step.metric === 'totalScore') return `${progress}/${step.goal} points`;
+  if (step.metric === 'maxCombo' || step.metric === 'coachMaxCombo') return `Best combo ${progress}/${step.goal}`;
+  if (step.metric === 'biggestClear') return `Best clear ${progress}/${step.goal} regions`;
+  if (step.metric === 'racksCompleted') return `${progress}/${step.goal} racks`;
+  if (step.metric === 'coachRuns') return `${progress}/${step.goal} Coach Mode runs`;
+  return `${progress}/${step.goal}`;
+}
+
+function getQuestFinalRewardText(chain) {
+  const reward = chain.finalReward || {};
+  const parts = [`🪙 ${reward.coins || 0}`];
+  if (reward.grantsUnlock) parts.push('bonus unlock if available');
+  return parts.join(' · ');
+}
+
 function createDefaultProgressionState() {
   return {
     version: PROGRESSION_STATE_VERSION,
@@ -1068,6 +1542,7 @@ function createDefaultProgressionState() {
         suppressedNoCandidate: 0,
       },
     },
+    questBoard: createDefaultQuestBoardState(),
     weeklyLadder: createDefaultWeeklyLadderState(),
   };
 }
@@ -1173,6 +1648,7 @@ function sanitiseProgressionState(rawState) {
       freezes: clampWholeNumber(streak.freezes, defaults.streak.freezes),
     },
     oneMoreRun: sanitiseOneMoreRunState(src.oneMoreRun),
+    questBoard: sanitiseQuestBoardState(src.questBoard),
     weeklyLadder: sanitiseWeeklyLadderState(src.weeklyLadder),
   };
 }
@@ -1182,11 +1658,14 @@ function createDefaultRunSummary() {
     finalScore: 0,
     coinsEarned: 0,
     completedObjectiveIds: [],
+    questHighlightIds: [],
     stats: {
       regionsCleared: 0,
+      biggestClear: 0,
       maxCombo: 0,
       racksCompleted: 0,
       personalBest: false,
+      coachModeUsed: false,
     },
     continuePrompt: null,
   };
@@ -1541,6 +2020,8 @@ function renderGameOverSummary() {
       dailySummary.hidden = true;
     }
   }
+
+  renderQuestRunSummary(summary);
 
   objectivesList.innerHTML = '';
   if (!objectives.length) {
@@ -2066,7 +2547,120 @@ function renderDailyMissions() {
   }
 
   const missionCopy = document.getElementById('dashboard-mission-copy');
-  if (missionCopy) missionCopy.textContent = `${completed}/${total} missions completed today.`;
+  if (missionCopy) {
+    const questStatus = getQuestBoardStatus();
+    missionCopy.textContent = `${completed}/${total} daily · ${questStatus.completed}/${questStatus.total} quest chains`;
+  }
+}
+
+function renderQuestBoard(options = {}) {
+  const status = getQuestBoardStatus(options);
+  const title = document.getElementById('dashboard-quest-title');
+  const copy = document.getElementById('dashboard-quest-copy');
+  const badge = document.getElementById('dashboard-quest-badge');
+  const timer = document.getElementById('dashboard-quest-timer');
+  const list = document.getElementById('dashboard-quest-list');
+  const goalsSubtitle = document.getElementById('missions-subtitle');
+  const questCount = document.getElementById('quest-count');
+  const questList = document.getElementById('quest-list');
+
+  if (title) title.textContent = `${status.completed}/${status.total} chains settled`;
+  if (copy) {
+    copy.textContent = status.completed === status.total
+      ? 'This week’s quest board is fully complete. Daily missions can still top up your coin flow.'
+      : 'Weekly quest chains unfold step by step across several sessions.';
+  }
+  if (badge) badge.textContent = `${status.completed}/${status.total}`;
+  if (timer) timer.textContent = status.countdown;
+
+  const renderQuestItems = (target, { compact = false } = {}) => {
+    if (!target) return;
+    target.innerHTML = '';
+    status.chains.forEach(item => {
+      const article = document.createElement('article');
+      article.className = `quest-item${item.isComplete ? ' quest-item--complete' : ''}${item.isChanged ? ' quest-item--changed' : ''}${compact ? ' quest-item--compact' : ''}`;
+      const currentStepMarkup = item.currentStep
+        ? `
+          <div class="quest-item__step">
+            <strong>Current step</strong>
+            <span>${item.currentStep.title}</span>
+            <p>${item.currentStep.description}</p>
+          </div>
+          <div class="quest-progress" aria-hidden="true"><span style="width:${item.progressPercent}%"></span></div>
+          <div class="quest-item__footer">
+            <span>${getQuestStepProgressText(item.currentStep, item.currentProgress)}</span>
+            <strong>${item.nextStep ? `Next · ${item.nextStep.title}` : 'Final step'}</strong>
+          </div>
+        `
+        : `
+          <div class="quest-item__step">
+            <strong>Chain complete</strong>
+            <span>${item.chain.summary}</span>
+            <p>Final reward settled for this cycle.</p>
+          </div>
+          <div class="quest-item__footer">
+            <span>All steps finished</span>
+            <strong>${item.finalRewardText}</strong>
+          </div>
+        `;
+
+      article.innerHTML = `
+        <div class="quest-item__top">
+          <div>
+            <span class="quest-item__kicker">${item.chain.kicker}</span>
+            <h3>${item.chain.title}</h3>
+            <p>${item.chain.description}</p>
+          </div>
+          <div class="quest-item__reward">${item.finalRewardText}</div>
+        </div>
+        ${currentStepMarkup}
+      `;
+      target.appendChild(article);
+    });
+  };
+
+  renderQuestItems(list, { compact: true });
+  if (goalsSubtitle) {
+    goalsSubtitle.textContent = `Daily missions refresh each day. Quest chains roll over weekly and pay out bigger rewards at the end.`;
+  }
+  if (questCount) {
+    questCount.textContent = `${status.completed}/${status.total} chains complete`;
+  }
+  renderQuestItems(questList);
+}
+
+function renderQuestRunSummary(summary) {
+  const section = document.getElementById('go-quest-summary');
+  const count = document.getElementById('go-quest-count');
+  const list = document.getElementById('go-quest-list');
+  if (!section || !count || !list) return;
+
+  const changedIds = Array.isArray(summary.questHighlightIds) ? summary.questHighlightIds : [];
+  const status = getQuestBoardStatus({ changedChainIds: changedIds });
+  const prioritised = [...status.chains].sort((left, right) => {
+    if (left.isChanged !== right.isChanged) return left.isChanged ? -1 : 1;
+    if (left.isComplete !== right.isComplete) return left.isComplete ? 1 : -1;
+    return left.chain.title.localeCompare(right.chain.title);
+  });
+
+  list.innerHTML = '';
+  const visibleChains = prioritised.slice(0, 3);
+  count.textContent = changedIds.length
+    ? `${changedIds.length} updated this run`
+    : `${status.completed}/${status.total} complete this week`;
+
+  visibleChains.forEach(item => {
+    const entry = document.createElement('li');
+    entry.className = `run-objective quest-objective${item.isChanged ? ' quest-objective--changed' : ''}`;
+    if (item.isComplete) {
+      entry.innerHTML = `<strong>${item.chain.title}</strong><span>Chain complete · ${item.finalRewardText}</span>`;
+    } else {
+      entry.innerHTML = `<strong>${item.chain.title} · ${item.currentStep.title}</strong><span>${getQuestStepProgressText(item.currentStep, item.currentProgress)} · Next ${item.nextStep ? item.nextStep.title : 'finish chain'}</span>`;
+    }
+    list.appendChild(entry);
+  });
+
+  section.hidden = !visibleChains.length;
 }
 
 function getCollectionSubtitle() {
@@ -2600,12 +3194,16 @@ function getSavedGameSession() {
             finalScore: clampWholeNumber(raw.runSummary.finalScore, 0),
             coinsEarned: clampWholeNumber(raw.runSummary.coinsEarned, 0),
             completedObjectiveIds: uniqueStringList(raw.runSummary.completedObjectiveIds, []),
+            questHighlightIds: uniqueStringList(raw.runSummary.questHighlightIds, []),
             stats: {
               regionsCleared: clampWholeNumber(raw.runSummary.stats?.regionsCleared, 0),
+              biggestClear: clampWholeNumber(raw.runSummary.stats?.biggestClear, 0),
               maxCombo: clampWholeNumber(raw.runSummary.stats?.maxCombo, 0),
               racksCompleted: clampWholeNumber(raw.runSummary.stats?.racksCompleted, 0),
               personalBest: !!raw.runSummary.stats?.personalBest,
+              coachModeUsed: !!raw.runSummary.stats?.coachModeUsed,
             },
+            continuePrompt: raw.runSummary.continuePrompt || null,
           }
         : createDefaultRunSummary(),
     };
@@ -2753,9 +3351,11 @@ function renderDashboard() {
   const dailyInfoButton = document.getElementById('btn-dashboard-daily-info');
   const dailyStreakPill = document.getElementById('daily-streak-pill');
   const runState = document.getElementById('dashboard-run-state');
+  const goalsButtonLabel = document.getElementById('dashboard-goals-label');
   const hasSavedGame = !!getSavedGameSession();
   const savedGame = getSavedGameSession();
   const missionCounts = getDailyMissionCounts();
+  const questStatus = getQuestBoardStatus();
   const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
   const challenge = ensureDailyChallengeForToday();
   const challengeStatus = getDailyChallengeStatus(challenge);
@@ -2785,8 +3385,11 @@ function renderDashboard() {
   }
   if (missionCopy) {
     missionCopy.textContent = missionCounts.total
-      ? `${missionCounts.completed} of ${missionCounts.total} done today`
-      : 'Fresh goals are on the way.';
+      ? `${missionCounts.completed}/${missionCounts.total} daily · ${questStatus.completed}/${questStatus.total} quest chains`
+      : `${questStatus.completed}/${questStatus.total} quest chains active`;
+  }
+  if (goalsButtonLabel) {
+    goalsButtonLabel.textContent = 'Goals board';
   }
   if (dailyTitle) {
     dailyTitle.textContent = challengeStatus.complete
@@ -2818,6 +3421,7 @@ function renderDashboard() {
   document.getElementById('dashboard-today').textContent = String(todayScore);
   document.getElementById('dashboard-finish').textContent = skin.name;
   renderSessionModeBadge();
+  renderQuestBoard();
   renderWeeklyLadder();
 }
 
@@ -3155,6 +3759,7 @@ function cancelDrag() {
 // ── Game actions ───────────────────────────────────────────
 function doPlace(slotIdx, row, col) {
   const cells = pieces[slotIdx];
+  ensureRunSummary().stats.coachModeUsed = ensureRunSummary().stats.coachModeUsed || trainingMode;
 
   // Place blocks on board
   for (const [dr, dc] of cells) board[row + dr][col + dc] = 1;
@@ -3258,6 +3863,7 @@ function doClears() {
   pts += combo * 5;
   score += pts;
   summary.stats.regionsCleared += total;
+  summary.stats.biggestClear = Math.max(summary.stats.biggestClear, total);
   summary.stats.maxCombo = Math.max(summary.stats.maxCombo, combo);
   updateDailyMissionProgress('regions', total);
   updateDailyMissionProgress('score', pts);
@@ -3406,6 +4012,7 @@ function triggerGameOver() {
   maybeCompleteDailyChallenge();
   evaluateRunObjectives();
   updateDailyMissionProgress('runs', 1);
+  ensureRunSummary().questHighlightIds = applyQuestChainProgress(ensureRunSummary()).changedChainIds;
   ensureRunSummary().continuePrompt = chooseOneMoreRunPrompt(ensureRunSummary());
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
@@ -4051,6 +4658,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   renderDailyMissions();
   ensureDailyChallengeForToday();
+  ensureQuestBoardForCurrentCycle();
   ensureWeeklyLadderForCurrentWeek();
   renderCosmeticsCollection();
   renderDashboard();
@@ -4071,6 +4679,7 @@ function init() {
   loadProgressionState();
   ensureDailyMissionsForToday();
   ensureDailyChallengeForToday();
+  ensureQuestBoardForCurrentCycle();
   ensureWeeklyLadderForCurrentWeek();
   resetStandardSessionState();
   updateCoinUI();
