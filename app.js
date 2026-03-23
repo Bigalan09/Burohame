@@ -2514,25 +2514,19 @@ function renderDailyChallengePanels() {
   const streakLabel = `🔥 ${challengeStatus.streak} ${dayLabel} streak`;
   const rewardLabel = `${challengeStatus.reward} coin reward`;
 
-  setTextIfPresent('dashboard-daily-card-title', title);
-  setTextIfPresent('dashboard-daily-card-copy', copy);
-  setTextIfPresent('dashboard-daily-card-target', `Target ${challenge.targetScore}`);
-  setTextIfPresent('dashboard-daily-card-best', bestLabel);
-  setTextIfPresent('dashboard-daily-card-streak', streakLabel);
+  setTextIfPresent('dashboard-daily-title', title);
+  setTextIfPresent('dashboard-daily-copy', copy);
+  setTextIfPresent('dashboard-daily-target', `Target ${challenge.targetScore}`);
+  setTextIfPresent('dashboard-daily-best', bestLabel);
+  setTextIfPresent('dashboard-daily-streak', streakLabel);
+  setTextIfPresent('dashboard-daily-reward', rewardLabel);
 
-  setTextIfPresent('daily-page-title', title);
-  setTextIfPresent('daily-page-copy', copy);
-  setTextIfPresent('daily-page-target', `Target ${challenge.targetScore}`);
-  setTextIfPresent('daily-page-best', bestLabel);
-  setTextIfPresent('daily-page-streak', streakLabel);
-  setTextIfPresent('daily-page-reward', rewardLabel);
-
-  const playButton = document.getElementById('btn-daily-page-play');
+  const playButton = document.getElementById('btn-dashboard-daily-play');
   if (playButton) {
     playButton.textContent = challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge';
   }
 
-  const infoButton = document.getElementById('btn-daily-page-info');
+  const infoButton = document.getElementById('btn-dashboard-daily-info');
   if (infoButton) {
     infoButton.textContent = 'How it works';
   }
@@ -3502,7 +3496,6 @@ function navigateTo(page) {
   });
 
   if (page === 'dashboard') renderDashboard();
-  if (page === 'daily-challenge') renderDailyChallengePanels();
   if (page === 'weekly') renderWeeklyLadder();
   if (page === 'missions') renderDailyMissions();
   if (page === 'quests') renderQuestBoard();
@@ -4536,9 +4529,6 @@ document.getElementById('btn-dashboard-new').addEventListener('click', () => {
   startNewGame({ resetPromptChain: true });
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-daily-page').addEventListener('click', () => {
-  navigateTo('daily-challenge');
-});
 document.getElementById('btn-dashboard-weekly-page').addEventListener('click', () => {
   navigateTo('weekly');
 });
@@ -4548,11 +4538,11 @@ document.getElementById('btn-dashboard-quests-page').addEventListener('click', (
 document.getElementById('btn-dashboard-missions-page').addEventListener('click', () => {
   navigateTo('missions');
 });
-document.getElementById('btn-daily-page-play').addEventListener('click', () => {
+document.getElementById('btn-dashboard-daily-play').addEventListener('click', () => {
   startNewGame({ sessionType: 'daily', resetPromptChain: true });
   navigateTo('game');
 });
-document.getElementById('btn-daily-page-info').addEventListener('click', () => {
+document.getElementById('btn-dashboard-daily-info').addEventListener('click', () => {
   const challenge = ensureDailyChallengeForToday();
   alert(`Today’s daily challenge is shared worldwide for ${challenge.date}. Reach ${challenge.targetScore} points to keep your streak and earn a coin bonus.`);
 });

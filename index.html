@@ -62,30 +62,28 @@
           </article>
         </section>
 
-        <section class="dashboard-retention" aria-label="Retention modes">
-          <div class="dashboard-section-head">
-            <div>
-              <span class="dashboard-section-head__kicker">Retention modes</span>
-              <h2>Keep your rhythm</h2>
+        <section class="dashboard-retention" aria-label="Extras">
+          <section class="dashboard-challenge" aria-label="Daily challenge status">
+            <div class="dashboard-challenge__head">
+              <div>
+                <span class="dashboard-challenge__kicker">Daily challenge</span>
+                <h2 id="dashboard-daily-title">Ready for today</h2>
+              </div>
+              <span class="dashboard-challenge__streak" id="dashboard-daily-streak">🔥 0 day streak</span>
             </div>
-          </div>
+            <p class="dashboard-challenge__copy" id="dashboard-daily-copy">A fresh seeded board is ready.</p>
+            <div class="dashboard-challenge__meta">
+              <span id="dashboard-daily-target">Target 0</span>
+              <span id="dashboard-daily-best">Best 0</span>
+              <span id="dashboard-daily-reward">0 coin reward</span>
+            </div>
+            <div class="dashboard-challenge__actions">
+              <button class="pill-btn" id="btn-dashboard-daily-play" type="button">Play daily challenge</button>
+              <button class="pill-btn pill-btn--secondary" id="btn-dashboard-daily-info" type="button">How it works</button>
+            </div>
+          </section>
 
           <div class="retention-links">
-            <button class="retention-link retention-link--daily" id="btn-dashboard-daily-page" type="button" aria-label="Open daily challenge page">
-              <span class="retention-link__kicker">Daily challenge</span>
-              <strong id="dashboard-daily-card-title">Ready for today</strong>
-              <p id="dashboard-daily-card-copy">A fresh seeded board is ready.</p>
-              <div class="retention-link__meta">
-                <span id="dashboard-daily-card-target">Target 0</span>
-                <span id="dashboard-daily-card-best">Best 0</span>
-                <span id="dashboard-daily-card-streak">🔥 0 day streak</span>
-              </div>
-              <div class="retention-link__footer" aria-hidden="true">
-                <span class="retention-link__cta">Open daily challenge</span>
-                <span class="retention-link__arrow">→</span>
-              </div>
-            </button>
-
             <button class="retention-link retention-link--weekly" id="btn-dashboard-weekly-page" type="button" aria-label="Open weekly leaderboard page">
               <span class="retention-link__kicker">Weekly leaderboard</span>
               <strong id="dashboard-weekly-card-title">Bronze week</strong>
@@ -128,43 +126,6 @@
                 <span class="retention-link__arrow">→</span>
               </div>
             </button>
-          </div>
-        </section>
-      </div>
-    </section>
-
-    <section class="page page--daily-challenge" data-page="daily-challenge" aria-label="Daily challenge">
-      <div class="page-scroll">
-        <header class="page-top">
-          <div>
-            <p class="page-kicker">Shared seed</p>
-            <h2>Daily challenge</h2>
-            <p class="page-intro">One shared board each day. Hit the target to keep the streak alive and bank the coin reward.</p>
-          </div>
-          <button class="icon-btn" data-back-page="dashboard" aria-label="Back to dashboard" type="button">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </header>
-
-        <section class="dashboard-challenge page-panel page-panel--retention" aria-label="Daily challenge status">
-          <div class="dashboard-challenge__head">
-            <div>
-              <span class="dashboard-challenge__kicker">Today’s board</span>
-              <h2 id="daily-page-title">Ready for today</h2>
-            </div>
-            <span class="dashboard-challenge__streak" id="daily-page-streak">🔥 0 day streak</span>
-          </div>
-          <p class="dashboard-challenge__copy" id="daily-page-copy">A fresh seeded board is ready.</p>
-          <div class="dashboard-challenge__meta">
-            <span id="daily-page-target">Target 0</span>
-            <span id="daily-page-best">Best 0</span>
-            <span id="daily-page-reward">0 coin reward</span>
-          </div>
-          <div class="dashboard-challenge__actions">
-            <button class="pill-btn" id="btn-daily-page-play" type="button">Play daily challenge</button>
-            <button class="pill-btn pill-btn--secondary" id="btn-daily-page-info" type="button">How it works</button>
           </div>
         </section>
       </div>
