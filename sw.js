@@ -1,7 +1,7 @@
 /* ===== Burohame Service Worker ===== */
 'use strict';
 
-const CACHE_NAME = 'burohame-e1966de';
+const CACHE_NAME = 'burohame-4900d79';
 
 // Derive asset URLs from the SW registration scope so the worker
 // is portable across any deployment path (e.g. GitHub Pages sub-path).
