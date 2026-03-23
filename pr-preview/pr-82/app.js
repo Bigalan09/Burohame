@@ -184,8 +184,6 @@ let currentSessionType = 'standard';
 let gameBannerQueue = [];
 let activeGameBanner = null;
 let gameBannerTimer = 0;
-const GAME_BANNER_HOLD_MS = 1800;
-const GAME_BANNER_SCROLL_MS = 560;
 let dailyChallengeState = {
   date: '',
   seed: 0,
@@ -1810,30 +1808,16 @@ function recordRunUpdate({ title = '', detail = '' }) {
   }].slice(-4);
 }
 
-function resetGameBannerContent() {
-  const banner = document.getElementById('game-banner');
-  const kicker = document.getElementById('game-banner-kicker');
-  const title = document.getElementById('game-banner-title');
-  const content = document.getElementById('game-banner-content');
-  if (!banner || !kicker || !title || !content) return;
-
+function clearGameBannerQueue() {
+  gameBannerQueue = [];
+  activeGameBanner = null;
   if (gameBannerTimer) {
     window.clearTimeout(gameBannerTimer);
     gameBannerTimer = 0;
   }
 
-  banner.classList.remove('game-banner--active', 'game-banner--scrolling');
-  content.style.animation = 'none';
-  void content.offsetWidth;
-  content.style.animation = '';
-  kicker.textContent = '';
-  title.textContent = '';
-}
-
-function clearGameBannerQueue() {
-  gameBannerQueue = [];
-  activeGameBanner = null;
-  resetGameBannerContent();
+  const banner = document.getElementById('game-banner');
+  if (banner) banner.hidden = true;
 }
 
 function renderNextGameBanner() {
@@ -1842,29 +1826,19 @@ function renderNextGameBanner() {
   const banner = document.getElementById('game-banner');
   const kicker = document.getElementById('game-banner-kicker');
   const title = document.getElementById('game-banner-title');
-  const content = document.getElementById('game-banner-content');
-  if (!banner || !kicker || !title || !content) return;
+  if (!banner || !kicker || !title) return;
 
   activeGameBanner = gameBannerQueue.shift();
-  banner.classList.remove('game-banner--active', 'game-banner--scrolling');
-  content.style.animation = 'none';
-  void content.offsetWidth;
-  content.style.animation = '';
   kicker.textContent = activeGameBanner.kicker;
   title.textContent = activeGameBanner.title;
-
-  window.requestAnimationFrame(() => {
-    banner.classList.add('game-banner--active');
-  });
+  banner.hidden = false;
 
   gameBannerTimer = window.setTimeout(() => {
-    banner.classList.add('game-banner--scrolling');
-    gameBannerTimer = window.setTimeout(() => {
-      activeGameBanner = null;
-      resetGameBannerContent();
-      renderNextGameBanner();
-    }, GAME_BANNER_SCROLL_MS);
-  }, GAME_BANNER_HOLD_MS);
+    activeGameBanner = null;
+    banner.hidden = true;
+    gameBannerTimer = 0;
+    renderNextGameBanner();
+  }, 1000);
 }
 
 function enqueueGameBanner({ kicker = 'Update', title = '', announce = '' }) {
