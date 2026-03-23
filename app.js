@@ -198,9 +198,9 @@ const PROGRESSION_STATE_VERSION = 8;
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
-const SHOP_PRICE_MULTIPLIER = 2;
+const SHOP_PRICE_MULTIPLIER = 2.78;
 const COIN_REWARD_MULTIPLIERS = Object.freeze({
-  run: 0.72,
+  run: 0.45,
   challenge: 0.6,
   mission: 0.45,
   quest: 0.5,
@@ -221,10 +221,10 @@ const COIN_REWARDS = Object.freeze({
   multiClearBonus: 0,
   comboStep: 0,
   roundMilestoneEvery: 10,
-  roundMilestoneReward: 12,
-  endRunBase: 16,
-  endRunPer50Score: 2,
-  personalBestBonus: 18,
+  roundMilestoneReward: 8,
+  endRunBase: 10,
+  endRunPer50Score: 1,
+  personalBestBonus: 12,
 });
 function scaleShopPrice(amount) {
   if (!amount) return 0;
