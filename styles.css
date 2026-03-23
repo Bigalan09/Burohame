@@ -1215,12 +1215,23 @@ a.icon-btn { text-decoration: none; }
   white-space: nowrap;
 }
 
-/* ===== Milestone moments ===== */
-#milestone-layer {
+/* ===== Notification moments ===== */
+#notification-layer {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 3400;
+}
+
+.notification-stack {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(360px, calc(100vw - 20px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .sr-only {
@@ -1237,20 +1248,20 @@ a.icon-btn { text-decoration: none; }
 
 @keyframes milestoneRise {
   0% {
-    transform: translateX(-50%) translateY(10px) scale(0.97);
+    transform: translateY(10px) scale(0.97);
     opacity: 0;
   }
   14% {
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateY(0) scale(1);
     opacity: 1;
   }
   86% {
-    transform: translateX(-50%) translateY(-6px) scale(1);
+    transform: translateY(0) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translateX(-50%) translateY(-12px) scale(0.99);
-    opacity: 0;
+    transform: translateY(0) scale(1);
+    opacity: 1;
   }
 }
 
@@ -1282,18 +1293,21 @@ a.icon-btn { text-decoration: none; }
   }
 }
 
-.milestone-chip {
-  position: fixed;
-  left: 50%;
-  width: min(308px, calc(100vw - 24px));
-  padding: 14px 16px;
+.milestone-chip,
+.coin-toast {
+  position: relative;
+  width: 100%;
+  padding: 14px 16px 20px;
   border-radius: 20px;
+  color: var(--text);
+  box-shadow: 0 16px 40px rgba(19, 26, 38, 0.18);
+  overflow: hidden;
+  animation: milestoneRise 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.milestone-chip {
   background: color-mix(in srgb, var(--bg-card) 90%, var(--accent-hi) 10%);
   border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
-  box-shadow: 0 16px 40px rgba(19, 26, 38, 0.18);
-  color: var(--text);
-  animation: milestoneRise 2.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  overflow: hidden;
 }
 
 .milestone-chip::before {
@@ -1321,6 +1335,7 @@ a.icon-btn { text-decoration: none; }
   z-index: 1;
 }
 
+.notification-card__eyebrow,
 .milestone-chip__eyebrow {
   display: block;
   font-size: 11px;
@@ -1330,20 +1345,57 @@ a.icon-btn { text-decoration: none; }
   color: color-mix(in srgb, var(--accent-dk) 70%, var(--text));
 }
 
+.coin-toast strong,
 .milestone-chip__title {
   display: block;
   margin-top: 3px;
-  font-size: 19px;
-  line-height: 1.18;
+  font-size: 18px;
+  line-height: 1.12;
   font-weight: 800;
 }
 
+.coin-toast span,
 .milestone-chip__detail {
   display: block;
   margin-top: 5px;
   font-size: 13px;
   line-height: 1.42;
   color: var(--text-2);
+}
+
+.notification-card__meter {
+  position: absolute;
+  inset: auto 14px 10px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-hi) 18%, transparent);
+  overflow: hidden;
+}
+
+.notification-card__meter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: color-mix(in srgb, var(--accent-hi) 56%, var(--accent));
+  animation: notificationTimer linear forwards;
+  animation-duration: var(--notification-duration, 3.6s);
+}
+
+.notification-card--major .notification-card__meter::after,
+.milestone-chip--major .notification-card__meter::after,
+.coin-toast--major .notification-card__meter::after {
+  background: color-mix(in srgb, var(--accent-hi) 74%, var(--accent));
+}
+
+.notification-card--spend .notification-card__meter::after,
+.coin-toast--spend .notification-card__meter::after {
+  background: color-mix(in srgb, #ff6b60 72%, #ff9b94);
+}
+
+@keyframes notificationTimer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
 }
 
 .milestone-chip__glow {
@@ -1379,25 +1431,9 @@ a.icon-btn { text-decoration: none; }
 .milestone-chip__spark:nth-child(10) { --spark-angle: 334deg; --spark-distance: 54px; }
 
 /* ===== Coin reward toast ===== */
-@keyframes coinToastIn {
-  0%   { transform: translateY(6px) scale(0.96); opacity: 0; }
-  18%  { transform: translateY(0) scale(1); opacity: 1; }
-  84%  { transform: translateY(-10px) scale(1); opacity: 1; }
-  100% { transform: translateY(-18px) scale(0.98); opacity: 0; }
-}
 .coin-toast {
-  position: fixed;
-  min-width: 140px;
-  max-width: min(220px, calc(100vw - 24px));
-  padding: 9px 12px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--accent) 20%, var(--bg-card));
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
-  box-shadow: 0 10px 28px rgba(0,0,0,0.16);
-  color: var(--text);
-  pointer-events: none;
-  z-index: 3200;
-  animation: coinToastIn 1.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .coin-toast--reward {
   background: color-mix(in srgb, var(--accent-hi) 18%, var(--bg-card));
@@ -1412,18 +1448,6 @@ a.icon-btn { text-decoration: none; }
   background: color-mix(in srgb, #ff6b60 18%, var(--bg-card));
   border-color: color-mix(in srgb, #ff6b60 28%, var(--border));
 }
-.coin-toast strong {
-  display: block;
-  font-size: 16px;
-  line-height: 1.05;
-}
-.coin-toast span {
-  display: block;
-  margin-top: 3px;
-  font-size: 11px;
-  color: var(--text-2);
-}
-
 .coin-toast__sparkles {
   display: inline-flex;
   gap: 4px;

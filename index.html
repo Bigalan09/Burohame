@@ -523,6 +523,13 @@
           </div>
           <ul id="go-quest-list" class="run-objectives__list"></ul>
         </section>
+        <section class="run-objectives" id="go-update-summary" hidden aria-labelledby="go-update-title">
+          <div class="run-objectives__header">
+            <h3 id="go-update-title">Run updates</h3>
+            <span id="go-update-count" class="run-objectives__count">0 moments</span>
+          </div>
+          <ul id="go-update-list" class="run-objectives__list"></ul>
+        </section>
         <section class="summary-continue" id="go-continue-prompt" hidden aria-labelledby="go-continue-title">
           <span class="summary-continue__eyebrow" id="go-continue-eyebrow">One more run</span>
           <h3 id="go-continue-title">A calm nudge for the next run</h3>
@@ -579,7 +586,7 @@
     </nav>
   </div>
 
-  <div id="milestone-layer" aria-hidden="true"></div>
+  <div id="notification-layer" aria-hidden="true"></div>
   <div id="milestone-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
   <script src="app.js"></script>

@@ -178,10 +178,10 @@ let darkMode     = false;
 let colorSetting = 'orange';   // 'orange','blue','green','purple','red','teal','pink','random'
 let rackSize     = 3;          // number of pieces shown in the rack (1–3)
 let progressionState = null;
-let coinToastOffset = 0;
 let runSummary = null;
 let currentPage = 'dashboard';
 let currentSessionType = 'standard';
+let notificationStackTimeouts = new WeakMap();
 let dailyChallengeState = {
   date: '',
   seed: 0,
@@ -1300,8 +1300,8 @@ function applyQuestChainProgress(summary) {
 
         awardedMilestones.push({
           eyebrow: chain.kicker,
-          title: `${chain.title} · ${step.title}`,
-          detail: rewardAmount ? `Step cleared. +${rewardAmount} coins added.` : 'Step cleared.',
+          title: step.title,
+          detail: rewardAmount ? `${chain.title} · +${rewardAmount} coins` : `${chain.title} updated`,
           major: false,
           announce: `${chain.title} quest step cleared.`,
         });
@@ -1335,8 +1335,8 @@ function applyQuestChainProgress(summary) {
             eyebrow: 'Quest chain complete',
             title: chain.title,
             detail: unlockReward
-              ? `Final reward: +${finalRewardCoins} coins and ${unlockReward.name} unlocked.`
-              : `Final reward: +${finalRewardCoins} coins.`,
+              ? `+${finalRewardCoins} coins · ${unlockReward.name} unlocked`
+              : `+${finalRewardCoins} coins banked`,
             major: true,
             announce: `${chain.title} quest chain complete.`,
           });
@@ -1771,6 +1771,7 @@ function createDefaultRunSummary() {
     coinsEarned: 0,
     completedObjectiveIds: [],
     questHighlightIds: [],
+    recentUpdates: [],
     stats: {
       regionsCleared: 0,
       biggestClear: 0,
@@ -1786,6 +1787,95 @@ function createDefaultRunSummary() {
 function ensureRunSummary() {
   if (!runSummary) runSummary = createDefaultRunSummary();
   return runSummary;
+}
+
+function createNotificationStack() {
+  const layer = document.getElementById('notification-layer');
+  if (!layer) return null;
+
+  let stack = layer.querySelector('.notification-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.className = 'notification-stack';
+    layer.appendChild(stack);
+  }
+  return stack;
+}
+
+function shortenNotificationDetail(detail) {
+  const text = String(detail || '').trim();
+  if (!text) return '';
+  if (text.length <= 78) return text;
+  return `${text.slice(0, 75).trimEnd()}…`;
+}
+
+function recordRunUpdate({ eyebrow = '', title = '', detail = '', major = false }) {
+  const summary = ensureRunSummary();
+  const nextUpdate = {
+    eyebrow: String(eyebrow || '').trim(),
+    title: String(title || '').trim(),
+    detail: shortenNotificationDetail(detail),
+    major: !!major,
+  };
+
+  if (!nextUpdate.title) return;
+
+  const previous = summary.recentUpdates?.[summary.recentUpdates.length - 1];
+  if (
+    previous &&
+    previous.eyebrow === nextUpdate.eyebrow &&
+    previous.title === nextUpdate.title &&
+    previous.detail === nextUpdate.detail
+  ) {
+    return;
+  }
+
+  summary.recentUpdates = [...(summary.recentUpdates || []), nextUpdate].slice(-5);
+}
+
+function dismissNotificationCard(card) {
+  if (!card) return;
+  const timeoutId = notificationStackTimeouts.get(card);
+  if (timeoutId) {
+    window.clearTimeout(timeoutId);
+    notificationStackTimeouts.delete(card);
+  }
+  card.remove();
+}
+
+function clearNotificationStack() {
+  const layer = document.getElementById('notification-layer');
+  const stack = layer?.querySelector('.notification-stack');
+  if (!stack) return;
+  [...stack.children].forEach(child => dismissNotificationCard(child));
+}
+
+function showNotificationCard(markup, {
+  className = '',
+  duration = 3600,
+  major = false,
+  spend = false,
+} = {}) {
+  if (gameOver) return null;
+
+  const stack = createNotificationStack();
+  if (!stack) return null;
+
+  const card = document.createElement('section');
+  card.className = className.trim();
+  if (major) card.classList.add('notification-card--major');
+  if (spend) card.classList.add('notification-card--spend');
+  card.style.setProperty('--notification-duration', `${duration}ms`);
+  card.innerHTML = `${markup}<span class="notification-card__meter" aria-hidden="true"></span>`;
+
+  stack.prepend(card);
+  while (stack.children.length > 3) {
+    dismissNotificationCard(stack.lastElementChild);
+  }
+
+  const timeoutId = window.setTimeout(() => dismissNotificationCard(card), duration);
+  notificationStackTimeouts.set(card, timeoutId);
+  return card;
 }
 
 function getOneMoreRunAnalytics() {
@@ -2016,36 +2106,31 @@ function pulseCelebrationSurface() {
 }
 
 function showMilestoneMoment({ eyebrow, title, detail = '', major = false, anchor = null, announce = '' }) {
-  const layer = document.getElementById('milestone-layer');
-  if (!layer) return;
-
-  const chip = document.createElement('section');
-  chip.className = `milestone-chip${major ? ' milestone-chip--major' : ''}`;
-
+  recordRunUpdate({ eyebrow, title, detail, major });
   const resolvedAnchor = typeof anchor === 'string' ? document.querySelector(anchor) : anchor;
-  const top = resolvedAnchor
-    ? Math.max(88, resolvedAnchor.getBoundingClientRect().top - 18)
-    : 104;
-  chip.style.top = `${top}px`;
+  const anchorLabel = resolvedAnchor?.getAttribute?.('aria-label');
+  const compactDetail = shortenNotificationDetail(detail);
 
-  chip.innerHTML = `
+  const chip = showNotificationCard(`
     <span class="milestone-chip__eyebrow">${eyebrow}</span>
     <strong class="milestone-chip__title">${title}</strong>
-    ${detail ? `<span class="milestone-chip__detail">${detail}</span>` : ''}
+    ${compactDetail ? `<span class="milestone-chip__detail">${compactDetail}</span>` : ''}
     <span class="milestone-chip__glow"></span>
-  `;
+  `, {
+    className: `milestone-chip${major ? ' milestone-chip--major' : ''}`,
+    duration: major ? 4600 : 3800,
+    major,
+  });
 
-  if (!prefersReducedMotion()) {
+  if (chip && !prefersReducedMotion()) {
     for (let i = 0; i < 6; i++) {
       const spark = document.createElement('span');
       spark.className = 'milestone-chip__spark';
       chip.appendChild(spark);
     }
   }
-
-  layer.appendChild(chip);
+  if (chip && anchorLabel) chip.dataset.anchor = anchorLabel;
   if (announce) announceMilestone(announce);
-  chip.addEventListener('animationend', () => chip.remove(), { once: true });
 }
 
 function recordRunObjective(objectiveId) {
@@ -2134,6 +2219,7 @@ function renderGameOverSummary() {
   }
 
   renderQuestRunSummary(summary);
+  renderRunUpdatesSummary(summary);
 
   objectivesList.innerHTML = '';
   if (!objectives.length) {
@@ -2517,29 +2603,21 @@ function getRoundMilestoneReward(roundsCompleted) {
 }
 
 function showCoinToast(amount, reason, options = {}) {
-  const anchor = document.querySelector('.coins-stat') || document.getElementById('score-wrap');
-  if (!anchor) return;
-
-  const toast = document.createElement('div');
   const isSpend = !!options.spend || amount < 0;
   const isReward = !isSpend && (options.celebrate || amount >= 8);
   const isMajor = !isSpend && (options.major || amount >= 16);
-  toast.className = `coin-toast${isSpend ? ' coin-toast--spend' : ''}${isReward ? ' coin-toast--reward' : ''}${isMajor ? ' coin-toast--major' : ''}`;
   const prefix = amount >= 0 ? '+' : '−';
-  toast.innerHTML = `
+  showNotificationCard(`
+    <span class="notification-card__eyebrow">${isSpend ? 'Spent' : 'Coins'}</span>
     <strong>🪙 ${prefix}${Math.abs(amount)}</strong>
     <span>${reason}</span>
     ${!isSpend && isReward ? '<span class="coin-toast__sparkles" aria-hidden="true"><i></i><i></i><i></i></span>' : ''}
-  `;
-
-  const rect = anchor.getBoundingClientRect();
-  const maxLeft = Math.max(12, window.innerWidth - 232);
-  coinToastOffset = (coinToastOffset + 1) % 3;
-  toast.style.left = `${Math.min(maxLeft, Math.max(12, rect.left - 20 + coinToastOffset * 10))}px`;
-  toast.style.top = `${Math.max(12, rect.bottom + 8 + coinToastOffset * 6)}px`;
-
-  document.body.appendChild(toast);
-  toast.addEventListener('animationend', () => toast.remove(), { once: true });
+  `, {
+    className: `coin-toast${isSpend ? ' coin-toast--spend' : ''}${isReward ? ' coin-toast--reward' : ''}${isMajor ? ' coin-toast--major' : ''}`,
+    duration: isMajor ? 4200 : 3400,
+    major: isMajor,
+    spend: isSpend,
+  });
 }
 
 function awardMissionCoins(amount, missionName = 'Mission complete') {
@@ -2695,9 +2773,9 @@ function maybeCompleteDailyChallenge() {
     major: streakCount >= 3,
   });
   showMilestoneMoment({
-    eyebrow: `Daily challenge cleared`,
+    eyebrow: 'Daily challenge',
     title: `Target ${challenge.targetScore} reached`,
-    detail: `Streak ${streakCount}. +${rewardAmount} coins added.`,
+    detail: `Streak ${streakCount} · +${rewardAmount} coins`,
     major: streakCount >= 3,
     anchor: '#score-wrap',
     announce: `Daily challenge complete. ${rewardAmount} coins awarded. ${streakCount} day streak.`,
@@ -2939,6 +3017,29 @@ function renderQuestRunSummary(summary) {
   section.hidden = !visibleChains.length;
 }
 
+function renderRunUpdatesSummary(summary) {
+  const section = document.getElementById('go-update-summary');
+  const count = document.getElementById('go-update-count');
+  const list = document.getElementById('go-update-list');
+  if (!section || !count || !list) return;
+
+  const updates = Array.isArray(summary.recentUpdates) ? summary.recentUpdates.slice().reverse() : [];
+  list.innerHTML = '';
+  section.hidden = !updates.length;
+  count.textContent = updates.length === 1 ? '1 moment' : `${updates.length} moments`;
+  if (!updates.length) return;
+
+  updates.forEach(update => {
+    const item = document.createElement('li');
+    item.className = 'run-objective';
+    item.innerHTML = `
+      <strong>${update.title}</strong>
+      <span>${[update.eyebrow, update.detail].filter(Boolean).join(' · ')}</span>
+    `;
+    list.appendChild(item);
+  });
+}
+
 function getCollectionSubtitle() {
   const ownedCount = getOwnedBlockSkins().length;
   const totalCount = COSMETIC_CATALOGUE.blockSkins.length;
@@ -3163,9 +3264,9 @@ function updateDailyMissionProgress(kind, value, mode = 'increment') {
     awardMissionCoins(reward, reason);
     showCoinToast(reward, reason, { celebrate: true, major: reward >= 18 });
     showMilestoneMoment({
-      eyebrow: 'Daily mission',
-      title: `${missionTitle} complete`,
-      detail: `+${reward} coins added to your balance.`,
+      eyebrow: 'Daily goal',
+      title: missionTitle,
+      detail: `Complete · +${reward} coins`,
       major: reward >= 18,
       anchor: '#score-wrap',
       announce: `Daily mission complete. ${missionTitle}. ${reward} coins awarded.`,
@@ -3540,6 +3641,18 @@ function getSavedGameSession() {
             coinsEarned: clampWholeNumber(raw.runSummary.coinsEarned, 0),
             completedObjectiveIds: uniqueStringList(raw.runSummary.completedObjectiveIds, []),
             questHighlightIds: uniqueStringList(raw.runSummary.questHighlightIds, []),
+            recentUpdates: Array.isArray(raw.runSummary.recentUpdates)
+              ? raw.runSummary.recentUpdates
+                  .filter(item => item && typeof item === 'object')
+                  .map(item => ({
+                    eyebrow: typeof item.eyebrow === 'string' ? item.eyebrow : '',
+                    title: typeof item.title === 'string' ? item.title : '',
+                    detail: typeof item.detail === 'string' ? item.detail : '',
+                    major: !!item.major,
+                  }))
+                  .filter(item => item.title)
+                  .slice(-5)
+              : [],
             stats: {
               regionsCleared: clampWholeNumber(raw.runSummary.stats?.regionsCleared, 0),
               biggestClear: clampWholeNumber(raw.runSummary.stats?.biggestClear, 0),
@@ -3578,8 +3691,8 @@ function restoreSavedGame() {
   score = saved.score;
   combo = saved.combo;
   gameOver = false;
-  coinToastOffset = 0;
   runSummary = saved.runSummary;
+  clearNotificationStack();
 
   initRackDOM();
   renderBoard();
@@ -4232,7 +4345,7 @@ function doClears() {
     showMilestoneMoment({
       eyebrow: 'First clear',
       title: 'Lovely start',
-      detail: 'You opened the board and made room to build on.',
+      detail: 'Board opened up',
       anchor: '#board-wrap',
       announce: 'First clear of the run.',
     });
@@ -4243,7 +4356,7 @@ function doClears() {
     showMilestoneMoment({
       eyebrow: `${total}-region clear`,
       title: 'That landed brilliantly',
-      detail: 'Big clears buy you space and keep the run settled.',
+      detail: 'A bigger clear bought you space',
       major: true,
       anchor: '#board-wrap',
       announce: `${total} regions cleared at once.`,
@@ -4369,6 +4482,7 @@ function triggerGameOver() {
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
+    clearNotificationStack();
     renderGameOverSummary();
     showOverlay('ov-gameover');
   });
@@ -4419,7 +4533,7 @@ function newRound() {
     showMilestoneMoment({
       eyebrow: 'Coin reward',
       title: `+${roundMilestoneReward} coins`,
-      detail: `${roundsCompleted} rounds completed. Nicely paced.`,
+      detail: `${roundsCompleted} rounds completed`,
       major: true,
       anchor: '#score-wrap',
       announce: `${roundMilestoneReward} coin reward for ${roundsCompleted} rounds completed.`,
@@ -4460,8 +4574,8 @@ function startNewGame(options = {}) {
   score    = 0;
   combo    = 0;
   gameOver = false;
-  coinToastOffset = 0;
   runSummary = createDefaultRunSummary();
+  clearNotificationStack();
   used     = Array(rackSize).fill(false);
   pieces   = smartPieces();
 
