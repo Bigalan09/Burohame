@@ -2494,19 +2494,72 @@ function getDailyMissionCounts() {
   return { completed, total };
 }
 
+function setTextIfPresent(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+  return element;
+}
+
+function renderDailyChallengePanels() {
+  const challenge = ensureDailyChallengeForToday();
+  const challengeStatus = getDailyChallengeStatus(challenge);
+  const title = challengeStatus.complete ? 'Today cleared' : `Target ${challenge.targetScore}`;
+  const copy = challengeStatus.complete
+    ? `Completed on ${challenge.date}. Come back tomorrow to keep the streak alive.`
+    : challengeStatus.remaining
+      ? `${challengeStatus.remaining} points left to finish today’s shared seed.`
+      : 'A fresh seeded board is ready.';
+  const bestLabel = getDailyChallengeBestLabel(challenge);
+  const dayLabel = challengeStatus.streak === 1 ? 'day' : 'days';
+  const streakLabel = `🔥 ${challengeStatus.streak} ${dayLabel} streak`;
+  const rewardLabel = `${challengeStatus.reward} coin reward`;
+
+  setTextIfPresent('dashboard-daily-card-title', title);
+  setTextIfPresent('dashboard-daily-card-copy', copy);
+  setTextIfPresent('dashboard-daily-card-target', `Target ${challenge.targetScore}`);
+  setTextIfPresent('dashboard-daily-card-best', bestLabel);
+  setTextIfPresent('dashboard-daily-card-streak', streakLabel);
+
+  setTextIfPresent('daily-page-title', title);
+  setTextIfPresent('daily-page-copy', copy);
+  setTextIfPresent('daily-page-target', `Target ${challenge.targetScore}`);
+  setTextIfPresent('daily-page-best', bestLabel);
+  setTextIfPresent('daily-page-streak', streakLabel);
+  setTextIfPresent('daily-page-reward', rewardLabel);
+
+  const playButton = document.getElementById('btn-daily-page-play');
+  if (playButton) {
+    playButton.textContent = challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge';
+  }
+
+  const infoButton = document.getElementById('btn-daily-page-info');
+  if (infoButton) {
+    infoButton.textContent = 'How it works';
+  }
+}
+
 function renderDailyMissions() {
   const missionState = ensureDailyMissionsForToday();
   const list = document.getElementById('missions-list');
   const count = document.getElementById('missions-count');
   const subtitle = document.getElementById('missions-subtitle');
   const badge = document.getElementById('mission-badge');
-  if (!list || !count || !subtitle || !badge) return;
-
   const { completed, total } = getDailyMissionCounts();
-  count.textContent = `${completed}/${total} completed`;
-  subtitle.textContent = `Fresh goals for ${missionState.date}. Rewards are paid automatically when you finish them.`;
-  badge.textContent = total ? `${completed}/${total}` : '0/0';
-  badge.hidden = !total;
+
+  if (count) count.textContent = `${completed}/${total} completed`;
+  if (subtitle) subtitle.textContent = `Fresh goals for ${missionState.date}. Rewards are paid automatically when you finish them.`;
+  if (badge) {
+    badge.textContent = total ? `${completed}/${total}` : '0/0';
+    badge.hidden = !total;
+  }
+
+  setTextIfPresent('dashboard-mission-card-title', total ? 'Today’s goals' : 'No goals today');
+  setTextIfPresent('dashboard-mission-copy', total
+    ? `${completed}/${total} missions settled so far.`
+    : 'Fresh goals are on the way.');
+  setTextIfPresent('dashboard-mission-card-progress', `${completed}/${total} completed`);
+
+  if (!list) return;
 
   list.innerHTML = '';
   if (!missionState.missions.length) {
@@ -2545,18 +2598,12 @@ function renderDailyMissions() {
     `;
     list.appendChild(item);
   }
-
-  const missionCopy = document.getElementById('dashboard-mission-copy');
-  if (missionCopy) {
-    const questStatus = getQuestBoardStatus();
-    missionCopy.textContent = `${completed}/${total} daily · ${questStatus.completed}/${questStatus.total} quest chains`;
-  }
 }
 
 function renderQuestBoard(options = {}) {
   const status = getQuestBoardStatus(options);
-  const goalsSubtitle = document.getElementById('missions-subtitle');
-  const questCount = document.getElementById('quest-count');
+  const questsSubtitle = document.getElementById('quests-subtitle');
+  const questCount = document.getElementById('quests-count');
   const questList = document.getElementById('quest-list');
 
   const renderQuestItems = (target, { compact = false } = {}) => {
@@ -2605,12 +2652,21 @@ function renderQuestBoard(options = {}) {
     });
   };
 
-  if (goalsSubtitle) {
-    goalsSubtitle.textContent = `Daily missions refresh each day. Quest chains roll over weekly and pay out bigger rewards at the end.`;
+  if (questsSubtitle) {
+    questsSubtitle.textContent = 'Ordered objectives unlock one step at a time across the week.';
   }
   if (questCount) {
     questCount.textContent = `${status.completed}/${status.total} chains complete`;
   }
+
+  const currentChain = status.chains.find(item => !item.isComplete && item.currentStep);
+  setTextIfPresent('dashboard-quest-card-title', currentChain ? currentChain.chain.title : 'Weekly routes settled');
+  setTextIfPresent('dashboard-quest-card-copy', currentChain
+    ? `${currentChain.currentStep.title} is the live step right now.`
+    : 'Every active chain is complete for this cycle.');
+  setTextIfPresent('dashboard-quest-card-progress', `${status.completed}/${status.total} chains complete`);
+  setTextIfPresent('dashboard-quest-card-timer', status.countdown);
+
   renderQuestItems(questList);
 }
 
@@ -3245,81 +3301,100 @@ function renderSessionModeBadge() {
 
 
 function renderWeeklyLadder() {
-  const title = document.getElementById('weekly-ladder-title');
-  const countdown = document.getElementById('weekly-ladder-countdown');
-  const copy = document.getElementById('weekly-ladder-copy');
-  const leagueEl = document.getElementById('weekly-ladder-league');
-  const scoreEl = document.getElementById('weekly-ladder-score');
-  const rankEl = document.getElementById('weekly-ladder-rank');
-  const bandEl = document.getElementById('weekly-ladder-band');
-  const zoneEl = document.getElementById('weekly-ladder-zone');
-  const runsEl = document.getElementById('weekly-ladder-runs');
-  const nextStepEl = document.getElementById('weekly-ladder-next-step');
-  const rewardEl = document.getElementById('weekly-ladder-reward');
-  const bestRunsEl = document.getElementById('weekly-best-runs');
-  const resultBanner = document.getElementById('weekly-result-banner');
-  const resultTitle = document.getElementById('weekly-result-title');
-  const resultCopy = document.getElementById('weekly-result-copy');
-  if (!title || !countdown || !copy || !leagueEl || !scoreEl || !rankEl || !bandEl || !zoneEl || !runsEl || !nextStepEl || !rewardEl || !bestRunsEl || !resultBanner || !resultTitle || !resultCopy) return;
-
   const status = getWeeklyLadderStatus();
   const { league, weekly, totalScore, rankLabel, rankBand, zoneLabel, countdown: timeRemaining, countedRuns, rewardPreview, promotionGap, safetyGap, projectedOutcome } = status;
-  title.textContent = `${league.badge} ${league.name} week`;
-  countdown.textContent = timeRemaining;
-  leagueEl.textContent = `${league.badge} ${league.name}`;
-  scoreEl.textContent = String(totalScore);
-  rankEl.textContent = rankLabel;
-  bandEl.textContent = rankBand;
-  zoneEl.textContent = zoneLabel;
-  runsEl.textContent = `${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} counted`;
+  const pageIds = {
+    title: 'weekly-page-title',
+    countdown: 'weekly-page-countdown',
+    copy: 'weekly-page-copy',
+    league: 'weekly-page-league',
+    score: 'weekly-page-score',
+    rank: 'weekly-page-rank',
+    band: 'weekly-page-band',
+    zone: 'weekly-page-zone',
+    runs: 'weekly-page-runs',
+    nextStep: 'weekly-page-next-step',
+    reward: 'weekly-page-reward',
+    bestRuns: 'weekly-page-best-runs',
+    resultBanner: 'weekly-page-result-banner',
+    resultTitle: 'weekly-page-result-title',
+    resultCopy: 'weekly-page-result-copy',
+  };
 
+  let copyText = '';
+  let nextStepText = '';
   if (!countedRuns.length) {
-    copy.textContent = 'Your best four runs this week count. One strong session is enough to start shaping your table.';
-    nextStepEl.textContent = 'Log a first run to join the weekly table.';
+    copyText = 'Your best four runs this week count. One strong session is enough to start shaping your table.';
+    nextStepText = 'Log a first run to join the weekly table.';
   } else if (status.zone === 'promotion' && weekly.leagueId !== 'diamond') {
-    copy.textContent = 'You are pacing for promotion if the week ended now.';
-    nextStepEl.textContent = 'Stay in the top four to climb next Monday.';
+    copyText = 'You are pacing for promotion if the week ended now.';
+    nextStepText = 'Stay in the top four to climb next Monday.';
   } else if (status.zone === 'relegation' && weekly.leagueId !== 'bronze') {
-    copy.textContent = `The table is still recoverable. ${safetyGap} more points would lift you back towards safety.`;
-    nextStepEl.textContent = 'A cleaner run or two should be enough to settle the week.';
+    copyText = `The table is still recoverable. ${safetyGap} more points would lift you back towards safety.`;
+    nextStepText = 'A cleaner run or two should be enough to settle the week.';
   } else if (promotionGap > 0 && weekly.leagueId !== 'diamond') {
-    copy.textContent = `${promotionGap} more points would move you into the promotion places.`;
-    nextStepEl.textContent = 'Only your best four runs count, so quality still matters more than volume.';
+    copyText = `${promotionGap} more points would move you into the promotion places.`;
+    nextStepText = 'Only your best four runs count, so quality still matters more than volume.';
   } else {
-    copy.textContent = 'The ladder favours calm consistency. Keep nudging your best four upwards.';
-    nextStepEl.textContent = 'One good run can still redraw the standings before the reset.';
+    copyText = 'The ladder favours calm consistency. Keep nudging your best four upwards.';
+    nextStepText = 'One good run can still redraw the standings before the reset.';
   }
 
   const rewardLine = projectedOutcome === 'promoted'
     ? `Weekly reward preview · ${rewardPreview.coins} coins plus a bonus unlock if available`
     : `Weekly reward preview · ${rewardPreview.coins} coins`;
-  rewardEl.textContent = rewardLine;
 
-  bestRunsEl.innerHTML = '';
-  const runsToShow = [...countedRuns];
-  while (runsToShow.length < WEEKLY_LADDER_COUNTED_RUNS) runsToShow.push(null);
-  runsToShow.forEach((value, index) => {
-    const chip = document.createElement('span');
-    chip.className = `dashboard-weekly__best-run${value ? '' : ' dashboard-weekly__best-run--empty'}`;
-    chip.textContent = value ? `Run ${index + 1} · ${value}` : `Run ${index + 1} open`;
-    bestRunsEl.appendChild(chip);
-  });
+  setTextIfPresent(pageIds.title, `${league.badge} ${league.name} week`);
+  setTextIfPresent(pageIds.countdown, timeRemaining);
+  setTextIfPresent(pageIds.copy, copyText);
+  setTextIfPresent(pageIds.league, `${league.badge} ${league.name}`);
+  setTextIfPresent(pageIds.score, String(totalScore));
+  setTextIfPresent(pageIds.rank, rankLabel);
+  setTextIfPresent(pageIds.band, rankBand);
+  setTextIfPresent(pageIds.zone, zoneLabel);
+  setTextIfPresent(pageIds.runs, `${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} counted`);
+  setTextIfPresent(pageIds.nextStep, nextStepText);
+  setTextIfPresent(pageIds.reward, rewardLine);
 
-  if (weekly.pendingResult?.weekId) {
-    resultBanner.hidden = false;
-    const pendingLeague = getLeagueById(weekly.pendingResult.leagueId);
-    resultTitle.textContent = weekly.pendingResult.outcome === 'promoted'
-      ? `${pendingLeague.badge} Promoted last week`
-      : weekly.pendingResult.outcome === 'relegated'
-        ? `${pendingLeague.badge} Relegated last week`
-        : `${pendingLeague.badge} Held last week`;
-    let summary = describeWeeklyResult(weekly.pendingResult);
-    if (weekly.pendingResult.unlockName) {
-      summary += ` ${weekly.pendingResult.unlockName} joined your collection.`;
+  setTextIfPresent('dashboard-weekly-card-title', `${league.badge} ${league.name} week`);
+  setTextIfPresent('dashboard-weekly-card-copy', copyText);
+  setTextIfPresent('dashboard-weekly-card-rank', rankLabel);
+  setTextIfPresent('dashboard-weekly-card-zone', zoneLabel);
+  setTextIfPresent('dashboard-weekly-card-countdown', timeRemaining);
+
+  const bestRunsEl = document.getElementById(pageIds.bestRuns);
+  if (bestRunsEl) {
+    bestRunsEl.innerHTML = '';
+    const runsToShow = [...countedRuns];
+    while (runsToShow.length < WEEKLY_LADDER_COUNTED_RUNS) runsToShow.push(null);
+    runsToShow.forEach((value, index) => {
+      const chip = document.createElement('span');
+      chip.className = `dashboard-weekly__best-run${value ? '' : ' dashboard-weekly__best-run--empty'}`;
+      chip.textContent = value ? `Run ${index + 1} · ${value}` : `Run ${index + 1} open`;
+      bestRunsEl.appendChild(chip);
+    });
+  }
+
+  const resultBanner = document.getElementById(pageIds.resultBanner);
+  const resultTitle = document.getElementById(pageIds.resultTitle);
+  const resultCopy = document.getElementById(pageIds.resultCopy);
+  if (resultBanner && resultTitle && resultCopy) {
+    if (weekly.pendingResult?.weekId) {
+      resultBanner.hidden = false;
+      const pendingLeague = getLeagueById(weekly.pendingResult.leagueId);
+      resultTitle.textContent = weekly.pendingResult.outcome === 'promoted'
+        ? `${pendingLeague.badge} Promoted last week`
+        : weekly.pendingResult.outcome === 'relegated'
+          ? `${pendingLeague.badge} Relegated last week`
+          : `${pendingLeague.badge} Held last week`;
+      let summary = describeWeeklyResult(weekly.pendingResult);
+      if (weekly.pendingResult.unlockName) {
+        summary += ` ${weekly.pendingResult.unlockName} joined your collection.`;
+      }
+      resultCopy.textContent = summary;
+    } else {
+      resultBanner.hidden = true;
     }
-    resultCopy.textContent = summary;
-  } else {
-    resultBanner.hidden = true;
   }
 }
 
@@ -3327,23 +3402,10 @@ function renderDashboard() {
   const continueBtn = document.getElementById('btn-dashboard-continue');
   const newGameBtn = document.getElementById('btn-dashboard-new');
   const intro = document.getElementById('dashboard-intro');
-  const missionCopy = document.getElementById('dashboard-mission-copy');
-  const dailyTitle = document.getElementById('daily-challenge-title');
-  const dailyCopy = document.getElementById('daily-challenge-copy');
-  const dailyTarget = document.getElementById('daily-challenge-target');
-  const dailyBest = document.getElementById('daily-challenge-best');
-  const dailyButton = document.getElementById('btn-dashboard-daily');
-  const dailyInfoButton = document.getElementById('btn-dashboard-daily-info');
-  const dailyStreakPill = document.getElementById('daily-streak-pill');
   const runState = document.getElementById('dashboard-run-state');
-  const goalsButtonLabel = document.getElementById('dashboard-goals-label');
   const hasSavedGame = !!getSavedGameSession();
   const savedGame = getSavedGameSession();
-  const missionCounts = getDailyMissionCounts();
-  const questStatus = getQuestBoardStatus();
   const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
-  const challenge = ensureDailyChallengeForToday();
-  const challengeStatus = getDailyChallengeStatus(challenge);
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
@@ -3368,44 +3430,14 @@ function renderDashboard() {
       intro.textContent = hasSavedGame ? 'Pick up where you left off.' : 'boo-roh-hah-meh';
     }
   }
-  if (missionCopy) {
-    missionCopy.textContent = missionCounts.total
-      ? `${missionCounts.completed}/${missionCounts.total} daily · ${questStatus.completed}/${questStatus.total} quest chains`
-      : `${questStatus.completed}/${questStatus.total} quest chains active`;
-  }
-  if (goalsButtonLabel) {
-    goalsButtonLabel.textContent = 'Goals board';
-  }
-  if (dailyTitle) {
-    dailyTitle.textContent = challengeStatus.complete
-      ? 'Today cleared'
-      : `Target ${challenge.targetScore}`;
-  }
-  if (dailyCopy) {
-    dailyCopy.textContent = challengeStatus.complete
-      ? `Completed on ${challenge.date}. Come back tomorrow to keep the streak alive.`
-      : challengeStatus.remaining
-        ? `${challengeStatus.remaining} points left to finish today’s shared seed.`
-        : 'A fresh seeded board is ready.';
-  }
-  if (dailyTarget) dailyTarget.textContent = `Target ${challenge.targetScore}`;
-  if (dailyBest) dailyBest.textContent = getDailyChallengeBestLabel(challenge);
-  if (dailyButton) {
-    dailyButton.textContent = challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge';
-  }
-  if (dailyInfoButton) {
-    dailyInfoButton.textContent = `${challengeStatus.reward} coin reward`;
-  }
-  if (dailyStreakPill) {
-    const dayLabel = challengeStatus.streak === 1 ? 'day' : 'days';
-    dailyStreakPill.textContent = `🔥 ${challengeStatus.streak} ${dayLabel} streak`;
-  }
 
   document.getElementById('dashboard-coins').textContent = String(getCoinBalance());
   document.getElementById('dashboard-best').textContent = String(bestScore);
   document.getElementById('dashboard-today').textContent = String(todayScore);
   document.getElementById('dashboard-finish').textContent = skin.name;
   renderSessionModeBadge();
+  renderDailyChallengePanels();
+  renderDailyMissions();
   renderQuestBoard();
   renderWeeklyLadder();
 }
@@ -3470,10 +3502,10 @@ function navigateTo(page) {
   });
 
   if (page === 'dashboard') renderDashboard();
-  if (page === 'goals') {
-    renderDailyMissions();
-    renderQuestBoard();
-  }
+  if (page === 'daily-challenge') renderDailyChallengePanels();
+  if (page === 'weekly') renderWeeklyLadder();
+  if (page === 'missions') renderDailyMissions();
+  if (page === 'quests') renderQuestBoard();
   if (page === 'shop') renderCosmeticsCollection();
   if (page === 'settings') populateSettingsPage();
   updateBottomNav();
@@ -4504,22 +4536,30 @@ document.getElementById('btn-dashboard-new').addEventListener('click', () => {
   startNewGame({ resetPromptChain: true });
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-daily').addEventListener('click', () => {
+document.getElementById('btn-dashboard-daily-page').addEventListener('click', () => {
+  navigateTo('daily-challenge');
+});
+document.getElementById('btn-dashboard-weekly-page').addEventListener('click', () => {
+  navigateTo('weekly');
+});
+document.getElementById('btn-dashboard-quests-page').addEventListener('click', () => {
+  navigateTo('quests');
+});
+document.getElementById('btn-dashboard-missions-page').addEventListener('click', () => {
+  navigateTo('missions');
+});
+document.getElementById('btn-daily-page-play').addEventListener('click', () => {
   startNewGame({ sessionType: 'daily', resetPromptChain: true });
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-daily-info').addEventListener('click', () => {
+document.getElementById('btn-daily-page-info').addEventListener('click', () => {
   const challenge = ensureDailyChallengeForToday();
   alert(`Today’s daily challenge is shared worldwide for ${challenge.date}. Reach ${challenge.targetScore} points to keep your streak and earn a coin bonus.`);
 });
-
-document.getElementById('btn-dashboard-missions').addEventListener('click', () => {
-  renderDailyMissions();
-  renderQuestBoard();
-  navigateTo('goals');
-});
-document.getElementById('btn-goals-back').addEventListener('click', () => {
-  navigateTo('dashboard');
+document.querySelectorAll('[data-back-page]').forEach(button => {
+  button.addEventListener('click', () => {
+    navigateTo(button.dataset.backPage);
+  });
 });
 document.getElementById('btn-game-back').addEventListener('click', () => {
   saveCurrentGame();
@@ -4541,10 +4581,6 @@ document.getElementById('btn-bottom-nav-play').addEventListener('click', () => {
     startNewGame({ resetPromptChain: true });
   }
   navigateTo('game');
-});
-
-document.getElementById('btn-missions-close').addEventListener('click', () => {
-  navigateTo('dashboard');
 });
 
 function handleShopAction(event) {
@@ -4653,6 +4689,9 @@ document.addEventListener('visibilitychange', () => {
   ensureDailyChallengeForToday();
   ensureQuestBoardForCurrentCycle();
   ensureWeeklyLadderForCurrentWeek();
+  renderDailyChallengePanels();
+  renderQuestBoard();
+  renderWeeklyLadder();
   renderCosmeticsCollection();
   renderDashboard();
 });

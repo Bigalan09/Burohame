@@ -125,7 +125,10 @@ html, body {
 }
 
 #app[data-page="dashboard"] .page[data-page="dashboard"],
-#app[data-page="goals"] .page[data-page="goals"],
+#app[data-page="daily-challenge"] .page[data-page="daily-challenge"],
+#app[data-page="weekly"] .page[data-page="weekly"],
+#app[data-page="quests"] .page[data-page="quests"],
+#app[data-page="missions"] .page[data-page="missions"],
 #app[data-page="game"] .page[data-page="game"],
 #app[data-page="shop"] .page[data-page="shop"],
 #app[data-page="settings"] .page[data-page="settings"],
@@ -289,6 +292,121 @@ html, body {
   font-size: clamp(22px, 6vw, 26px);
   line-height: 1;
   color: var(--text);
+}
+
+.dashboard-retention {
+  margin-top: 18px;
+}
+
+.dashboard-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-section-head__kicker,
+.retention-link__kicker {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--accent-dk) 62%, var(--text-2));
+}
+
+.dashboard-section-head h2 {
+  margin-top: 6px;
+  font-size: clamp(24px, 6vw, 28px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.dashboard-section-head__note {
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  font-size: 12px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent-dk) 72%, var(--text));
+}
+
+.retention-links {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.retention-link {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 12%, transparent), transparent 54%),
+    color-mix(in srgb, var(--accent) 6%, var(--bg-card));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.retention-link strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 18px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.retention-link p {
+  margin-top: 6px;
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.retention-link__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.retention-link__meta span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  color: color-mix(in srgb, var(--accent-dk) 70%, var(--text));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.retention-link--daily {
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 16%, transparent), transparent 50%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, var(--bg-card)) 0%, color-mix(in srgb, var(--accent) 4%, var(--bg-card)) 100%);
+}
+
+.retention-link--weekly {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 16%, transparent), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--bg-card)) 0%, color-mix(in srgb, var(--accent) 3%, var(--bg-card)) 100%);
+}
+
+.page-panel--retention {
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-card));
+}
+
+.retention-back-btn {
+  margin-top: 16px;
 }
 
 
@@ -498,6 +616,13 @@ html, body {
   font-size: 10px;
   font-weight: 800;
   line-height: 1;
+}
+
+.retention-link__meta .dashboard-mission-pill {
+  position: static;
+  transform: none;
+  right: auto;
+  top: auto;
 }
 
 .dashboard-challenge {
