@@ -286,6 +286,11 @@
         </div>
       </header>
 
+      <div id="game-banner" class="game-banner" hidden aria-live="polite" aria-atomic="true">
+        <span id="game-banner-kicker" class="game-banner__kicker">Update</span>
+        <strong id="game-banner-title" class="game-banner__title">A quick update appears here.</strong>
+      </div>
+
       <main id="main">
         <div id="board-wrap">
           <div id="board"></div>
@@ -489,8 +494,8 @@
             <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <h2>Game Over</h2>
-        <p class="summary-intro">Your run rewards are ready.</p>
+        <h2>Run complete</h2>
+        <p class="summary-intro">Ready for another go?</p>
         <div class="run-summary" aria-label="Run rewards summary">
           <div class="summary-stat summary-stat--score">
             <span class="summary-label">Score</span>
@@ -504,32 +509,9 @@
             <span class="summary-label">Coins this run</span>
             <strong id="go-coins-earned">0</strong>
           </div>
-          <div class="summary-stat">
-            <span class="summary-label">Total coins</span>
-            <strong id="go-coin-total">0</strong>
-          </div>
         </div>
-        <section class="run-objectives" aria-labelledby="go-objectives-title">
-          <div class="run-objectives__header">
-            <h3 id="go-objectives-title">Completed objectives</h3>
-            <span id="go-objective-count" class="run-objectives__count">0 cleared</span>
-          </div>
-          <ul id="go-objectives-list" class="run-objectives__list"></ul>
-        </section>
-        <section class="run-objectives" id="go-quest-summary" aria-labelledby="go-quest-title">
-          <div class="run-objectives__header">
-            <h3 id="go-quest-title">Quest chain progress</h3>
-            <span id="go-quest-count" class="run-objectives__count">0 updated this run</span>
-          </div>
-          <ul id="go-quest-list" class="run-objectives__list"></ul>
-        </section>
-        <section class="run-objectives" id="go-update-summary" hidden aria-labelledby="go-update-title">
-          <div class="run-objectives__header">
-            <h3 id="go-update-title">Run updates</h3>
-            <span id="go-update-count" class="run-objectives__count">0 moments</span>
-          </div>
-          <ul id="go-update-list" class="run-objectives__list"></ul>
-        </section>
+        <p class="summary-total">Total coins <strong id="go-coin-total">0</strong></p>
+        <p class="summary-note" id="go-summary-note" hidden>One tidy line for this run.</p>
         <section class="summary-continue" id="go-continue-prompt" hidden aria-labelledby="go-continue-title">
           <span class="summary-continue__eyebrow" id="go-continue-eyebrow">One more run</span>
           <h3 id="go-continue-title">A calm nudge for the next run</h3>
@@ -586,7 +568,6 @@
     </nav>
   </div>
 
-  <div id="notification-layer" aria-hidden="true"></div>
   <div id="milestone-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
   <script src="app.js"></script>

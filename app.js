@@ -181,7 +181,9 @@ let progressionState = null;
 let runSummary = null;
 let currentPage = 'dashboard';
 let currentSessionType = 'standard';
-let notificationStackTimeouts = new WeakMap();
+let gameBannerQueue = [];
+let activeGameBanner = null;
+let gameBannerTimer = 0;
 let dailyChallengeState = {
   date: '',
   seed: 0,
@@ -193,7 +195,6 @@ const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
 const PROGRESSION_STATE_VERSION = 8;
-const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
@@ -1789,93 +1790,75 @@ function ensureRunSummary() {
   return runSummary;
 }
 
-function createNotificationStack() {
-  const layer = document.getElementById('notification-layer');
-  if (!layer) return null;
+function recordRunUpdate({ title = '', detail = '' }) {
+  const nextTitle = String(title || '').trim();
+  if (!nextTitle) return;
 
-  let stack = layer.querySelector('.notification-stack');
-  if (!stack) {
-    stack = document.createElement('div');
-    stack.className = 'notification-stack';
-    layer.appendChild(stack);
-  }
-  return stack;
-}
-
-function shortenNotificationDetail(detail) {
-  const text = String(detail || '').trim();
-  if (!text) return '';
-  if (text.length <= 78) return text;
-  return `${text.slice(0, 75).trimEnd()}…`;
-}
-
-function recordRunUpdate({ eyebrow = '', title = '', detail = '', major = false }) {
   const summary = ensureRunSummary();
-  const nextUpdate = {
-    eyebrow: String(eyebrow || '').trim(),
-    title: String(title || '').trim(),
-    detail: shortenNotificationDetail(detail),
-    major: !!major,
+  const nextDetail = String(detail || '').trim();
+  const latest = summary.recentUpdates[summary.recentUpdates.length - 1];
+  if (latest && latest.title === nextTitle && latest.detail === nextDetail) return;
+
+  summary.recentUpdates = [...summary.recentUpdates, {
+    title: nextTitle,
+    detail: nextDetail,
+  }].slice(-4);
+}
+
+function clearGameBannerQueue() {
+  gameBannerQueue = [];
+  activeGameBanner = null;
+  if (gameBannerTimer) {
+    window.clearTimeout(gameBannerTimer);
+    gameBannerTimer = 0;
+  }
+
+  const banner = document.getElementById('game-banner');
+  if (banner) banner.hidden = true;
+}
+
+function renderNextGameBanner() {
+  if (activeGameBanner || !gameBannerQueue.length || currentPage !== 'game' || gameOver) return;
+
+  const banner = document.getElementById('game-banner');
+  const kicker = document.getElementById('game-banner-kicker');
+  const title = document.getElementById('game-banner-title');
+  if (!banner || !kicker || !title) return;
+
+  activeGameBanner = gameBannerQueue.shift();
+  kicker.textContent = activeGameBanner.kicker;
+  title.textContent = activeGameBanner.title;
+  banner.hidden = false;
+
+  gameBannerTimer = window.setTimeout(() => {
+    activeGameBanner = null;
+    banner.hidden = true;
+    gameBannerTimer = 0;
+    renderNextGameBanner();
+  }, 1000);
+}
+
+function enqueueGameBanner({ kicker = 'Update', title = '', announce = '' }) {
+  const nextTitle = String(title || '').trim();
+  if (!nextTitle) return;
+
+  if (announce) announceMilestone(announce);
+  if (currentPage !== 'game' || gameOver) return;
+
+  const nextBanner = {
+    kicker: String(kicker || 'Update').trim(),
+    title: nextTitle,
   };
-
-  if (!nextUpdate.title) return;
-
-  const previous = summary.recentUpdates?.[summary.recentUpdates.length - 1];
+  const latestQueued = gameBannerQueue[gameBannerQueue.length - 1];
   if (
-    previous &&
-    previous.eyebrow === nextUpdate.eyebrow &&
-    previous.title === nextUpdate.title &&
-    previous.detail === nextUpdate.detail
+    (activeGameBanner && activeGameBanner.kicker === nextBanner.kicker && activeGameBanner.title === nextBanner.title) ||
+    (latestQueued && latestQueued.kicker === nextBanner.kicker && latestQueued.title === nextBanner.title)
   ) {
     return;
   }
 
-  summary.recentUpdates = [...(summary.recentUpdates || []), nextUpdate].slice(-5);
-}
-
-function dismissNotificationCard(card) {
-  if (!card) return;
-  const timeoutId = notificationStackTimeouts.get(card);
-  if (timeoutId) {
-    window.clearTimeout(timeoutId);
-    notificationStackTimeouts.delete(card);
-  }
-  card.remove();
-}
-
-function clearNotificationStack() {
-  const layer = document.getElementById('notification-layer');
-  const stack = layer?.querySelector('.notification-stack');
-  if (!stack) return;
-  [...stack.children].forEach(child => dismissNotificationCard(child));
-}
-
-function showNotificationCard(markup, {
-  className = '',
-  duration = 3600,
-  major = false,
-  spend = false,
-} = {}) {
-  if (gameOver) return null;
-
-  const stack = createNotificationStack();
-  if (!stack) return null;
-
-  const card = document.createElement('section');
-  card.className = className.trim();
-  if (major) card.classList.add('notification-card--major');
-  if (spend) card.classList.add('notification-card--spend');
-  card.style.setProperty('--notification-duration', `${duration}ms`);
-  card.innerHTML = `${markup}<span class="notification-card__meter" aria-hidden="true"></span>`;
-
-  stack.prepend(card);
-  while (stack.children.length > 3) {
-    dismissNotificationCard(stack.lastElementChild);
-  }
-
-  const timeoutId = window.setTimeout(() => dismissNotificationCard(card), duration);
-  notificationStackTimeouts.set(card, timeoutId);
-  return card;
+  gameBannerQueue.push(nextBanner);
+  renderNextGameBanner();
 }
 
 function getOneMoreRunAnalytics() {
@@ -2081,10 +2064,6 @@ function chooseOneMoreRunPrompt(summary) {
   return prompt;
 }
 
-function prefersReducedMotion() {
-  return REDUCED_MOTION_QUERY.matches;
-}
-
 function announceMilestone(message) {
   const liveRegion = document.getElementById('milestone-live');
   if (!liveRegion) return;
@@ -2106,31 +2085,14 @@ function pulseCelebrationSurface() {
 }
 
 function showMilestoneMoment({ eyebrow, title, detail = '', major = false, anchor = null, announce = '' }) {
-  recordRunUpdate({ eyebrow, title, detail, major });
-  const resolvedAnchor = typeof anchor === 'string' ? document.querySelector(anchor) : anchor;
-  const anchorLabel = resolvedAnchor?.getAttribute?.('aria-label');
-  const compactDetail = shortenNotificationDetail(detail);
-
-  const chip = showNotificationCard(`
-    <span class="milestone-chip__eyebrow">${eyebrow}</span>
-    <strong class="milestone-chip__title">${title}</strong>
-    ${compactDetail ? `<span class="milestone-chip__detail">${compactDetail}</span>` : ''}
-    <span class="milestone-chip__glow"></span>
-  `, {
-    className: `milestone-chip${major ? ' milestone-chip--major' : ''}`,
-    duration: major ? 4600 : 3800,
-    major,
+  void major;
+  void anchor;
+  recordRunUpdate({ title, detail });
+  enqueueGameBanner({
+    kicker: eyebrow,
+    title: detail ? `${title} · ${detail}` : title,
+    announce,
   });
-
-  if (chip && !prefersReducedMotion()) {
-    for (let i = 0; i < 6; i++) {
-      const spark = document.createElement('span');
-      spark.className = 'milestone-chip__spark';
-      chip.appendChild(spark);
-    }
-  }
-  if (chip && anchorLabel) chip.dataset.anchor = anchorLabel;
-  if (announce) announceMilestone(announce);
 }
 
 function recordRunObjective(objectiveId) {
@@ -2157,9 +2119,8 @@ function getCompletedRunObjectives() {
 function renderGameOverSummary() {
   const summary = ensureRunSummary();
   const objectives = getCompletedRunObjectives();
-  const objectivesList = document.getElementById('go-objectives-list');
-  const objectiveCount = document.getElementById('go-objective-count');
   const intro = document.querySelector('.summary-intro');
+  const summaryNote = document.getElementById('go-summary-note');
   const continuePrompt = document.getElementById('go-continue-prompt');
   const continueEyebrow = document.getElementById('go-continue-eyebrow');
   const continueTitle = document.getElementById('go-continue-title');
@@ -2175,14 +2136,34 @@ function renderGameOverSummary() {
   document.getElementById('go-best').textContent = String(bestScore);
   document.getElementById('go-coins-earned').textContent = `+${summary.coinsEarned}`;
   document.getElementById('go-coin-total').textContent = String(getCoinBalance());
-  objectiveCount.textContent = objectives.length === 1 ? '1 cleared' : `${objectives.length} cleared`;
   if (intro) {
     intro.textContent = isDailyChallengeSession()
-      ? 'Your daily challenge result is locked in.'
-      : 'Your run rewards are ready.';
+      ? 'Today’s score is locked in.'
+      : 'Ready for another go?';
   }
   if (dashboardButton) {
     dashboardButton.setAttribute('aria-label', isDailyChallengeSession() ? 'Back to dashboard from daily challenge summary' : 'Back to dashboard');
+  }
+  if (summaryNote) {
+    const latestUpdate = summary.recentUpdates[summary.recentUpdates.length - 1];
+    const extraCount = Math.max(0, summary.recentUpdates.length - 1);
+    if (latestUpdate) {
+      summaryNote.hidden = false;
+      summaryNote.textContent = extraCount
+        ? `${latestUpdate.title}. ${extraCount} more update${extraCount === 1 ? '' : 's'} this run.`
+        : latestUpdate.detail
+          ? `${latestUpdate.title}. ${latestUpdate.detail}.`
+          : latestUpdate.title;
+    } else if (summary.questHighlightIds.length) {
+      summaryNote.hidden = false;
+      summaryNote.textContent = `${summary.questHighlightIds.length} quest chain${summary.questHighlightIds.length === 1 ? '' : 's'} moved on this run.`;
+    } else if (objectives.length) {
+      summaryNote.hidden = false;
+      summaryNote.textContent = `${objectives.length} objective${objectives.length === 1 ? '' : 's'} cleared this run.`;
+    } else {
+      summaryNote.hidden = true;
+      summaryNote.textContent = '';
+    }
   }
   if (continuePrompt && continueEyebrow && continueTitle && continueCopy && continueMeta && nextRunButton) {
     const prompt = summary.continuePrompt;
@@ -2216,25 +2197,6 @@ function renderGameOverSummary() {
     } else {
       dailySummary.hidden = true;
     }
-  }
-
-  renderQuestRunSummary(summary);
-  renderRunUpdatesSummary(summary);
-
-  objectivesList.innerHTML = '';
-  if (!objectives.length) {
-    const emptyItem = document.createElement('li');
-    emptyItem.className = 'run-objective run-objective--empty';
-    emptyItem.textContent = 'No objectives completed this run. Your next run can still earn coins and milestones.';
-    objectivesList.appendChild(emptyItem);
-    return;
-  }
-
-  for (const objective of objectives) {
-    const item = document.createElement('li');
-    item.className = 'run-objective';
-    item.innerHTML = `<strong>${objective.label}</strong><span>${objective.description}</span>`;
-    objectivesList.appendChild(item);
   }
 }
 
@@ -2604,19 +2566,10 @@ function getRoundMilestoneReward(roundsCompleted) {
 
 function showCoinToast(amount, reason, options = {}) {
   const isSpend = !!options.spend || amount < 0;
-  const isReward = !isSpend && (options.celebrate || amount >= 8);
-  const isMajor = !isSpend && (options.major || amount >= 16);
   const prefix = amount >= 0 ? '+' : '−';
-  showNotificationCard(`
-    <span class="notification-card__eyebrow">${isSpend ? 'Spent' : 'Coins'}</span>
-    <strong>🪙 ${prefix}${Math.abs(amount)}</strong>
-    <span>${reason}</span>
-    ${!isSpend && isReward ? '<span class="coin-toast__sparkles" aria-hidden="true"><i></i><i></i><i></i></span>' : ''}
-  `, {
-    className: `coin-toast${isSpend ? ' coin-toast--spend' : ''}${isReward ? ' coin-toast--reward' : ''}${isMajor ? ' coin-toast--major' : ''}`,
-    duration: isMajor ? 4200 : 3400,
-    major: isMajor,
-    spend: isSpend,
+  enqueueGameBanner({
+    kicker: isSpend ? 'Spent' : 'Coins',
+    title: `🪙 ${prefix}${Math.abs(amount)} · ${reason}`,
   });
 }
 
@@ -2769,6 +2722,7 @@ function maybeCompleteDailyChallenge() {
     return state;
   });
   awardCoins(rewardAmount, `Daily challenge day ${streakCount}`, {
+    silent: true,
     celebrate: true,
     major: streakCount >= 3,
   });
@@ -2981,63 +2935,6 @@ function renderQuestBoard(options = {}) {
   setTextIfPresent('dashboard-quest-card-timer', status.countdown);
 
   renderQuestItems(questList);
-}
-
-function renderQuestRunSummary(summary) {
-  const section = document.getElementById('go-quest-summary');
-  const count = document.getElementById('go-quest-count');
-  const list = document.getElementById('go-quest-list');
-  if (!section || !count || !list) return;
-
-  const changedIds = Array.isArray(summary.questHighlightIds) ? summary.questHighlightIds : [];
-  const status = getQuestBoardStatus({ changedChainIds: changedIds });
-  const prioritised = [...status.chains].sort((left, right) => {
-    if (left.isChanged !== right.isChanged) return left.isChanged ? -1 : 1;
-    if (left.isComplete !== right.isComplete) return left.isComplete ? 1 : -1;
-    return left.chain.title.localeCompare(right.chain.title);
-  });
-
-  list.innerHTML = '';
-  const visibleChains = prioritised.slice(0, 3);
-  count.textContent = changedIds.length
-    ? `${changedIds.length} updated this run`
-    : `${status.completed}/${status.total} complete this week`;
-
-  visibleChains.forEach(item => {
-    const entry = document.createElement('li');
-    entry.className = `run-objective quest-objective${item.isChanged ? ' quest-objective--changed' : ''}`;
-    if (item.isComplete) {
-      entry.innerHTML = `<strong>${item.chain.title}</strong><span>Chain complete · ${item.finalRewardText}</span>`;
-    } else {
-      entry.innerHTML = `<strong>${item.chain.title} · ${item.currentStep.title}</strong><span>${getQuestStepProgressText(item.currentStep, item.currentProgress)} · Next ${item.nextStep ? item.nextStep.title : 'finish chain'}</span>`;
-    }
-    list.appendChild(entry);
-  });
-
-  section.hidden = !visibleChains.length;
-}
-
-function renderRunUpdatesSummary(summary) {
-  const section = document.getElementById('go-update-summary');
-  const count = document.getElementById('go-update-count');
-  const list = document.getElementById('go-update-list');
-  if (!section || !count || !list) return;
-
-  const updates = Array.isArray(summary.recentUpdates) ? summary.recentUpdates.slice().reverse() : [];
-  list.innerHTML = '';
-  section.hidden = !updates.length;
-  count.textContent = updates.length === 1 ? '1 moment' : `${updates.length} moments`;
-  if (!updates.length) return;
-
-  updates.forEach(update => {
-    const item = document.createElement('li');
-    item.className = 'run-objective';
-    item.innerHTML = `
-      <strong>${update.title}</strong>
-      <span>${[update.eyebrow, update.detail].filter(Boolean).join(' · ')}</span>
-    `;
-    list.appendChild(item);
-  });
 }
 
 function getCollectionSubtitle() {
@@ -3262,7 +3159,6 @@ function updateDailyMissionProgress(kind, value, mode = 'increment') {
   renderDailyMissions();
   rewardsToGrant.forEach(({ reward, reason, missionTitle }) => {
     awardMissionCoins(reward, reason);
-    showCoinToast(reward, reason, { celebrate: true, major: reward >= 18 });
     showMilestoneMoment({
       eyebrow: 'Daily goal',
       title: missionTitle,
@@ -3645,13 +3541,11 @@ function getSavedGameSession() {
               ? raw.runSummary.recentUpdates
                   .filter(item => item && typeof item === 'object')
                   .map(item => ({
-                    eyebrow: typeof item.eyebrow === 'string' ? item.eyebrow : '',
                     title: typeof item.title === 'string' ? item.title : '',
                     detail: typeof item.detail === 'string' ? item.detail : '',
-                    major: !!item.major,
                   }))
                   .filter(item => item.title)
-                  .slice(-5)
+                  .slice(-4)
               : [],
             stats: {
               regionsCleared: clampWholeNumber(raw.runSummary.stats?.regionsCleared, 0),
@@ -3691,8 +3585,8 @@ function restoreSavedGame() {
   score = saved.score;
   combo = saved.combo;
   gameOver = false;
+  clearGameBannerQueue();
   runSummary = saved.runSummary;
-  clearNotificationStack();
 
   initRackDOM();
   renderBoard();
@@ -3940,6 +3834,7 @@ function updateBottomNav() {
 }
 
 function navigateTo(page) {
+  if (page !== 'game') clearGameBannerQueue();
   currentPage = page;
   document.getElementById('app').dataset.page = page;
   document.querySelectorAll('.page').forEach(section => {
@@ -4482,7 +4377,7 @@ function triggerGameOver() {
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
-    clearNotificationStack();
+    clearGameBannerQueue();
     renderGameOverSummary();
     showOverlay('ov-gameover');
   });
@@ -4527,6 +4422,7 @@ function newRound() {
   const roundMilestoneReward = getRoundMilestoneReward(roundsCompleted);
   if (roundMilestoneReward) {
     awardCoins(roundMilestoneReward, `${roundsCompleted} rounds completed`, {
+      silent: true,
       celebrate: true,
       major: true,
     });
@@ -4574,8 +4470,8 @@ function startNewGame(options = {}) {
   score    = 0;
   combo    = 0;
   gameOver = false;
+  clearGameBannerQueue();
   runSummary = createDefaultRunSummary();
-  clearNotificationStack();
   used     = Array(rackSize).fill(false);
   pieces   = smartPieces();
 
