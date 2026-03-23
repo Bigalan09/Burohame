@@ -9,7 +9,18 @@ When you are asked to make repository changes, follow this sequence unless the u
 3. Run the relevant checks for the changes you made.
 4. Commit your changes with a clear message.
 5. Push the branch to `origin`.
-6. Open a GitHub pull request from your branch to `main` on `origin`.
+6. Reuse the existing GitHub pull request for that branch if one already exists. Only open a new pull request when there is no suitable existing pull request to update.
+
+### Codex Web and cloud PR handling
+
+To avoid duplicate pull requests and UI confusion, use these rules whenever Codex Web or Codex cloud is involved:
+
+- Treat the branch as the source of truth. A branch should map to a single active pull request unless the user explicitly asks for a replacement pull request.
+- Before opening a pull request, check whether `origin` already has an open pull request for the current branch. If it does, update and reuse that pull request instead of creating another one.
+- If Codex Web shows a manual "Create PR" option in the UI, do not create an additional pull request when the branch already has one. Mention that the existing pull request should be reused.
+- If an earlier agent already created a pull request, continue pushing commits to the same branch and keep that pull request as the review thread.
+- Only hand PR creation back to the user when automation cannot complete it. In that case, explicitly say whether an existing pull request already exists and instruct the user to reuse it rather than opening a duplicate.
+- Do not end a task by both creating a pull request yourself and asking the user to create another one from the UI. Choose one path only.
 
 ## Working expectations
 
