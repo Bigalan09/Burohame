@@ -81,6 +81,24 @@
           </div>
         </section>
 
+        <section class="dashboard-mastery" aria-label="Mastery track">
+          <div class="dashboard-mastery__head">
+            <div>
+              <span class="dashboard-mastery__kicker">Mastery track</span>
+              <h2 id="dashboard-mastery-level">Level 1</h2>
+            </div>
+            <span class="dashboard-mastery__pill">Permanent unlocks</span>
+          </div>
+          <p class="dashboard-mastery__copy" id="dashboard-mastery-progress">Every run adds focus towards the next unlock.</p>
+          <div class="dashboard-mastery__bar" aria-hidden="true">
+            <span id="dashboard-mastery-bar"></span>
+          </div>
+          <div class="dashboard-mastery__meta">
+            <span id="dashboard-mastery-title">Current title · Quiet starter</span>
+            <span id="dashboard-mastery-next">Next · Colourway</span>
+          </div>
+        </section>
+
         <section class="dashboard-weekly" aria-label="Weekly ladder and leagues">
           <div class="dashboard-weekly__head">
             <div>
@@ -189,6 +207,22 @@
             <p class="page-intro">Spend coins on colourways and finishes, then equip your favourites for the next run.</p>
           </div>
         </header>
+
+        <div class="page-panel page-panel--shop page-panel--mastery">
+          <div class="collection-head collection-head--mastery">
+            <div>
+              <h3>Mastery track</h3>
+              <p>Every run adds focus. Rewards unlock automatically at milestone levels.</p>
+            </div>
+            <span class="missions-count" id="mastery-level">Level 1</span>
+          </div>
+          <div class="mastery-track-bar" aria-hidden="true">
+            <span id="mastery-progress-bar"></span>
+          </div>
+          <p class="mastery-track-copy" id="mastery-progress-copy">0 focus to the next reward.</p>
+          <p class="mastery-track-next" id="mastery-next-reward">Next reward · Colourway</p>
+          <div id="mastery-road-list" class="mastery-road-list" aria-live="polite"></div>
+        </div>
 
         <div class="page-panel page-panel--shop">
           <div class="collection-head">
@@ -375,6 +409,19 @@
             <strong id="go-coin-total">0</strong>
           </div>
         </div>
+        <section class="summary-mastery" id="go-mastery-summary" aria-labelledby="go-mastery-title">
+          <div class="summary-mastery__head">
+            <div>
+              <h3 id="go-mastery-title">Mastery progress</h3>
+              <p id="go-mastery-copy">Run complete +10</p>
+            </div>
+            <strong id="go-mastery-earned">+0</strong>
+          </div>
+          <div class="summary-mastery__bar" aria-hidden="true">
+            <span id="go-mastery-bar"></span>
+          </div>
+          <p id="go-mastery-next" class="summary-mastery__next">Next reward · Colourway</p>
+        </section>
         <section class="run-objectives" aria-labelledby="go-objectives-title">
           <div class="run-objectives__header">
             <h3 id="go-objectives-title">Completed objectives</h3>

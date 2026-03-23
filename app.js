@@ -192,7 +192,7 @@ let dailyChallengeState = {
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 5;
+const PROGRESSION_STATE_VERSION = 6;
 const REDUCED_MOTION_QUERY = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
@@ -205,6 +205,8 @@ const WEEKLY_LADDER_COUNTED_RUNS = 4;
 const WEEKLY_COHORT_SIZE = 20;
 const WEEKLY_PROMOTION_SLOTS = 4;
 const WEEKLY_RELEGATION_SLOTS = 4;
+const MASTERY_LEVEL_CAP = 30;
+const MASTERY_BASE_POINTS = 10;
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
   multiClearBonus: 0,
@@ -453,6 +455,80 @@ const BLOCK_SKIN_LOOKUP = Object.freeze(
     return acc;
   }, {})
 );
+
+const TITLE_CATALOGUE = Object.freeze([
+  {
+    id: 'starter',
+    name: 'Quiet starter',
+    description: 'Your first calm mastery title.',
+  },
+  {
+    id: 'steady-hands',
+    name: 'Steady hands',
+    description: 'A title for settled, consistent runs.',
+  },
+  {
+    id: 'quiet-climber',
+    name: 'Quiet climber',
+    description: 'A title for players who keep edging upwards.',
+  },
+  {
+    id: 'clear-eyed',
+    name: 'Clear-eyed',
+    description: 'A title for players who see the board cleanly.',
+  },
+  {
+    id: 'quiet-legend',
+    name: 'Quiet legend',
+    description: 'The long-term title at the end of the mastery road.',
+  },
+]);
+const TITLE_LOOKUP = Object.freeze(
+  TITLE_CATALOGUE.reduce((acc, title) => {
+    acc[title.id] = title;
+    return acc;
+  }, {})
+);
+const MASTERY_REWARDS = Object.freeze([
+  { level: 2, id: 'mastery-blue', type: 'colorway', ref: 'blue', name: 'Blue Tide' },
+  { level: 4, id: 'mastery-title-steady', type: 'title', ref: 'steady-hands', name: 'Steady hands' },
+  { level: 6, id: 'mastery-satin', type: 'finish', ref: 'satin', name: 'Satin' },
+  { level: 8, id: 'mastery-green', type: 'colorway', ref: 'green', name: 'Green Grove' },
+  { level: 10, id: 'mastery-title-climber', type: 'title', ref: 'quiet-climber', name: 'Quiet climber' },
+  { level: 12, id: 'mastery-velvet', type: 'finish', ref: 'velvet', name: 'Velvet' },
+  { level: 14, id: 'mastery-purple', type: 'colorway', ref: 'purple', name: 'Purple Pulse' },
+  { level: 16, id: 'mastery-frost', type: 'finish', ref: 'frost', name: 'Frost' },
+  { level: 18, id: 'mastery-teal', type: 'colorway', ref: 'teal', name: 'Teal Drift' },
+  { level: 20, id: 'mastery-title-clear', type: 'title', ref: 'clear-eyed', name: 'Clear-eyed' },
+  { level: 22, id: 'mastery-prism', type: 'finish', ref: 'prism', name: 'Prism' },
+  { level: 24, id: 'mastery-random', type: 'colorway', ref: 'random', name: 'Shuffle Glow' },
+  { level: 26, id: 'mastery-ember', type: 'finish', ref: 'ember', name: 'Ember' },
+  { level: 28, id: 'mastery-pink', type: 'colorway', ref: 'pink', name: 'Pink Pop' },
+  { level: 30, id: 'mastery-title-legend', type: 'title', ref: 'quiet-legend', name: 'Quiet legend' },
+]);
+const MASTERY_REWARD_LOOKUP = Object.freeze(
+  MASTERY_REWARDS.reduce((acc, reward) => {
+    acc[reward.id] = reward;
+    return acc;
+  }, {})
+);
+
+function getMasteryRewardLabel(reward) {
+  if (!reward) return 'Mastery complete';
+  if (reward.type === 'title') return `Title · ${reward.name}`;
+  if (reward.type === 'finish') return `Finish · ${reward.name}`;
+  return `Colourway · ${reward.name}`;
+}
+
+function getMasteryRewardForLevel(level) {
+  return MASTERY_REWARDS.find(reward => reward.level === level) || null;
+}
+
+function getMasteryRewardForCollection(collection, itemId) {
+  const mappedType = collection === 'finish' ? 'finish' : collection === 'colorway' ? 'colorway' : '';
+  return MASTERY_REWARDS.find(reward => reward.type === mappedType && reward.ref === itemId) || null;
+}
+
 const RUN_OBJECTIVES = Object.freeze([
   {
     id: 'first-clear',
@@ -1030,6 +1106,14 @@ function createDefaultProgressionState() {
       ownedBlockSkins: ['classic'],
       ownedColorways: ['orange'],
     },
+    profile: {
+      equippedTitle: 'starter',
+      ownedTitles: ['starter'],
+    },
+    mastery: {
+      totalPoints: 0,
+      unlockedRewardIds: [],
+    },
     dailyMissions: {
       date: '',
       missions: [],
@@ -1092,6 +1176,8 @@ function sanitiseProgressionState(rawState) {
   const coins = src.coins && typeof src.coins === 'object' ? src.coins : {};
   const unlocks = src.unlocks && typeof src.unlocks === 'object' ? src.unlocks : {};
   const cosmetics = src.cosmetics && typeof src.cosmetics === 'object' ? src.cosmetics : {};
+  const profile = src.profile && typeof src.profile === 'object' ? src.profile : {};
+  const mastery = src.mastery && typeof src.mastery === 'object' ? src.mastery : {};
   const streak = src.streak && typeof src.streak === 'object' ? src.streak : {};
   const ownedThemes = (() => {
     const owned = uniqueStringList(unlocks.ownedThemes, defaults.unlocks.ownedThemes);
@@ -1103,6 +1189,9 @@ function sanitiseProgressionState(rawState) {
   const ownedColorways = uniqueStringList(cosmetics.ownedColorways, defaults.cosmetics.ownedColorways)
     .filter(id => COLORWAY_LOOKUP[id]);
   if (!ownedColorways.includes('orange')) ownedColorways.unshift('orange');
+  const ownedTitles = uniqueStringList(profile.ownedTitles, defaults.profile.ownedTitles)
+    .filter(id => TITLE_LOOKUP[id]);
+  if (!ownedTitles.includes('starter')) ownedTitles.unshift('starter');
   const equippedTheme = typeof unlocks.equippedTheme === 'string' && unlocks.equippedTheme.trim() !== ''
     ? unlocks.equippedTheme
     : defaults.unlocks.equippedTheme;
@@ -1111,6 +1200,13 @@ function sanitiseProgressionState(rawState) {
     && ownedBlockSkins.includes(cosmetics.equippedBlockSkin)
     ? cosmetics.equippedBlockSkin
     : defaults.cosmetics.equippedBlockSkin;
+  const equippedTitle = typeof profile.equippedTitle === 'string'
+    && profile.equippedTitle.trim() !== ''
+    && ownedTitles.includes(profile.equippedTitle)
+    ? profile.equippedTitle
+    : defaults.profile.equippedTitle;
+  const unlockedRewardIds = uniqueStringList(mastery.unlockedRewardIds, defaults.mastery.unlockedRewardIds)
+    .filter(id => MASTERY_REWARD_LOOKUP[id]);
 
   return {
     version: PROGRESSION_STATE_VERSION,
@@ -1129,6 +1225,14 @@ function sanitiseProgressionState(rawState) {
       ownedBlockSkins,
       ownedColorways,
     },
+    profile: {
+      equippedTitle,
+      ownedTitles,
+    },
+    mastery: {
+      totalPoints: clampWholeNumber(mastery.totalPoints, defaults.mastery.totalPoints),
+      unlockedRewardIds,
+    },
     dailyMissions: sanitiseMissionState(src.dailyMissions),
     dailyChallenge: sanitiseDailyChallengeState(src.dailyChallenge),
     streak: {
@@ -1146,6 +1250,9 @@ function createDefaultRunSummary() {
   return {
     finalScore: 0,
     coinsEarned: 0,
+    masteryEarned: 0,
+    masteryBreakdown: [],
+    masteryUnlockedRewardId: '',
     completedObjectiveIds: [],
     stats: {
       regionsCleared: 0,
@@ -1239,6 +1346,10 @@ function getCompletedRunObjectives() {
   return RUN_OBJECTIVES.filter(objective => summary.completedObjectiveIds.includes(objective.id));
 }
 
+function formatMasteryBreakdown(summary) {
+  return summary.masteryBreakdown.map(entry => `${entry.label} +${entry.points}`).join(' · ');
+}
+
 function renderGameOverSummary() {
   const summary = ensureRunSummary();
   const objectives = getCompletedRunObjectives();
@@ -1248,6 +1359,11 @@ function renderGameOverSummary() {
   const dailySummary = document.getElementById('go-daily-summary');
   const dailyStatus = document.getElementById('go-daily-status');
   const dailyCopy = document.getElementById('go-daily-copy');
+  const masterySummary = document.getElementById('go-mastery-summary');
+  const masteryEarned = document.getElementById('go-mastery-earned');
+  const masteryCopy = document.getElementById('go-mastery-copy');
+  const masteryNext = document.getElementById('go-mastery-next');
+  const masteryBar = document.getElementById('go-mastery-bar');
   const nextRunButton = document.getElementById('btn-new');
   const dashboardButton = document.getElementById('btn-gameover-dashboard');
 
@@ -1266,6 +1382,22 @@ function renderGameOverSummary() {
   }
   if (dashboardButton) {
     dashboardButton.setAttribute('aria-label', isDailyChallengeSession() ? 'Back to dashboard from daily challenge summary' : 'Back to dashboard');
+  }
+
+  const masteryStatus = getMasteryStatus();
+  if (masterySummary && masteryEarned && masteryCopy && masteryNext && masteryBar) {
+    masterySummary.hidden = false;
+    masteryEarned.textContent = `+${summary.masteryEarned}`;
+    masteryCopy.textContent = summary.masteryBreakdown.length
+      ? formatMasteryBreakdown(summary)
+      : 'Run complete +10';
+    const unlockedReward = summary.masteryUnlockedRewardId ? MASTERY_REWARD_LOOKUP[summary.masteryUnlockedRewardId] : null;
+    masteryNext.textContent = unlockedReward
+      ? `${unlockedReward.name} unlocked and ready.`
+      : masteryStatus.nextReward
+        ? `Next reward · ${getMasteryRewardLabel(masteryStatus.nextReward)}`
+        : 'Mastery road complete';
+    masteryBar.style.width = `${Math.round(masteryStatus.progressRatio * 100)}%`;
   }
 
   if (dailySummary && dailyStatus && dailyCopy) {
@@ -1346,6 +1478,59 @@ function getOwnedColorways() {
   return progressionState?.cosmetics?.ownedColorways || ['orange'];
 }
 
+function getOwnedTitles() {
+  return progressionState?.profile?.ownedTitles || ['starter'];
+}
+
+function getEquippedTitle() {
+  return progressionState?.profile?.equippedTitle || 'starter';
+}
+
+function getMasteryPointsTotal() {
+  return progressionState?.mastery?.totalPoints || 0;
+}
+
+function getMasteryUnlockedRewardIds() {
+  return progressionState?.mastery?.unlockedRewardIds || [];
+}
+
+function getMasteryPointsForLevel(level) {
+  if (level <= 1) return 0;
+  let total = 0;
+  for (let current = 1; current < level; current++) {
+    total += 18 + current * 6;
+  }
+  return total;
+}
+
+function getMasteryLevelFromPoints(points) {
+  let level = 1;
+  while (level < MASTERY_LEVEL_CAP && points >= getMasteryPointsForLevel(level + 1)) {
+    level += 1;
+  }
+  return level;
+}
+
+function getMasteryStatus(totalPoints = getMasteryPointsTotal()) {
+  const level = getMasteryLevelFromPoints(totalPoints);
+  const levelStart = getMasteryPointsForLevel(level);
+  const nextLevel = Math.min(MASTERY_LEVEL_CAP, level + 1);
+  const nextLevelAt = level >= MASTERY_LEVEL_CAP ? levelStart : getMasteryPointsForLevel(nextLevel);
+  const pointsInLevel = totalPoints - levelStart;
+  const pointsForLevel = Math.max(0, nextLevelAt - levelStart);
+  return {
+    level,
+    totalPoints,
+    nextLevel,
+    pointsRemaining: Math.max(0, nextLevelAt - totalPoints),
+    progressRatio: level >= MASTERY_LEVEL_CAP || !pointsForLevel ? 1 : Math.max(0, Math.min(1, pointsInLevel / pointsForLevel)),
+    nextReward: level >= MASTERY_LEVEL_CAP
+      ? null
+      : MASTERY_REWARDS.find(reward => reward.level > level) || null,
+    currentTitle: TITLE_LOOKUP[getEquippedTitle()] || TITLE_LOOKUP.starter,
+  };
+}
+
 function getEquippedBlockSkin() {
   return progressionState?.cosmetics?.equippedBlockSkin || 'classic';
 }
@@ -1403,6 +1588,69 @@ function applyEquippedCosmeticSkin() {
   updateCosmeticLabel();
 }
 
+function applyMasteryReward(state, reward) {
+  if (!reward || state.mastery.unlockedRewardIds.includes(reward.id)) return;
+  state.mastery.unlockedRewardIds.push(reward.id);
+  if (reward.type === 'colorway' && !state.cosmetics.ownedColorways.includes(reward.ref)) {
+    state.cosmetics.ownedColorways.push(reward.ref);
+    colorSetting = reward.ref;
+  }
+  if (reward.type === 'finish' && !state.cosmetics.ownedBlockSkins.includes(reward.ref)) {
+    state.cosmetics.ownedBlockSkins.push(reward.ref);
+    state.cosmetics.equippedBlockSkin = reward.ref;
+  }
+  if (reward.type === 'title' && !state.profile.ownedTitles.includes(reward.ref)) {
+    state.profile.ownedTitles.push(reward.ref);
+    state.profile.equippedTitle = reward.ref;
+  }
+}
+
+function calculateMasteryBreakdown(summary) {
+  return [
+    { label: 'Run complete', points: MASTERY_BASE_POINTS },
+    { label: 'Score', points: Math.min(18, Math.floor(summary.finalScore / 45)) },
+    { label: 'Clears', points: Math.min(12, summary.stats.regionsCleared * 2) },
+    { label: 'Racks', points: Math.min(8, summary.stats.racksCompleted * 2) },
+    { label: 'New best', points: summary.stats.personalBest ? 6 : 0 },
+  ].filter(entry => entry.points > 0);
+}
+
+function grantRunMasteryProgress() {
+  const summary = ensureRunSummary();
+  summary.finalScore = score;
+  const breakdown = calculateMasteryBreakdown(summary);
+  const pointsEarned = breakdown.reduce((total, entry) => total + entry.points, 0);
+  let unlockedReward = null;
+  const beforeLevel = getMasteryLevelFromPoints(getMasteryPointsTotal());
+
+  updateProgressionState(state => {
+    state.mastery.totalPoints += pointsEarned;
+    const afterLevel = getMasteryLevelFromPoints(state.mastery.totalPoints);
+    for (let level = beforeLevel + 1; level <= afterLevel; level++) {
+      const reward = getMasteryRewardForLevel(level);
+      if (!reward) continue;
+      if (!state.mastery.unlockedRewardIds.includes(reward.id)) {
+        applyMasteryReward(state, reward);
+        if (!unlockedReward) unlockedReward = reward;
+      }
+    }
+    return state;
+  });
+
+  if (unlockedReward?.type === 'colorway') {
+    applyColor(colorSetting);
+    saveSettings();
+  }
+  if (unlockedReward?.type === 'finish') {
+    applyEquippedCosmeticSkin();
+  }
+
+  summary.masteryEarned = pointsEarned;
+  summary.masteryBreakdown = breakdown;
+  summary.masteryUnlockedRewardId = unlockedReward?.id || '';
+  return { pointsEarned, unlockedReward };
+}
+
 function awardCoins(amount, reason, options = {}) {
   const wholeAmount = Math.max(0, Math.floor(amount));
   if (!wholeAmount) return 0;
@@ -1439,7 +1687,9 @@ function spendCoins(amount, reason) {
 
 function unlockColorway(colorId) {
   const colorway = COLORWAY_LOOKUP[colorId];
+  const masteryReward = getMasteryRewardForCollection('colorway', colorId);
   if (!colorway || isColorwayOwned(colorId)) return true;
+  if (masteryReward) return false;
   if (!spendCoins(colorway.price, `${colorway.name} unlocked`)) return false;
 
   updateProgressionState(state => {
@@ -1473,7 +1723,9 @@ function equipColorway(colorId) {
 
 function unlockBlockSkin(skinId) {
   const skin = BLOCK_SKIN_LOOKUP[skinId];
+  const masteryReward = getMasteryRewardForCollection('finish', skinId);
   if (!skin || isBlockSkinOwned(skinId)) return true;
+  if (masteryReward) return false;
   if (!spendCoins(skin.price, `${skin.name} unlocked`)) return false;
 
   updateProgressionState(state => {
@@ -1823,14 +2075,80 @@ function getColorwaySubtitle() {
   return `${ownedCount}/${totalCount} colourways owned.`;
 }
 
-function getShopActionMarkup({ owned, equipped, canAfford, price, itemId, collection }) {
+function getMasteryRoadSummary() {
+  const status = getMasteryStatus();
+  if (status.level >= MASTERY_LEVEL_CAP) {
+    return 'Mastery complete. Every milestone reward is unlocked.';
+  }
+  return `${status.pointsRemaining} focus to ${getMasteryRewardLabel(status.nextReward)}.`;
+}
+
+function getShopActionMarkup({ owned, equipped, canAfford, price, itemId, collection, masteryReward }) {
   if (equipped) {
     return '<button class="pill-btn pill-btn--secondary" type="button" disabled>Equipped</button>';
   }
   if (owned) {
     return `<button class="pill-btn pill-btn--secondary" type="button" data-action="equip" data-item-id="${itemId}" data-collection="${collection}">Equip</button>`;
   }
+  if (masteryReward) {
+    return `<button class="pill-btn pill-btn--secondary" type="button" disabled>Unlocks at level ${masteryReward.level}</button>`;
+  }
   return `<button class="pill-btn${canAfford ? '' : ' pill-btn--secondary'}" type="button" data-action="unlock" data-item-id="${itemId}" data-collection="${collection}" ${canAfford ? '' : 'disabled'}>Unlock · 🪙 ${price}</button>`;
+}
+
+function renderMasteryPanel() {
+  const dashboardLevel = document.getElementById('dashboard-mastery-level');
+  const dashboardProgress = document.getElementById('dashboard-mastery-progress');
+  const dashboardBar = document.getElementById('dashboard-mastery-bar');
+  const dashboardNext = document.getElementById('dashboard-mastery-next');
+  const dashboardTitle = document.getElementById('dashboard-mastery-title');
+  const shopLevel = document.getElementById('mastery-level');
+  const shopProgress = document.getElementById('mastery-progress-copy');
+  const shopBar = document.getElementById('mastery-progress-bar');
+  const shopNext = document.getElementById('mastery-next-reward');
+  const shopRoad = document.getElementById('mastery-road-list');
+  const status = getMasteryStatus();
+  const unlockedRewards = new Set(getMasteryUnlockedRewardIds());
+
+  if (dashboardLevel) dashboardLevel.textContent = `Level ${status.level}`;
+  if (dashboardProgress) dashboardProgress.textContent = getMasteryRoadSummary();
+  if (dashboardBar) dashboardBar.style.width = `${Math.round(status.progressRatio * 100)}%`;
+  if (dashboardNext) {
+    dashboardNext.textContent = status.nextReward
+      ? `Next · ${getMasteryRewardLabel(status.nextReward)}`
+      : 'Mastery road complete';
+  }
+  if (dashboardTitle) dashboardTitle.textContent = `Current title · ${status.currentTitle.name}`;
+
+  if (shopLevel) shopLevel.textContent = `Level ${status.level}`;
+  if (shopProgress) shopProgress.textContent = getMasteryRoadSummary();
+  if (shopBar) shopBar.style.width = `${Math.round(status.progressRatio * 100)}%`;
+  if (shopNext) {
+    shopNext.textContent = status.nextReward
+      ? `Next reward · ${getMasteryRewardLabel(status.nextReward)}`
+      : 'Every mastery reward unlocked';
+  }
+  if (!shopRoad) return;
+
+  const road = MASTERY_REWARDS.filter(reward => {
+    if (reward.level <= 6) return true;
+    return Math.abs(reward.level - status.level) <= 6 || reward.level === MASTERY_LEVEL_CAP;
+  }).slice(0, 7);
+  shopRoad.innerHTML = '';
+  road.forEach(reward => {
+    const row = document.createElement('article');
+    const unlocked = unlockedRewards.has(reward.id);
+    row.className = `mastery-road-item${unlocked ? ' mastery-road-item--unlocked' : ''}`;
+    row.innerHTML = `
+      <div>
+        <span class="mastery-road-item__level">Level ${reward.level}</span>
+        <strong>${reward.name}</strong>
+        <p>${getMasteryRewardLabel(reward)}</p>
+      </div>
+      <span class="mastery-road-item__type">${unlocked ? 'Unlocked' : 'Upcoming'}</span>
+    `;
+    shopRoad.appendChild(row);
+  });
 }
 
 function renderCosmeticsCollection() {
@@ -1841,6 +2159,7 @@ function renderCosmeticsCollection() {
   const colorwaySubtitle = document.getElementById('colorway-subtitle');
   if (!finishList || !colorwayList || !balance || !finishSubtitle || !colorwaySubtitle) return;
 
+  renderMasteryPanel();
   const coinBalance = getCoinBalance();
   const equippedSkin = getEquippedBlockSkin();
   balance.textContent = `🪙 ${coinBalance}`;
@@ -1849,12 +2168,13 @@ function renderCosmeticsCollection() {
 
   colorwayList.innerHTML = '';
   for (const colorway of COLORWAY_CATALOGUE) {
+    const masteryReward = getMasteryRewardForCollection('colorway', colorway.id);
     const owned = isColorwayOwned(colorway.id);
     const equipped = colorSetting === colorway.id;
-    const canAfford = coinBalance >= colorway.price;
-    const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    const canAfford = !masteryReward && coinBalance >= colorway.price;
+    const status = equipped ? 'Equipped' : owned ? 'Unlocked' : masteryReward ? `Level ${masteryReward.level}` : 'Locked';
     const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
-    const costLabel = colorway.price ? `🪙 ${colorway.price}` : 'Free';
+    const costLabel = masteryReward ? `Mastery level ${masteryReward.level}` : colorway.price ? `🪙 ${colorway.price}` : 'Free';
     const card = document.createElement('article');
     card.className = 'cosmetic-card cosmetic-card--colorway';
     card.dataset.colorway = colorway.id;
@@ -1875,7 +2195,7 @@ function renderCosmeticsCollection() {
           <div class="cosmetic-card__meta">
             <span>${costLabel}</span>
           </div>
-          ${getShopActionMarkup({ owned, equipped, canAfford, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
+          ${getShopActionMarkup({ owned, equipped, canAfford, price: colorway.price, itemId: colorway.id, collection: 'colorway', masteryReward })}
         </div>
       </div>
     `;
@@ -1884,18 +2204,19 @@ function renderCosmeticsCollection() {
 
   finishList.innerHTML = '';
   for (const skin of COSMETIC_CATALOGUE.blockSkins) {
+    const masteryReward = getMasteryRewardForCollection('finish', skin.id);
     const owned = isBlockSkinOwned(skin.id);
     const equipped = equippedSkin === skin.id;
-    const canAfford = coinBalance >= skin.price;
+    const canAfford = !masteryReward && coinBalance >= skin.price;
     const card = document.createElement('article');
     card.className = 'cosmetic-card';
     card.dataset.cosmetic = skin.id;
     if (equipped) card.classList.add('cosmetic-card--equipped');
     if (!owned) card.classList.add('cosmetic-card--locked');
 
-    const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
+    const status = equipped ? 'Equipped' : owned ? 'Unlocked' : masteryReward ? `Level ${masteryReward.level}` : 'Locked';
     const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
-    const costLabel = skin.price ? `🪙 ${skin.price}` : 'Free';
+    const costLabel = masteryReward ? `Mastery level ${masteryReward.level}` : skin.price ? `🪙 ${skin.price}` : 'Free';
 
     card.innerHTML = `
       <div class="cosmetic-card__preview" aria-hidden="true">
@@ -1913,7 +2234,7 @@ function renderCosmeticsCollection() {
           <div class="cosmetic-card__meta">
             <span>${costLabel}</span>
           </div>
-          ${getShopActionMarkup({ owned, equipped, canAfford, price: skin.price, itemId: skin.id, collection: 'finish' })}
+          ${getShopActionMarkup({ owned, equipped, canAfford, price: skin.price, itemId: skin.id, collection: 'finish', masteryReward })}
         </div>
       </div>
     `;
@@ -2339,6 +2660,13 @@ function getSavedGameSession() {
         ? {
             finalScore: clampWholeNumber(raw.runSummary.finalScore, 0),
             coinsEarned: clampWholeNumber(raw.runSummary.coinsEarned, 0),
+            masteryEarned: clampWholeNumber(raw.runSummary.masteryEarned, 0),
+            masteryBreakdown: Array.isArray(raw.runSummary.masteryBreakdown)
+              ? raw.runSummary.masteryBreakdown
+                .filter(entry => entry && typeof entry === 'object' && typeof entry.label === 'string')
+                .map(entry => ({ label: entry.label, points: clampWholeNumber(entry.points, 0) }))
+              : [],
+            masteryUnlockedRewardId: typeof raw.runSummary.masteryUnlockedRewardId === 'string' ? raw.runSummary.masteryUnlockedRewardId : '',
             completedObjectiveIds: uniqueStringList(raw.runSummary.completedObjectiveIds, []),
             stats: {
               regionsCleared: clampWholeNumber(raw.runSummary.stats?.regionsCleared, 0),
@@ -2559,6 +2887,7 @@ function renderDashboard() {
   document.getElementById('dashboard-finish').textContent = skin.name;
   renderSessionModeBadge();
   renderWeeklyLadder();
+  renderMasteryPanel();
 }
 
 function populateQuickSettings() {
@@ -3145,6 +3474,17 @@ function triggerGameOver() {
   maybeCompleteDailyChallenge();
   evaluateRunObjectives();
   updateDailyMissionProgress('runs', 1);
+  const masteryResult = grantRunMasteryProgress();
+  if (masteryResult.unlockedReward) {
+    showMilestoneMoment({
+      eyebrow: 'Mastery reward',
+      title: masteryResult.unlockedReward.name,
+      detail: `${getMasteryRewardLabel(masteryResult.unlockedReward)} unlocked automatically.`,
+      major: true,
+      anchor: '#score-wrap',
+      announce: `${masteryResult.unlockedReward.name} unlocked from the mastery track.`,
+    });
+  }
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
