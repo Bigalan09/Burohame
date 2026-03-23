@@ -122,8 +122,24 @@
           </div>
         </section>
 
-        <button class="dashboard-missions" id="btn-dashboard-missions" type="button" aria-label="Open daily missions">
-          <span class="dashboard-missions__label">Daily missions</span>
+        <section class="dashboard-quests" aria-label="Quest chains">
+          <div class="dashboard-quests__head">
+            <div>
+              <span class="dashboard-quests__kicker">Weekly quest board</span>
+              <h2 id="dashboard-quest-title">0/0 chains settled</h2>
+            </div>
+            <span class="dashboard-quests__badge" id="dashboard-quest-badge">0/0</span>
+          </div>
+          <p class="dashboard-quests__copy" id="dashboard-quest-copy">Weekly quest chains unfold step by step across several sessions.</p>
+          <div class="dashboard-quests__meta">
+            <span id="dashboard-quest-timer">0h left</span>
+            <span>Final rewards include bigger coin drops</span>
+          </div>
+          <div class="dashboard-quests__list" id="dashboard-quest-list" aria-live="polite"></div>
+        </section>
+
+        <button class="dashboard-missions" id="btn-dashboard-missions" type="button" aria-label="Open goals board">
+          <span class="dashboard-missions__label" id="dashboard-goals-label">Goals board</span>
           <strong id="dashboard-mission-copy">Fresh goals are on the way.</strong>
           <span class="dashboard-mission-pill" id="mission-badge" hidden>0/0</span>
         </button>
@@ -338,12 +354,30 @@
       <div class="ov-card ov-card--missions">
         <div class="missions-head">
           <div>
-            <h2>Daily missions</h2>
+            <h2>Goals board</h2>
             <p id="missions-subtitle">Fresh goals are on the way.</p>
           </div>
           <span class="missions-count" id="missions-count">0/0 completed</span>
         </div>
+        <section class="missions-section" aria-labelledby="quest-list-title">
+          <div class="missions-head missions-head--nested">
+            <div>
+              <h3 id="quest-list-title">Quest chains</h3>
+              <p>Ordered objectives that unlock one step at a time across the week.</p>
+            </div>
+            <span class="missions-count" id="quest-count">0/0 chains complete</span>
+          </div>
+          <div id="quest-list" class="missions-list" aria-live="polite"></div>
+        </section>
+        <section class="missions-section" aria-labelledby="daily-missions-title">
+          <div class="missions-head missions-head--nested">
+            <div>
+              <h3 id="daily-missions-title">Daily missions</h3>
+              <p>One-step goals that refresh every day.</p>
+            </div>
+          </div>
         <div id="missions-list" class="missions-list" aria-live="polite"></div>
+        </section>
         <button class="pill-btn wide" id="btn-missions-close" type="button">Back to dashboard</button>
       </div>
     </div>
@@ -381,6 +415,13 @@
             <span id="go-objective-count" class="run-objectives__count">0 cleared</span>
           </div>
           <ul id="go-objectives-list" class="run-objectives__list"></ul>
+        </section>
+        <section class="run-objectives" id="go-quest-summary" aria-labelledby="go-quest-title">
+          <div class="run-objectives__header">
+            <h3 id="go-quest-title">Quest chain progress</h3>
+            <span id="go-quest-count" class="run-objectives__count">0 updated this run</span>
+          </div>
+          <ul id="go-quest-list" class="run-objectives__list"></ul>
         </section>
         <section class="summary-continue" id="go-continue-prompt" hidden aria-labelledby="go-continue-title">
           <span class="summary-continue__eyebrow" id="go-continue-eyebrow">One more run</span>
