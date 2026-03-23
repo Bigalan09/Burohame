@@ -199,7 +199,14 @@ const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
 const SHOP_PRICE_MULTIPLIER = 2;
-const COIN_REWARD_MULTIPLIER = 0.8;
+const COIN_REWARD_MULTIPLIERS = Object.freeze({
+  run: 0.72,
+  challenge: 0.6,
+  mission: 0.45,
+  quest: 0.5,
+  weekly: 0.45,
+});
+const DAILY_MISSION_VERSION = 3;
 const DAILY_CHALLENGE_TARGET_MIN = 140;
 const DAILY_CHALLENGE_TARGET_RANGE = 51;
 const ONE_MORE_RUN_RAPID_RETRY_WINDOW_MS = 4 * 60 * 1000;
@@ -224,9 +231,10 @@ function scaleShopPrice(amount) {
   return Math.max(0, Math.round(amount * SHOP_PRICE_MULTIPLIER));
 }
 
-function scaleCoinReward(amount) {
+function scaleCoinReward(amount, source = 'run') {
   if (!amount) return 0;
-  return Math.max(1, Math.round(amount * COIN_REWARD_MULTIPLIER));
+  const multiplier = COIN_REWARD_MULTIPLIERS[source] ?? COIN_REWARD_MULTIPLIERS.run;
+  return Math.max(1, Math.round(amount * multiplier));
 }
 
 const DAILY_MISSION_TEMPLATES = Object.freeze([
@@ -234,7 +242,7 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     templateId: 'score-120',
     kind: 'score',
     goal: 120,
-    reward: scaleCoinReward(18),
+    reward: scaleCoinReward(18, 'mission'),
     title: 'Point collector',
     description: 'Score 120 points across today’s runs.',
   },
@@ -242,7 +250,7 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     templateId: 'blocks-30',
     kind: 'blocks',
     goal: 30,
-    reward: scaleCoinReward(14),
+    reward: scaleCoinReward(14, 'mission'),
     title: 'Builder’s rhythm',
     description: 'Place 30 blocks today.',
   },
@@ -250,7 +258,7 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     templateId: 'regions-8',
     kind: 'regions',
     goal: 8,
-    reward: scaleCoinReward(16),
+    reward: scaleCoinReward(16, 'mission'),
     title: 'Board cleaner',
     description: 'Clear 8 regions today.',
   },
@@ -258,7 +266,7 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     templateId: 'racks-4',
     kind: 'racks',
     goal: 4,
-    reward: scaleCoinReward(12),
+    reward: scaleCoinReward(12, 'mission'),
     title: 'Rack runner',
     description: 'Finish 4 full racks today.',
   },
@@ -266,7 +274,7 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     templateId: 'combo-4',
     kind: 'combo',
     goal: 4,
-    reward: scaleCoinReward(20),
+    reward: scaleCoinReward(20, 'mission'),
     title: 'Heat check',
     description: 'Reach a 4× combo in a run today.',
   },
@@ -274,7 +282,7 @@ const DAILY_MISSION_TEMPLATES = Object.freeze([
     templateId: 'runs-3',
     kind: 'runs',
     goal: 3,
-    reward: scaleCoinReward(10),
+    reward: scaleCoinReward(10, 'mission'),
     title: 'Keep going',
     description: 'Complete 3 runs today.',
   },
@@ -288,7 +296,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
     description: 'Raise your scoring floor with steadier, cleaner runs.',
     summary: 'Build from a tidy warm-up into a proper breakthrough score.',
     finalReward: {
-      coins: scaleCoinReward(32),
+      coins: scaleCoinReward(32, 'quest'),
       unlockHint: 'Bonus colourway or finish if your collection still has a locked piece.',
       grantsUnlock: true,
     },
@@ -300,7 +308,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'singleRunScore',
         goal: 90,
         mode: 'max',
-        reward: scaleCoinReward(6),
+        reward: scaleCoinReward(6, 'quest'),
       },
       {
         stepId: 'score-ladder-2',
@@ -309,7 +317,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'totalScore',
         goal: 180,
         mode: 'cumulative',
-        reward: scaleCoinReward(8),
+        reward: scaleCoinReward(8, 'quest'),
       },
       {
         stepId: 'score-ladder-3',
@@ -318,7 +326,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'singleRunScore',
         goal: 150,
         mode: 'max',
-        reward: scaleCoinReward(10),
+        reward: scaleCoinReward(10, 'quest'),
       },
     ],
   },
@@ -329,7 +337,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
     description: 'Learn to stack clears so the board opens up instead of closing in.',
     summary: 'From small links to proper chain-building.',
     finalReward: {
-      coins: scaleCoinReward(34),
+      coins: scaleCoinReward(34, 'quest'),
       unlockHint: 'Bonus colourway or finish if one is still locked.',
       grantsUnlock: false,
     },
@@ -341,7 +349,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'maxCombo',
         goal: 2,
         mode: 'max',
-        reward: scaleCoinReward(6),
+        reward: scaleCoinReward(6, 'quest'),
       },
       {
         stepId: 'combo-mastery-2',
@@ -350,7 +358,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'regionsCleared',
         goal: 6,
         mode: 'cumulative',
-        reward: scaleCoinReward(8),
+        reward: scaleCoinReward(8, 'quest'),
       },
       {
         stepId: 'combo-mastery-3',
@@ -359,7 +367,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'maxCombo',
         goal: 4,
         mode: 'max',
-        reward: scaleCoinReward(10),
+        reward: scaleCoinReward(10, 'quest'),
       },
     ],
   },
@@ -370,7 +378,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
     description: 'Make room methodically by clearing lines and boxes in the same run.',
     summary: 'Turn scattered space into a board that breathes again.',
     finalReward: {
-      coins: scaleCoinReward(30),
+      coins: scaleCoinReward(30, 'quest'),
       unlockHint: 'Large coin payout for cleaner board work.',
       grantsUnlock: false,
     },
@@ -382,7 +390,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'regionsCleared',
         goal: 4,
         mode: 'cumulative',
-        reward: scaleCoinReward(6),
+        reward: scaleCoinReward(6, 'quest'),
       },
       {
         stepId: 'board-sweep-2',
@@ -391,7 +399,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'biggestClear',
         goal: 2,
         mode: 'max',
-        reward: scaleCoinReward(8),
+        reward: scaleCoinReward(8, 'quest'),
       },
       {
         stepId: 'board-sweep-3',
@@ -400,7 +408,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'regionsCleared',
         goal: 9,
         mode: 'cumulative',
-        reward: scaleCoinReward(10),
+        reward: scaleCoinReward(10, 'quest'),
       },
     ],
   },
@@ -411,7 +419,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
     description: 'Use Coach Mode to learn healthier setups and calmer scoring lines.',
     summary: 'A guided chain that rewards better habits, not raw grind.',
     finalReward: {
-      coins: scaleCoinReward(28),
+      coins: scaleCoinReward(28, 'quest'),
       unlockHint: 'Finishing this lesson can also unlock a cosmetic if one is still waiting.',
       grantsUnlock: true,
     },
@@ -423,7 +431,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'coachRuns',
         goal: 1,
         mode: 'cumulative',
-        reward: scaleCoinReward(6),
+        reward: scaleCoinReward(6, 'quest'),
       },
       {
         stepId: 'coach-apprentice-2',
@@ -432,7 +440,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'coachRegions',
         goal: 4,
         mode: 'cumulative',
-        reward: scaleCoinReward(8),
+        reward: scaleCoinReward(8, 'quest'),
       },
       {
         stepId: 'coach-apprentice-3',
@@ -441,7 +449,7 @@ const QUEST_CHAIN_TEMPLATES = Object.freeze([
         metric: 'coachMaxCombo',
         goal: 3,
         mode: 'max',
-        reward: scaleCoinReward(10),
+        reward: scaleCoinReward(10, 'quest'),
       },
     ],
   },
@@ -459,10 +467,10 @@ const WEEKLY_LEAGUES = Object.freeze([
     name: 'Bronze',
     badge: '🥉',
     tier: 0,
-    previewCoins: scaleCoinReward(18),
-    holdCoins: scaleCoinReward(16),
-    promotionCoins: scaleCoinReward(28),
-    relegationCoins: scaleCoinReward(12),
+    previewCoins: scaleCoinReward(18, 'weekly'),
+    holdCoins: scaleCoinReward(16, 'weekly'),
+    promotionCoins: scaleCoinReward(28, 'weekly'),
+    relegationCoins: scaleCoinReward(12, 'weekly'),
     scoreRange: [280, 620],
   },
   {
@@ -470,10 +478,10 @@ const WEEKLY_LEAGUES = Object.freeze([
     name: 'Silver',
     badge: '🥈',
     tier: 1,
-    previewCoins: scaleCoinReward(24),
-    holdCoins: scaleCoinReward(20),
-    promotionCoins: scaleCoinReward(34),
-    relegationCoins: scaleCoinReward(14),
+    previewCoins: scaleCoinReward(24, 'weekly'),
+    holdCoins: scaleCoinReward(20, 'weekly'),
+    promotionCoins: scaleCoinReward(34, 'weekly'),
+    relegationCoins: scaleCoinReward(14, 'weekly'),
     scoreRange: [420, 800],
   },
   {
@@ -481,10 +489,10 @@ const WEEKLY_LEAGUES = Object.freeze([
     name: 'Gold',
     badge: '🥇',
     tier: 2,
-    previewCoins: scaleCoinReward(30),
-    holdCoins: scaleCoinReward(24),
-    promotionCoins: scaleCoinReward(42),
-    relegationCoins: scaleCoinReward(16),
+    previewCoins: scaleCoinReward(30, 'weekly'),
+    holdCoins: scaleCoinReward(24, 'weekly'),
+    promotionCoins: scaleCoinReward(42, 'weekly'),
+    relegationCoins: scaleCoinReward(16, 'weekly'),
     scoreRange: [560, 980],
   },
   {
@@ -492,10 +500,10 @@ const WEEKLY_LEAGUES = Object.freeze([
     name: 'Diamond',
     badge: '💎',
     tier: 3,
-    previewCoins: scaleCoinReward(36),
-    holdCoins: scaleCoinReward(30),
-    promotionCoins: scaleCoinReward(48),
-    relegationCoins: scaleCoinReward(18),
+    previewCoins: scaleCoinReward(36, 'weekly'),
+    holdCoins: scaleCoinReward(30, 'weekly'),
+    promotionCoins: scaleCoinReward(48, 'weekly'),
+    relegationCoins: scaleCoinReward(18, 'weekly'),
     scoreRange: [720, 1180],
   },
 ]);
@@ -1613,6 +1621,7 @@ function createDefaultProgressionState() {
       completedIds: [],
       claimedIds: [],
       refreshCount: 0,
+      templateVersion: DAILY_MISSION_VERSION,
     },
     dailyChallenge: {
       date: '',
@@ -1665,6 +1674,7 @@ function sanitiseMissionState(value) {
     completedIds: uniqueStringList(src.completedIds, []),
     claimedIds: uniqueStringList(src.claimedIds, []),
     refreshCount: clampWholeNumber(src.refreshCount, 0),
+    templateVersion: clampWholeNumber(src.templateVersion, 0),
   };
 }
 
@@ -2542,7 +2552,7 @@ function calculateClearCoinReward(totalRegions, comboValue) {
   const baseReward = (totalRegions * COIN_REWARDS.clearRegion)
     + (Math.max(0, totalRegions - 1) * COIN_REWARDS.multiClearBonus)
     + (Math.max(0, comboValue - 1) * COIN_REWARDS.comboStep);
-  return scaleCoinReward(baseReward);
+  return scaleCoinReward(baseReward, 'run');
 }
 
 function clearRewardLabel(totalRegions, comboValue) {
@@ -2554,13 +2564,13 @@ function clearRewardLabel(totalRegions, comboValue) {
 
 function calculateEndRunCoinReward(finalScore) {
   const baseReward = COIN_REWARDS.endRunBase + Math.floor(finalScore / 50) * COIN_REWARDS.endRunPer50Score;
-  return scaleCoinReward(baseReward);
+  return scaleCoinReward(baseReward, 'run');
 }
 
 function getRoundMilestoneReward(roundsCompleted) {
   if (!roundsCompleted) return 0;
   return roundsCompleted % COIN_REWARDS.roundMilestoneEvery === 0
-    ? scaleCoinReward(COIN_REWARDS.roundMilestoneReward)
+    ? scaleCoinReward(COIN_REWARDS.roundMilestoneReward, 'run')
     : 0;
 }
 
@@ -2580,7 +2590,10 @@ function awardMissionCoins(amount, missionName = 'Mission complete') {
 function ensureDailyMissionsForToday() {
   const todayKey = getLocalDateKey();
   const currentDate = progressionState?.dailyMissions?.date || '';
-  if (currentDate === todayKey && progressionState?.dailyMissions?.missions?.length) {
+  const currentTemplateVersion = clampWholeNumber(progressionState?.dailyMissions?.templateVersion, 0);
+  if (currentDate === todayKey
+    && currentTemplateVersion === DAILY_MISSION_VERSION
+    && progressionState?.dailyMissions?.missions?.length) {
     return progressionState.dailyMissions;
   }
 
@@ -2592,6 +2605,7 @@ function ensureDailyMissionsForToday() {
       completedIds: [],
       claimedIds: [],
       refreshCount: currentDate ? refreshCount + 1 : refreshCount,
+      templateVersion: DAILY_MISSION_VERSION,
     };
     return state;
   });
@@ -2654,7 +2668,7 @@ function getDailyChallengeRewardAmount(streakCount) {
     DAILY_CHALLENGE_STREAK_BONUS_CAP,
     Math.max(0, streakCount - 1) * DAILY_CHALLENGE_STREAK_STEP
   );
-  return scaleCoinReward(baseReward);
+  return scaleCoinReward(baseReward, 'challenge');
 }
 
 function getDailyChallengeStatus(challenge = ensureDailyChallengeForToday()) {
@@ -4360,7 +4374,7 @@ function triggerGameOver() {
   }
 
   awardCoins(calculateEndRunCoinReward(score), 'Run complete');
-  if (isNewBest) awardCoins(scaleCoinReward(COIN_REWARDS.personalBestBonus), 'New best');
+  if (isNewBest) awardCoins(scaleCoinReward(COIN_REWARDS.personalBestBonus, 'run'), 'New best');
   ensureRunSummary().stats.personalBest = isNewBest;
   recordWeeklyRunScore(score);
 
