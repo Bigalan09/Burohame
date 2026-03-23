@@ -230,6 +230,7 @@ const COIN_REWARDS = Object.freeze({
   roundMilestoneReward: 8,
   endRunBase: 10,
   endRunPer50Score: 1,
+  endRunScoreBandCap: 10,
   personalBestBonus: 12,
 });
 function scaleShopPrice(amount) {
@@ -2689,7 +2690,11 @@ function clearRewardLabel(totalRegions, comboValue) {
 }
 
 function calculateEndRunCoinReward(finalScore) {
-  const baseReward = COIN_REWARDS.endRunBase + Math.floor(finalScore / 50) * COIN_REWARDS.endRunPer50Score;
+  const scoreBands = Math.min(
+    COIN_REWARDS.endRunScoreBandCap,
+    Math.floor(Math.max(0, finalScore) / 50)
+  );
+  const baseReward = COIN_REWARDS.endRunBase + (scoreBands * COIN_REWARDS.endRunPer50Score);
   return scaleCoinReward(baseReward, 'run');
 }
 
