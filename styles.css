@@ -1645,6 +1645,43 @@ a.icon-btn { text-decoration: none; }
   padding-block: 14px;
 }
 
+.summary-continue {
+  margin-top: 14px;
+  padding: 15px 16px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+}
+
+.summary-continue__eyebrow,
+.summary-continue__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent-dk) 72%, var(--text));
+}
+
+.summary-continue h3 {
+  margin-top: 8px;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.summary-continue p {
+  margin-top: 8px;
+  margin-bottom: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.summary-continue__meta {
+  margin-top: 12px;
+}
+
 .summary-challenge {
   margin-top: 14px;
   padding: 14px;
