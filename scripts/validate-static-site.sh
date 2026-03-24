@@ -75,12 +75,18 @@ check_not_contains index.html 'id="btn-settings-backoffice"' \
   "index.html must not expose the back-office setup button."
 check_not_contains index.html 'data-page="backoffice"' \
   "index.html must not ship the back-office page."
+check_not_contains app.js 'backoffice' \
+  "app.js must not retain the removed back-office flow."
+check_not_contains styles.css 'data-page="backoffice"' \
+  "styles.css must not retain selectors for the removed back-office page."
 check_contains app.js "addListener(" \
   "app.js must keep a MediaQueryList listener fallback for Safari compatibility."
 check_contains sw.js "request.mode === 'navigate'" \
   "sw.js must treat navigation requests as part of the app shell."
 check_contains sw.js "fetch(request)" \
   "sw.js must attempt a network fetch before falling back to cache for shell requests."
+check_contains sw.js "scopeUrl('config.js')" \
+  "sw.js must cache config.js as part of the offline app shell."
 
 for page in $(sed -n 's/.*data-page="\([^"]*\)".*/\1/p' index.html | sort -u); do
   selector="#app[data-page=\"${page}\"] .page[data-page=\"${page}\"]"

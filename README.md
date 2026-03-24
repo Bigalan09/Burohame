@@ -15,16 +15,19 @@
 - Rows, columns and 3×3 boxes clear when full
 - Multi-clear and combo bonuses
 - Best score saved locally
-- Weekly leaderboard with a pluggable multiplayer adapter (Supabase or local fallback)
+- Weekly leaderboard with global Supabase multiplayer config and automatic local fallback
 - **Coach Mode** (toggle via ⚙️): colour-coded move hints, board health metrics, move quality feedback
 
-## Multiplayer weekly leaderboard setup (Supabase)
+## Multiplayer weekly leaderboard deployment (Supabase)
 
 1. Apply the SQL in `supabase/weekly_leaderboard.sql` or `supabase/migrations/202603240001_weekly_leaderboard_hardening.sql`.
 2. Deploy the Edge Function at `supabase/functions/upsert-leaderboard-entry`.
-3. Open the **Leaderboard setup** back-office page on first run (or from Settings → Back-office setup).
-4. Choose **Supabase multiplayer** and enter your Supabase URL and publishable key.
-5. After saving setup once, credential fields are removed from standard settings.
+3. In GitHub repository settings, add these Actions variables for Pages deploys:
+   - `SUPABASE_URL`
+   - `SUPABASE_PUBLISHABLE_KEY`
+4. Deploy `main` to GitHub Pages through `.github/workflows/deploy.yml`.
+
+If either Actions variable is missing, the deployed site stays in local practice mode and still works offline.
 
 ### Security model
 
@@ -34,6 +37,7 @@
 - The Edge Function requires an authenticated user token, derives `player_id` from the token subject, validates payload fields, and recomputes `total_score` from `counted_runs`.
 - The Edge Function writes with the service role key server-side.
 - RLS allows public read-only access and blocks direct client inserts, updates, and deletes.
+- Hosted leaderboard config is injected at deploy time through GitHub Actions, not entered by players in the browser.
 
 ### Manual Supabase deploy steps
 
@@ -49,7 +53,7 @@ Hosted Supabase Edge Functions already receive the default `SUPABASE_URL` and `S
 Enable Supabase Auth anonymous sign-ins for the project so the browser can obtain an authenticated JWT for Edge Function writes.
 The function validates that JWT inside the function itself because Supabase's built-in `verify_jwt` path is incompatible with projects using the newer JWT signing keys.
 
-If Supabase is not configured, Burohame automatically falls back to local leaderboard storage.
+If hosted multiplayer is unavailable or the browser is offline, Burohame falls back to local leaderboard storage on that device. Those local fallback runs are not synced later.
 
 ## Local dev
 

@@ -32,6 +32,26 @@ jobs:
           COMMIT=$(git rev-parse --short HEAD)
           sed -i "s/__CACHE_VERSION__/${COMMIT}/g" sw.js
 
+      - name: Generate runtime config
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+
+          const hasHostedLeaderboard = Boolean(process.env.SUPABASE_URL) && Boolean(process.env.SUPABASE_PUBLISHABLE_KEY);
+          const config = {
+            weeklyLeaderboard: {
+              backend: hasHostedLeaderboard ? 'supabase' : 'local',
+              supabaseUrl: hasHostedLeaderboard ? process.env.SUPABASE_URL : '',
+              supabasePublishableKey: hasHostedLeaderboard ? process.env.SUPABASE_PUBLISHABLE_KEY : '',
+            },
+          };
+
+          fs.writeFileSync('config.js', `window.BUROHAME_RUNTIME_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
+          EOF
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
