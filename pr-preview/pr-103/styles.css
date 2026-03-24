@@ -178,6 +178,12 @@ html, body {
   min-width: 0;
 }
 
+.page-top > .header-actions {
+  flex: 0 0 auto;
+  min-width: auto;
+  margin-left: auto;
+}
+
 .page-kicker {
   font-size: 11px;
   font-weight: 800;
@@ -895,7 +901,8 @@ html, body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .icon-btn {
@@ -912,6 +919,11 @@ html, body {
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
+
+.header-actions .icon-btn {
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+}
 a.icon-btn { text-decoration: none; }
 .icon-btn:active { opacity: 0.6; }
 .icon-btn--share {
@@ -919,6 +931,26 @@ a.icon-btn { text-decoration: none; }
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent-hi) 25%, transparent), color-mix(in srgb, var(--accent) 22%, transparent));
   border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
   box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.dash-starter {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg));
+}
+
+.dash-starter h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.dash-starter p {
+  margin: 6px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
 }
 .icon-btn--share:hover,
 .icon-btn--share:focus-visible {
