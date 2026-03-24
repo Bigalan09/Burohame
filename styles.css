@@ -147,6 +147,7 @@ html, body {
 #app[data-page="game"] .page[data-page="game"],
 #app[data-page="shop"] .page[data-page="shop"],
 #app[data-page="settings"] .page[data-page="settings"],
+#app[data-page="backoffice"] .page[data-page="backoffice"],
 #app[data-page="about"] .page[data-page="about"] {
   display: flex;
 }
