@@ -1,4 +1,4 @@
 project_id = "burohame"
 
 [functions.upsert-leaderboard-entry]
-verify_jwt = true
+verify_jwt = false

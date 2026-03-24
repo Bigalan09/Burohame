@@ -14,24 +14,30 @@ const PLAYER_NAME_PATTERN = /^[\p{L}\p{N} .,'_\-]{1,24}$/u;
 const VALID_LEAGUES = new Set(['bronze', 'silver', 'gold', 'diamond']);
 const MAX_COUNTED_RUNS = 4;
 const MAX_RUN_SCORE = 1_000_000;
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_AUTH_KEY =
+  Deno.env.get('SB_PUBLISHABLE_KEY') ??
+  Deno.env.get('SUPABASE_ANON_KEY') ??
+  '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const authClient =
+  SUPABASE_URL && SUPABASE_AUTH_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_AUTH_KEY, {
+        auth: { persistSession: false },
+      })
+    : null;
+const serviceClient =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+      })
+    : null;
 
 function jsonResponse(status: number, payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-}
-
-function parseJwtPayload(token: string): Record<string, unknown> | null {
-  try {
-    const [, payload] = token.split('.');
-    if (!payload) return null;
-    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    const parsed = JSON.parse(decoded);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 function isMondayUtcDate(dateKey: string): boolean {
@@ -65,9 +71,19 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(401, { error: 'Missing bearer token' });
   }
 
-  const jwtPayload = parseJwtPayload(tokenMatch[1]);
-  const tokenRole = typeof jwtPayload?.role === 'string' ? jwtPayload.role : '';
-  const tokenPlayerId = typeof jwtPayload?.sub === 'string' ? jwtPayload.sub.trim() : '';
+  if (!authClient || !serviceClient) {
+    return jsonResponse(500, { error: 'Missing Supabase server configuration' });
+  }
+
+  const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(tokenMatch[1]);
+  if (claimsError) {
+    console.error('upsert-leaderboard-entry auth error:', claimsError.message);
+    return jsonResponse(401, { error: 'Authenticated user token required' });
+  }
+
+  const jwtClaims = claimsData?.claims;
+  const tokenRole = typeof jwtClaims?.role === 'string' ? jwtClaims.role : '';
+  const tokenPlayerId = typeof jwtClaims?.sub === 'string' ? jwtClaims.sub.trim() : '';
   if (!tokenPlayerId || tokenRole !== 'authenticated') {
     return jsonResponse(401, { error: 'Authenticated user token required' });
   }
@@ -126,17 +142,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(400, { error: 'total_score must match counted_runs sum' });
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  if (!supabaseUrl || !serviceRoleKey) {
-    return jsonResponse(500, { error: 'Missing Supabase server configuration' });
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
-
-  const { error } = await supabase
+  const { error } = await serviceClient
     .from('weekly_leaderboard_entries')
     .upsert(
       {

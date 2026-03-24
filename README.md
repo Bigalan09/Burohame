@@ -40,16 +40,14 @@
 ```sh
 # from the repository root
 supabase link --project-ref <your-project-ref>
-supabase db push
-supabase functions deploy upsert-leaderboard-entry
+SUPABASE_DB_PASSWORD=<your-db-password> supabase db push --include-all
+supabase functions deploy upsert-leaderboard-entry --no-verify-jwt
 ```
 
-Set these function secrets in Supabase before testing writes:
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+Hosted Supabase Edge Functions already receive the default `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` secrets, so you do not need to set them manually for deploys.
 
 Enable Supabase Auth anonymous sign-ins for the project so the browser can obtain an authenticated JWT for Edge Function writes.
+The function validates that JWT inside the function itself because Supabase's built-in `verify_jwt` path is incompatible with projects using the newer JWT signing keys.
 
 If Supabase is not configured, Burohame automatically falls back to local leaderboard storage.
 
