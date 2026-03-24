@@ -1,6 +1,6 @@
 // Edge Function: upsert-leaderboard-entry
 // Receives a leaderboard entry from a browser client, validates it server-side,
-// and writes it using the service role key so anon clients never touch the table directly.
+// and writes it using the service role key so browser clients never touch the table directly.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -8,8 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const VALID_LEAGUE_IDS = new Set(['bronze', 'silver', 'gold', 'diamond']);
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -39,9 +37,8 @@ Deno.serve(async (req: Request) => {
   const weekId = typeof entry.week_id === 'string' ? entry.week_id.trim() : '';
   const playerId = typeof entry.player_id === 'string' ? entry.player_id.trim() : '';
   const rawName = typeof entry.player_name === 'string' ? entry.player_name.trim() : '';
-  const playerName = rawName.slice(0, 24) || 'Guest';
-  const rawLeague = typeof entry.league_id === 'string' ? entry.league_id.trim() : '';
-  const leagueId = VALID_LEAGUE_IDS.has(rawLeague) ? rawLeague : 'bronze';
+  const playerName = rawName.slice(0, 24);
+  const leagueId = typeof entry.league_id === 'string' ? entry.league_id.trim() : '';
 
   if (!weekId) {
     return new Response(JSON.stringify({ error: 'week_id is required' }), {
@@ -57,13 +54,27 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  if (typeof entry.total_score !== 'number' || !Number.isFinite(entry.total_score)) {
-    return new Response(JSON.stringify({ error: 'total_score must be a finite number' }), {
+  if (!playerName) {
+    return new Response(JSON.stringify({ error: 'player_name is required' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-  const totalScore = Math.max(0, Math.floor(entry.total_score));
+
+  if (!leagueId) {
+    return new Response(JSON.stringify({ error: 'league_id is required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (typeof entry.total_score !== 'number' || !Number.isInteger(entry.total_score) || entry.total_score < 0) {
+    return new Response(JSON.stringify({ error: 'total_score must be a non-negative integer' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const totalScore = entry.total_score;
 
   if (!Array.isArray(entry.counted_runs)) {
     return new Response(JSON.stringify({ error: 'counted_runs must be an array' }), {
@@ -72,18 +83,27 @@ Deno.serve(async (req: Request) => {
     });
   }
   const allRunsValid = (entry.counted_runs as unknown[]).every(
-    (r) => typeof r === 'number' && Number.isFinite(r) && r >= 0,
+    (r) => typeof r === 'number' && Number.isInteger(r) && r >= 0,
   );
   if (!allRunsValid) {
-    return new Response(JSON.stringify({ error: 'counted_runs must contain non-negative finite numbers' }), {
+    return new Response(JSON.stringify({ error: 'counted_runs must contain non-negative integers' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-  const countedRuns: number[] = (entry.counted_runs as number[]).map(Math.floor).slice(0, 4);
+  const countedRuns: number[] = (entry.counted_runs as number[])
+    .slice()
+    .sort((a, b) => b - a)
+    .slice(0, 4);
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  if (!supabaseUrl || !serviceRoleKey) {
+    return new Response(JSON.stringify({ error: 'Missing Supabase server configuration' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },

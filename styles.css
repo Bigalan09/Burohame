@@ -1150,18 +1150,9 @@ a.icon-btn { text-decoration: none; }
   animation: gameBannerOut 240ms cubic-bezier(0.25, 1, 0.5, 1) both;
 }
 
-.game-banner__message.is-idle .game-banner__meta {
-  opacity: 1;
-}
-
-.game-banner__meta {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: color-mix(in srgb, var(--accent-dk) 42%, var(--text-muted));
-  opacity: 0;
-  transition: opacity 180ms ease;
+.game-banner__message--placeholder .game-banner__kicker,
+.game-banner__message--placeholder .game-banner__title {
+  color: color-mix(in srgb, var(--text-muted) 74%, var(--text));
 }
 
 .game-banner__kicker {
@@ -1205,10 +1196,8 @@ a.icon-btn { text-decoration: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .game-banner__message--incoming,
-  .game-banner__message--outgoing,
-  .game-banner__meta {
+  .game-banner__message--outgoing {
     animation: none;
-    transition: none;
   }
 }
 
