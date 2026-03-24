@@ -197,6 +197,7 @@ let leaderboardPlayerName = 'Guest';
 let leaderboardPlayerId = '';
 let leaderboardBackend = 'local';
 let leaderboardSupabaseUrl = '';
+let leaderboardBackofficeCompleteAt = '';
 let leaderboardSupabaseAnonKey = '';
 let weeklyLeaderboardAdapter = null;
 let weeklyLeaderboardViewState = {
@@ -862,6 +863,8 @@ function createDefaultWeeklyLeaderboardState() {
     playerId: '',
     playerName: 'Guest',
     supabaseUrl: '',
+    backofficeCompleteAt: '',
+    backofficeCompleteAt: typeof src.backofficeCompleteAt === 'string' ? src.backofficeCompleteAt : '',
     supabaseAnonKey: '',
   };
 }
@@ -999,6 +1002,8 @@ function configureWeeklyLeaderboardAdapter() {
     playerId: leaderboardPlayerId,
     playerName: leaderboardPlayerName,
     supabaseUrl: leaderboardSupabaseUrl,
+    backofficeCompleteAt: leaderboardBackofficeCompleteAt,
+  leaderboardBackofficeCompleteAt = settings.backofficeCompleteAt;
     supabaseAnonKey: leaderboardSupabaseAnonKey,
   });
   leaderboardBackend = settings.backend;
@@ -3854,6 +3859,8 @@ function saveSettings() {
       playerId: leaderboardPlayerId,
       playerName: leaderboardPlayerName,
       supabaseUrl: leaderboardSupabaseUrl,
+      backofficeCompleteAt: leaderboardBackofficeCompleteAt,
+    leaderboardBackofficeCompleteAt = weeklyLeaderboardSettings.backofficeCompleteAt;
       supabaseAnonKey: leaderboardSupabaseAnonKey,
     },
   }));
@@ -4240,10 +4247,26 @@ function populateSettingsPage() {
   colorSelect.value = isColorwayOwned(colorSetting) ? colorSetting : 'orange';
   document.getElementById('page-sel-rack').value = String(rackSize);
   document.getElementById('page-input-weekly-name').value = leaderboardPlayerName;
-  document.getElementById('page-sel-weekly-backend').value = leaderboardBackend;
-  document.getElementById('page-input-supabase-url').value = leaderboardSupabaseUrl;
-  document.getElementById('page-input-supabase-key').value = leaderboardSupabaseAnonKey;
+  const backendStatus = document.getElementById('page-weekly-backend-status');
+  if (backendStatus) {
+    const hostedConfigured = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseApiKey;
+    backendStatus.textContent = hostedConfigured
+      ? 'Supabase multiplayer configured for this device.'
+      : leaderboardBackend === 'supabase'
+        ? 'Supabase selected but setup is incomplete.'
+        : 'Using local practice mode.';
+  }
   updateCosmeticLabel();
+}
+
+function populateBackofficePage() {
+  const backendSelect = document.getElementById('backoffice-sel-weekly-backend');
+  const urlInput = document.getElementById('backoffice-input-supabase-url');
+  const keyInput = document.getElementById('backoffice-input-supabase-key');
+  if (!backendSelect || !urlInput || !keyInput) return;
+  backendSelect.value = leaderboardBackend;
+  urlInput.value = leaderboardSupabaseUrl;
+  keyInput.value = leaderboardSupabaseApiKey;
 }
 
 function updatePrimaryPlayButton() {
@@ -5265,9 +5288,6 @@ function applySettingsState(nextSettings) {
   colorSetting = isColorwayOwned(requestedColor) ? requestedColor : colorSetting;
   rackSize = nextSettings.rackSize;
   leaderboardPlayerName = (nextSettings.leaderboardPlayerName || 'Guest').trim().slice(0, 24) || 'Guest';
-  leaderboardBackend = nextSettings.leaderboardBackend === 'supabase' ? 'supabase' : 'local';
-  leaderboardSupabaseUrl = (nextSettings.leaderboardSupabaseUrl || '').trim();
-  leaderboardSupabaseAnonKey = (nextSettings.leaderboardSupabaseAnonKey || '').trim();
   if (!leaderboardPlayerId) leaderboardPlayerId = createPseudoId();
   configureWeeklyLeaderboardAdapter();
 
@@ -5301,6 +5321,18 @@ function openQuickSettingsOverlay() {
   showOverlay('ov-quick-settings');
 }
 
+function applyBackofficeSetup(settings) {
+  leaderboardBackend = settings.backend === 'supabase' ? 'supabase' : 'local';
+  leaderboardSupabaseUrl = (settings.supabaseUrl || '').trim();
+  leaderboardSupabaseApiKey = (settings.supabaseApiKey || '').trim();
+  leaderboardBackofficeCompleteAt = new Date().toISOString();
+  configureWeeklyLeaderboardAdapter();
+  saveSettings();
+  populateBackofficePage();
+  populateSettingsPage();
+  renderWeeklyLadder();
+}
+
 document.getElementById('btn-quick-settings').addEventListener('click', openQuickSettingsOverlay);
 document.getElementById('btn-quick-settings-close').addEventListener('click', () => {
   hideOverlay('ov-quick-settings');
@@ -5313,9 +5345,6 @@ document.getElementById('btn-quick-settings-save').addEventListener('click', () 
     colorSetting,
     rackSize,
     leaderboardPlayerName,
-    leaderboardBackend,
-    leaderboardSupabaseUrl,
-    leaderboardSupabaseAnonKey,
   });
   hideOverlay('ov-quick-settings');
 });
@@ -5421,11 +5450,33 @@ document.getElementById('btn-settings-save').addEventListener('click', () => {
     colorSetting: sanitiseColorSetting(document.getElementById('page-sel-color').value),
     rackSize: parseInt(document.getElementById('page-sel-rack').value, 10),
     leaderboardPlayerName: document.getElementById('page-input-weekly-name').value,
-    leaderboardBackend: document.getElementById('page-sel-weekly-backend').value,
-    leaderboardSupabaseUrl: document.getElementById('page-input-supabase-url').value,
-    leaderboardSupabaseAnonKey: document.getElementById('page-input-supabase-key').value,
   });
   navigateTo('dashboard');
+});
+
+document.getElementById('btn-settings-backoffice').addEventListener('click', () => {
+  populateBackofficePage();
+  navigateTo('backoffice');
+});
+
+document.getElementById('btn-backoffice-save').addEventListener('click', () => {
+  const backend = document.getElementById('backoffice-sel-weekly-backend').value;
+  const supabaseUrl = document.getElementById('backoffice-input-supabase-url').value.trim();
+  const supabaseApiKey = document.getElementById('backoffice-input-supabase-key').value.trim();
+  if (backend === 'supabase' && (!supabaseUrl || !supabaseApiKey)) {
+    alert('Supabase URL and publishable key are required for Supabase multiplayer.');
+    return;
+  }
+  applyBackofficeSetup({
+    backend,
+    supabaseUrl,
+    supabaseApiKey,
+  });
+  navigateTo('settings');
+});
+
+document.getElementById('btn-backoffice-cancel').addEventListener('click', () => {
+  navigateTo('settings');
 });
 
 document.getElementById('btn-clear-data').addEventListener('click', async () => {
@@ -5499,6 +5550,13 @@ document.addEventListener('touchstart', e => {
 }, { passive: false });
 
 // ── Init ───────────────────────────────────────────────────
+function shouldOpenBackofficeSetup() {
+  if (leaderboardBackofficeCompleteAt) return false;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('setup') === 'backoffice') return true;
+  return !leaderboardSupabaseUrl && !leaderboardSupabaseApiKey;
+}
+
 function init() {
   bestScore  = parseInt(localStorage.getItem('bst-best') || '0', 10);
   const todayKey = new Date().toISOString().slice(0, 10);
@@ -5553,8 +5611,9 @@ function init() {
 
   populateQuickSettings();
   populateSettingsPage();
+  populateBackofficePage();
   renderDashboard();
-  navigateTo('dashboard');
+  navigateTo(shouldOpenBackofficeSetup() ? 'backoffice' : 'dashboard');
 }
 
 init();
