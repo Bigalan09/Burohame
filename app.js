@@ -3459,16 +3459,16 @@ function renderDailyChallengePanels() {
   const challenge = ensureDailyChallengeForToday();
   const challengeStatus = getDailyChallengeStatus(challenge);
   const isFirstRunExperience = getCompletedRunCount() === 0;
-  const title = challengeStatus.complete ? 'Today’s challenge complete' : 'Today’s challenge';
+  const title = 'Today';
   const copy = challengeStatus.complete
-    ? 'Great work. Come back tomorrow to keep your streak moving.'
+    ? 'Done for today. Come back tomorrow for a fresh board.'
     : challengeStatus.remaining
-      ? `${challengeStatus.remaining} more points to reach today’s target.`
+      ? `${challengeStatus.remaining} points to today’s target.`
       : isFirstRunExperience
-        ? 'Play today’s board to begin your streak.'
-        : 'A fresh shared board is ready.';
+        ? 'Play today’s board.'
+        : 'A fresh board is ready.';
   const progressLabel = challengeStatus.complete
-    ? `Reward earned: ${challengeStatus.reward} coins`
+    ? `Reward claimed: ${challengeStatus.reward} coins`
     : `Reward: ${challengeStatus.reward} coins`;
 
   setTextIfPresent('dashboard-daily-title', title);
@@ -4415,15 +4415,13 @@ function renderWeeklyLadder() {
   setTextIfPresent(pageIds.nextStep, nextStepText);
   setTextIfPresent(pageIds.reward, rewardLine);
 
-  const compactWeeklyTitle = countedRuns.length
-    ? `${league.badge} ${league.name} week`
-    : 'Weekly progress';
+  const compactWeeklyTitle = 'This week';
   const compactWeeklyCopy = countedRuns.length
-    ? '1 more run could improve your rank.'
-    : 'Complete your first run this week.';
+    ? 'One more strong run could lift your place.'
+    : 'Set your first weekly score.';
   const compactWeeklyProgress = countedRuns.length
     ? `${rankLabel} · ${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} runs counted`
-    : 'No runs counted yet';
+    : 'Complete your first run';
 
   setTextIfPresent('dashboard-weekly-card-title', compactWeeklyTitle);
   setTextIfPresent('dashboard-weekly-card-copy', compactWeeklyCopy);
@@ -4500,13 +4498,13 @@ function renderDashboardUnlockPreview({ isFirstRunExperience = false } = {}) {
   const spotlight = albumStatus.spotlightSet;
 
   let title = 'Next reward';
-  let copy = 'Complete your first run to start unlocking finishes.';
-  let progress = 'Collection progress starts after your first run';
+  let copy = 'Unlock your first finish reward.';
+  let progress = 'Complete your first run';
 
   if (!isFirstRunExperience) {
     if (albumStatus.allSetsComplete) {
-      title = 'Collection complete';
-      copy = 'Every themed set is complete and ready to equip.';
+      title = 'Next unlock';
+      copy = 'Your collection is complete. Try a higher weekly finish for bonus rewards.';
       progress = `${COLLECTION_ALBUM_GOAL.reward.name} unlocked`;
     } else if (spotlight) {
       title = 'Next unlock';
@@ -4536,6 +4534,10 @@ function renderDashboard() {
   const isFirstRunExperience = getCompletedRunCount() === 0;
   const onboarding = document.getElementById('dashboard-onboarding');
   const firstReward = document.getElementById('dashboard-first-reward');
+  const progressStrip = document.getElementById('dashboard-progress-strip');
+  const focusCards = document.querySelector('.dashboard-focus');
+  const coins = getCoinBalance();
+  const hasMeaningfulProgress = coins > 0 || bestScore > 0 || todayScore > 0;
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
@@ -4557,18 +4559,24 @@ function renderDashboard() {
       intro.textContent = 'Your daily challenge is waiting.';
     } else {
       intro.textContent = hasSavedGame
-        ? 'Welcome back. Pick up where you left off.'
+        ? 'Pick up where you left off.'
         : isFirstRunExperience
-          ? 'Calm puzzle runs you can learn in seconds.'
-          : 'Clear rows, columns, and boxes in calm, quick runs.';
+          ? 'Quick to learn, calm to replay.'
+          : 'Jump in for a clean puzzle run.';
     }
   }
   if (onboarding) {
     onboarding.hidden = !isFirstRunExperience || hasSavedGame;
   }
   if (firstReward) firstReward.textContent = `First run reward: ${scaleCoinReward(32, 'run')} coins`;
+  if (focusCards) {
+    focusCards.hidden = isFirstRunExperience && !hasSavedGame;
+  }
+  if (progressStrip) {
+    progressStrip.hidden = !hasMeaningfulProgress;
+  }
 
-  document.getElementById('dashboard-coins').textContent = String(getCoinBalance());
+  document.getElementById('dashboard-coins').textContent = String(coins);
   document.getElementById('dashboard-best').textContent = String(bestScore);
   document.getElementById('dashboard-today').textContent = String(todayScore);
   renderSessionModeBadge();

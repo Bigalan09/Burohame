@@ -223,22 +223,22 @@ html, body {
 }
 
 .dash-hero {
-  padding: 20px 18px 16px;
+  padding: 20px 18px 18px;
   border-radius: 28px;
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 18%, transparent), transparent 48%),
-    color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 12%, transparent), transparent 52%),
+    color-mix(in srgb, var(--accent) 6%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
 }
 
 .dash-hero--calm {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .dash-hero__value {
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--text-2);
 }
 
@@ -274,7 +274,7 @@ html, body {
 .dash-progress-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
 }
 
 .dash-hero-meta {
@@ -307,10 +307,10 @@ html, body {
 }
 
 .dashboard-stat {
-  padding: 10px 10px;
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--accent) 4%, var(--bg-card));
-  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--border));
+  padding: 9px 10px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 3%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 8%, var(--border));
 }
 
 .dashboard-stat span {
@@ -323,54 +323,63 @@ html, body {
 
 .dashboard-stat strong {
   display: block;
-  margin-top: 8px;
-  font-size: clamp(22px, 6vw, 26px);
+  margin-top: 7px;
+  font-size: clamp(20px, 5.8vw, 24px);
   line-height: 1;
   color: var(--text);
 }
 
 .dash-onboarding {
-  margin-top: 12px;
+  margin-top: 10px;
   padding: 14px;
   border-radius: 22px;
   border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border));
-  background: color-mix(in srgb, var(--accent) 4%, var(--bg-card));
+  background: color-mix(in srgb, var(--accent) 3%, var(--bg-card));
 }
 
 .dash-onboarding h2 {
-  font-size: 16px;
+  font-size: 15px;
   margin-bottom: 8px;
 }
 
 .dash-onboarding__steps {
-  margin-left: 18px;
-  color: var(--text-2);
-  font-size: 13px;
-  line-height: 1.5;
   display: grid;
-  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.dash-onboarding__steps p {
+  margin: 0;
+  min-height: 50px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 9%, var(--border));
+  padding: 8px 9px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+  background: color-mix(in srgb, var(--accent) 3%, var(--bg-card));
 }
 
 .dash-onboarding__reward {
-  margin-top: 10px;
+  margin-top: 9px;
   font-size: 13px;
   font-weight: 700;
   color: color-mix(in srgb, var(--accent-dk) 74%, var(--text));
 }
 
 .dashboard-focus {
-  margin-top: 14px;
+  margin-top: 12px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .focus-card {
   width: 100%;
   text-align: left;
-  padding: 14px;
-  border-radius: 20px;
+  padding: 13px;
+  border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--border));
-  background: color-mix(in srgb, var(--accent) 3%, var(--bg-card));
+  background: color-mix(in srgb, var(--accent) 2%, var(--bg-card));
   color: inherit;
   font: inherit;
 }
@@ -382,18 +391,24 @@ html, body {
 }
 
 .focus-card__line {
-  margin-top: 5px;
+  margin-top: 4px;
   font-size: 13px;
   color: var(--text-2);
 }
 
 .focus-card__meta {
-  margin-top: 10px;
+  margin-top: 9px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+
+@media (max-width: 380px) {
+  .dash-onboarding__steps {
+    grid-template-columns: 1fr;
+  }
 }
 
 .focus-card__action {
