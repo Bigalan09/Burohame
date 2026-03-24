@@ -41,6 +41,8 @@ check_contains manifest.json "\"start_url\": \"/${name}/\"" \
   "manifest.json must use the current repository Pages path as start_url."
 check_contains index.html "updateViaCache: 'none'" \
   "index.html must register the service worker with updateViaCache disabled."
+check_contains app.js "addListener(" \
+  "app.js must keep a MediaQueryList listener fallback for Safari compatibility."
 check_contains sw.js "request.mode === 'navigate'" \
   "sw.js must treat navigation requests as part of the app shell."
 check_contains sw.js "fetch(request)" \

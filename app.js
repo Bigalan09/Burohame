@@ -5636,6 +5636,17 @@ function shouldOpenBackofficeSetup() {
   return !leaderboardSupabaseUrl && !leaderboardSupabaseApiKey;
 }
 
+function addMediaQueryChangeListener(mediaQueryList, listener) {
+  if (!mediaQueryList) return;
+  if (typeof mediaQueryList.addEventListener === 'function') {
+    mediaQueryList.addEventListener('change', listener);
+    return;
+  }
+  if (typeof mediaQueryList.addListener === 'function') {
+    mediaQueryList.addListener(listener);
+  }
+}
+
 function init() {
   bestScore  = parseInt(localStorage.getItem('bst-best') || '0', 10);
   const todayKey = new Date().toISOString().slice(0, 10);
@@ -5662,7 +5673,7 @@ function init() {
   // Follow OS dark-mode changes dynamically when the user hasn't set
   // an explicit preference (i.e. no saved 'dark' key in settings yet).
   const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
-  darkMQ.addEventListener('change', e => {
+  addMediaQueryChangeListener(darkMQ, e => {
     const s = JSON.parse(localStorage.getItem('bst-settings') || '{}');
     if (typeof s.dark !== 'boolean') {
       darkMode = e.matches;
