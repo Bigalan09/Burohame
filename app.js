@@ -194,11 +194,10 @@ let dailyChallengeState = {
 };
 let leaderboardPlayerName = 'Guest';
 let leaderboardPlayerId = '';
-let leaderboardBackend = 'local';
-let leaderboardSupabaseUrl = '';
-let leaderboardSupabaseApiKey = '';
-let leaderboardBackofficeCompleteAt = '';
+let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
 let weeklyLeaderboardAdapter = null;
+let weeklyLeaderboardHostedAdapter = null;
+let weeklyLeaderboardLocalAdapter = null;
 let weeklyLeaderboardViewState = {
   weekId: '',
   entries: [],
@@ -857,32 +856,60 @@ function formatOrdinal(value) {
 
 function createDefaultWeeklyLeaderboardState() {
   return {
-    backend: 'local',
     playerId: '',
     playerName: 'Guest',
-    supabaseUrl: '',
-    supabaseApiKey: '',
-    backofficeCompleteAt: '',
   };
 }
 
 function sanitiseWeeklyLeaderboardState(value) {
   const defaults = createDefaultWeeklyLeaderboardState();
   const src = value && typeof value === 'object' ? value : {};
-  // Legacy compatibility: accept old saved `supabaseAnonKey` and normalise it
-  // into the publishable key setting name used by current builds.
   return {
-    backend: src.backend === 'supabase' ? 'supabase' : defaults.backend,
     playerId: typeof src.playerId === 'string' ? src.playerId.trim().slice(0, 64) : '',
     playerName: typeof src.playerName === 'string' && src.playerName.trim()
       ? src.playerName.trim().slice(0, 24)
       : defaults.playerName,
-    supabaseUrl: typeof src.supabaseUrl === 'string' ? src.supabaseUrl.trim() : '',
-    supabaseApiKey: typeof (src.supabaseApiKey || src.supabaseAnonKey) === 'string'
-      ? String(src.supabaseApiKey || src.supabaseAnonKey).trim()
-      : '',
-    backofficeCompleteAt: typeof src.backofficeCompleteAt === 'string' ? src.backofficeCompleteAt : '',
   };
+}
+
+function createDefaultWeeklyLeaderboardRuntimeConfig() {
+  return {
+    backend: 'local',
+    supabaseUrl: '',
+    supabasePublishableKey: '',
+  };
+}
+
+function sanitiseWeeklyLeaderboardRuntimeConfig(value) {
+  const defaults = createDefaultWeeklyLeaderboardRuntimeConfig();
+  const src = value && typeof value === 'object' ? value : {};
+  const supabaseUrl = typeof src.supabaseUrl === 'string' ? src.supabaseUrl.trim() : '';
+  const supabasePublishableKey = typeof (src.supabasePublishableKey || src.supabaseApiKey || src.supabaseAnonKey) === 'string'
+    ? String(src.supabasePublishableKey || src.supabaseApiKey || src.supabaseAnonKey).trim()
+    : '';
+
+  if (src.backend === 'supabase' && supabaseUrl && supabasePublishableKey) {
+    return {
+      backend: 'supabase',
+      supabaseUrl,
+      supabasePublishableKey,
+    };
+  }
+
+  return defaults;
+}
+
+function loadRuntimeConfig() {
+  const runtimeConfig = window.BUROHAME_RUNTIME_CONFIG && typeof window.BUROHAME_RUNTIME_CONFIG === 'object'
+    ? window.BUROHAME_RUNTIME_CONFIG
+    : {};
+  weeklyLeaderboardRuntimeConfig = sanitiseWeeklyLeaderboardRuntimeConfig(runtimeConfig.weeklyLeaderboard);
+}
+
+function hasHostedWeeklyLeaderboardConfig() {
+  return weeklyLeaderboardRuntimeConfig.backend === 'supabase'
+    && !!weeklyLeaderboardRuntimeConfig.supabaseUrl
+    && !!weeklyLeaderboardRuntimeConfig.supabasePublishableKey;
 }
 
 function createPseudoId() {
@@ -1093,24 +1120,20 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
 
 function configureWeeklyLeaderboardAdapter() {
   const settings = sanitiseWeeklyLeaderboardState({
-    backend: leaderboardBackend,
     playerId: leaderboardPlayerId,
     playerName: leaderboardPlayerName,
-    supabaseUrl: leaderboardSupabaseUrl,
-    supabaseApiKey: leaderboardSupabaseApiKey,
-    backofficeCompleteAt: leaderboardBackofficeCompleteAt,
   });
-  leaderboardBackend = settings.backend;
   leaderboardPlayerId = settings.playerId || createPseudoId();
   leaderboardPlayerName = settings.playerName;
-  leaderboardSupabaseUrl = settings.supabaseUrl;
-  leaderboardSupabaseApiKey = settings.supabaseApiKey;
-  leaderboardBackofficeCompleteAt = settings.backofficeCompleteAt;
 
-  const canUseSupabase = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseApiKey;
-  weeklyLeaderboardAdapter = canUseSupabase
-    ? createSupabaseWeeklyLeaderboardAdapter(leaderboardSupabaseUrl, leaderboardSupabaseApiKey)
-    : createLocalWeeklyLeaderboardAdapter();
+  weeklyLeaderboardLocalAdapter = createLocalWeeklyLeaderboardAdapter();
+  weeklyLeaderboardHostedAdapter = hasHostedWeeklyLeaderboardConfig()
+    ? createSupabaseWeeklyLeaderboardAdapter(
+        weeklyLeaderboardRuntimeConfig.supabaseUrl,
+        weeklyLeaderboardRuntimeConfig.supabasePublishableKey,
+      )
+    : null;
+  weeklyLeaderboardAdapter = weeklyLeaderboardHostedAdapter || weeklyLeaderboardLocalAdapter;
   weeklyLeaderboardViewState = {
     ...weeklyLeaderboardViewState,
     sourceLabel: weeklyLeaderboardAdapter.sourceLabel,
@@ -1133,10 +1156,18 @@ function getWeeklyLeaderboardEntryPayload() {
 }
 
 async function publishWeeklyLeaderboardEntry() {
-  if (!weeklyLeaderboardAdapter || !leaderboardPlayerId) return;
+  if (!leaderboardPlayerId) return;
   const payload = getWeeklyLeaderboardEntryPayload();
+  if (weeklyLeaderboardLocalAdapter) {
+    try {
+      await weeklyLeaderboardLocalAdapter.upsertPlayerWeekEntry(payload);
+    } catch (_) {
+      // Local fallback should never block the game loop.
+    }
+  }
+  if (!weeklyLeaderboardHostedAdapter) return;
   try {
-    await weeklyLeaderboardAdapter.upsertPlayerWeekEntry(payload);
+    await weeklyLeaderboardHostedAdapter.upsertPlayerWeekEntry(payload);
   } catch (_) {
     // Keep the game running even if hosted leaderboard writes fail.
   }
@@ -1170,10 +1201,24 @@ async function refreshWeeklyLeaderboard(weekId, options = {}) {
       sourceLabel: weeklyLeaderboardAdapter.sourceLabel,
     };
   } catch (_) {
+    let fallbackRows = [];
+    if (weeklyLeaderboardLocalAdapter) {
+      try {
+        fallbackRows = await weeklyLeaderboardLocalAdapter.fetchWeekEntries(weekId);
+      } catch (_) {
+        fallbackRows = [];
+      }
+    }
     weeklyLeaderboardViewState = {
       ...weeklyLeaderboardViewState,
+      weekId,
+      entries: fallbackRows,
       loading: false,
-      error: 'Shared table unavailable right now. Falling back to your local status.',
+      fetchedAt: weeklyLeaderboardHostedAdapter ? 0 : Date.now(),
+      error: weeklyLeaderboardHostedAdapter
+        ? 'Shared table unavailable right now. Showing your local practice table.'
+        : '',
+      sourceLabel: weeklyLeaderboardLocalAdapter?.sourceLabel || 'Using local practice table',
     };
   }
   renderWeeklyGlobalLeaderboard();
@@ -1195,7 +1240,9 @@ function renderWeeklyGlobalLeaderboard() {
   const rows = weeklyLeaderboardViewState.entries.slice(0, 8);
   if (!rows.length) {
     const empty = document.createElement('li');
-    empty.textContent = 'No shared runs yet this week. Your next run can set the pace.';
+    empty.textContent = weeklyLeaderboardViewState.sourceLabel === (weeklyLeaderboardLocalAdapter?.sourceLabel || 'Using local practice table')
+      ? 'No local practice runs are saved on this device yet.'
+      : 'No shared runs yet this week. Your next run can set the pace.';
     listEl.appendChild(empty);
     return;
   }
@@ -3933,12 +3980,8 @@ function saveSettings() {
     color:     colorSetting,
     rackSize:  rackSize,
     weeklyLeaderboard: {
-      backend: leaderboardBackend,
       playerId: leaderboardPlayerId,
       playerName: leaderboardPlayerName,
-      supabaseUrl: leaderboardSupabaseUrl,
-      supabaseApiKey: leaderboardSupabaseApiKey,
-      backofficeCompleteAt: leaderboardBackofficeCompleteAt,
     },
   }));
 }
@@ -3952,13 +3995,8 @@ function loadSettings() {
     if (typeof s.rackSize === 'number' && s.rackSize >= 1 && s.rackSize <= 3)
       rackSize = s.rackSize;
     const weeklyLeaderboardSettings = sanitiseWeeklyLeaderboardState(s.weeklyLeaderboard);
-    leaderboardBackend = weeklyLeaderboardSettings.backend;
     leaderboardPlayerId = weeklyLeaderboardSettings.playerId || createPseudoId();
     leaderboardPlayerName = weeklyLeaderboardSettings.playerName;
-    leaderboardSupabaseUrl = weeklyLeaderboardSettings.supabaseUrl;
-    leaderboardSupabaseApiKey = weeklyLeaderboardSettings.supabaseApiKey;
-    leaderboardBackofficeCompleteAt = weeklyLeaderboardSettings.backofficeCompleteAt;
-    configureWeeklyLeaderboardAdapter();
     // Respect saved dark preference; fall back to OS preference on first launch
     if (typeof s.dark === 'boolean') {
       darkMode = s.dark;
@@ -4327,24 +4365,11 @@ function populateSettingsPage() {
   document.getElementById('page-input-weekly-name').value = leaderboardPlayerName;
   const backendStatus = document.getElementById('page-weekly-backend-status');
   if (backendStatus) {
-    const hostedConfigured = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseApiKey;
-    backendStatus.textContent = hostedConfigured
-      ? 'Supabase multiplayer configured for this device.'
-      : leaderboardBackend === 'supabase'
-        ? 'Supabase selected but setup is incomplete.'
-        : 'Using local practice mode.';
+    backendStatus.textContent = hasHostedWeeklyLeaderboardConfig()
+      ? 'Hosted multiplayer is configured for this release. Local fallback is automatic offline.'
+      : 'This build uses local practice mode only.';
   }
   updateCosmeticLabel();
-}
-
-function populateBackofficePage() {
-  const backendSelect = document.getElementById('backoffice-sel-weekly-backend');
-  const urlInput = document.getElementById('backoffice-input-supabase-url');
-  const keyInput = document.getElementById('backoffice-input-supabase-key');
-  if (!backendSelect || !urlInput || !keyInput) return;
-  backendSelect.value = leaderboardBackend;
-  urlInput.value = leaderboardSupabaseUrl;
-  keyInput.value = leaderboardSupabaseApiKey;
 }
 
 function updatePrimaryPlayButton() {
@@ -5400,18 +5425,6 @@ function openQuickSettingsOverlay() {
   showOverlay('ov-quick-settings');
 }
 
-function applyBackofficeSetup(settings) {
-  leaderboardBackend = settings.backend === 'supabase' ? 'supabase' : 'local';
-  leaderboardSupabaseUrl = (settings.supabaseUrl || '').trim();
-  leaderboardSupabaseApiKey = (settings.supabaseApiKey || '').trim();
-  leaderboardBackofficeCompleteAt = new Date().toISOString();
-  configureWeeklyLeaderboardAdapter();
-  saveSettings();
-  populateBackofficePage();
-  populateSettingsPage();
-  renderWeeklyLadder();
-}
-
 document.getElementById('btn-quick-settings').addEventListener('click', openQuickSettingsOverlay);
 document.getElementById('btn-quick-settings-close').addEventListener('click', () => {
   hideOverlay('ov-quick-settings');
@@ -5533,31 +5546,6 @@ document.getElementById('btn-settings-save').addEventListener('click', () => {
   navigateTo('dashboard');
 });
 
-document.getElementById('btn-settings-backoffice').addEventListener('click', () => {
-  populateBackofficePage();
-  navigateTo('backoffice');
-});
-
-document.getElementById('btn-backoffice-save').addEventListener('click', () => {
-  const backend = document.getElementById('backoffice-sel-weekly-backend').value;
-  const supabaseUrl = document.getElementById('backoffice-input-supabase-url').value.trim();
-  const supabaseApiKey = document.getElementById('backoffice-input-supabase-key').value.trim();
-  if (backend === 'supabase' && (!supabaseUrl || !supabaseApiKey)) {
-    alert('Supabase URL and publishable key are required for Supabase multiplayer.');
-    return;
-  }
-  applyBackofficeSetup({
-    backend,
-    supabaseUrl,
-    supabaseApiKey,
-  });
-  navigateTo('settings');
-});
-
-document.getElementById('btn-backoffice-cancel').addEventListener('click', () => {
-  navigateTo('settings');
-});
-
 document.getElementById('btn-clear-data').addEventListener('click', async () => {
   if (!confirm('Clear all game progress and cached data?\nThis cannot be undone.')) return;
 
@@ -5568,6 +5556,12 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   localStorage.removeItem(PROGRESSION_STORAGE_KEY);
   localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
   localStorage.removeItem(WEEKLY_LEADERBOARD_STORAGE_KEY);
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('bst-supabase-auth:')) {
+      localStorage.removeItem(key);
+    }
+  }
   progressionState = createDefaultProgressionState();
 
   // Unregister service workers so new assets are fetched on next load
@@ -5628,14 +5622,6 @@ document.addEventListener('touchstart', e => {
   if (e.target.closest('.slot')) e.preventDefault();
 }, { passive: false });
 
-// ── Init ───────────────────────────────────────────────────
-function shouldOpenBackofficeSetup() {
-  if (leaderboardBackofficeCompleteAt) return false;
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('setup') === 'backoffice') return true;
-  return !leaderboardSupabaseUrl && !leaderboardSupabaseApiKey;
-}
-
 function addMediaQueryChangeListener(mediaQueryList, listener) {
   if (!mediaQueryList) return;
   if (typeof mediaQueryList.addEventListener === 'function') {
@@ -5663,6 +5649,7 @@ function init() {
   updateCoinUI();
   applyEquippedCosmeticSkin();
   loadSettings();
+  loadRuntimeConfig();
   if (!weeklyLeaderboardAdapter) configureWeeklyLeaderboardAdapter();
   ensureSelectedColorway({ preserveLegacy: true });
   applyDarkMode(darkMode);
@@ -5701,9 +5688,8 @@ function init() {
 
   populateQuickSettings();
   populateSettingsPage();
-  populateBackofficePage();
   renderDashboard();
-  navigateTo(shouldOpenBackofficeSetup() ? 'backoffice' : 'dashboard');
+  navigateTo('dashboard');
 }
 
 init();

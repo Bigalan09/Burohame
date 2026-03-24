@@ -13,6 +13,7 @@ function shellAssetUrls() {
   return [
     scopeUrl(''),
     scopeUrl('index.html'),
+    scopeUrl('config.js'),
     scopeUrl('app.js'),
     scopeUrl('styles.css'),
   ];

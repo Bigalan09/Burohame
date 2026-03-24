@@ -200,10 +200,10 @@
           </div>
           <div class="dashboard-weekly__global" aria-live="polite">
             <div class="dashboard-weekly__global-head">
-              <strong>Shared weekly table</strong>
+              <strong>Weekly table</strong>
               <span id="weekly-global-status">Using local practice table</span>
             </div>
-            <ol class="dashboard-weekly__global-list" id="weekly-global-list" aria-label="Shared weekly leaderboard entries"></ol>
+            <ol class="dashboard-weekly__global-list" id="weekly-global-list" aria-label="Weekly leaderboard entries"></ol>
           </div>
         </section>
       </div>
@@ -427,16 +427,15 @@
           <div class="setting-row setting-row--stack">
             <div>
               <span>Weekly display name</span>
-              <small>Name shown in the shared weekly table.</small>
+              <small>Name shown in the weekly table.</small>
             </div>
             <input id="page-input-weekly-name" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Player name">
           </div>
           <div class="setting-row setting-row--stack">
             <div>
-              <span>Leaderboard backend</span>
-              <small id="page-weekly-backend-status">Back-office setup status.</small>
+              <span>Weekly leaderboard mode</span>
+              <small id="page-weekly-backend-status">This build uses local practice mode.</small>
             </div>
-            <button class="pill-btn pill-btn--secondary" id="btn-settings-backoffice" type="button">Back-office setup</button>
           </div>
           <div class="setting-row setting-row--stack">
             <div>
@@ -447,47 +446,6 @@
           </div>
           <button class="pill-btn wide" id="btn-settings-save" type="button">Save settings</button>
           <button class="pill-btn wide danger" id="btn-clear-data" type="button">🗑️ Clear All Data</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="page page--backoffice" data-page="backoffice" aria-label="Leaderboard back-office setup">
-      <div class="page-scroll">
-        <header class="page-top">
-          <div>
-            <p class="page-kicker">Back office</p>
-            <h2>Leaderboard setup</h2>
-            <p class="page-intro">This one-time setup controls hosted leaderboard access on this device.</p>
-          </div>
-        </header>
-
-        <div class="page-panel settings-page-panel">
-          <div class="setting-row setting-row--stack">
-            <div>
-              <span>Weekly backend</span>
-              <small>Choose local practice mode or Supabase multiplayer.</small>
-            </div>
-            <select id="backoffice-sel-weekly-backend">
-              <option value="local">Local practice</option>
-              <option value="supabase">Supabase multiplayer</option>
-            </select>
-          </div>
-          <div class="setting-row setting-row--stack">
-            <div>
-              <span>Supabase URL</span>
-              <small>Only needed for Supabase multiplayer.</small>
-            </div>
-            <input id="backoffice-input-supabase-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://your-project.supabase.co">
-          </div>
-          <div class="setting-row setting-row--stack">
-            <div>
-              <span>Supabase publishable key</span>
-              <small>Stored locally on this browser only.</small>
-            </div>
-            <input id="backoffice-input-supabase-key" type="password" autocomplete="off" spellcheck="false" placeholder="sb_publishable_...">
-          </div>
-          <button class="pill-btn wide" id="btn-backoffice-save" type="button">Save setup</button>
-          <button class="pill-btn wide pill-btn--secondary" id="btn-backoffice-cancel" type="button">Back to settings</button>
         </div>
       </div>
     </section>
@@ -636,6 +594,7 @@
 
   <div id="milestone-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
