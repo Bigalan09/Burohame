@@ -228,10 +228,10 @@ const COIN_REWARDS = Object.freeze({
   comboStep: 0,
   roundMilestoneEvery: 10,
   roundMilestoneReward: 8,
-  endRunBase: 10,
+  endRunBase: 8,
   endRunPer50Score: 1,
   endRunScoreBandCap: 10,
-  personalBestBonus: 12,
+  personalBestBonus: 10,
 });
 function scaleShopPrice(amount) {
   if (!amount) return 0;
