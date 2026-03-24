@@ -192,7 +192,7 @@ let dailyChallengeState = {
   targetScore: 0,
   randomState: 0,
 };
-let leaderboardPlayerName = 'Guest';
+let leaderboardPlayerName = '';
 let leaderboardPlayerId = '';
 let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
 let weeklyLeaderboardAdapter = null;
@@ -248,7 +248,16 @@ const COIN_REWARDS = Object.freeze({
   endRunScoreBandCap: 10,
   personalBestBonus: 10,
 });
-const DEFAULT_LEADERBOARD_NAME = 'Guest';
+const LEGACY_LEADERBOARD_NAME = 'Guest';
+const LEADERBOARD_FALLBACK_ANIMALS = Object.freeze([
+  'Otter', 'Badger', 'Fox', 'Hedgehog', 'Robin', 'Falcon', 'Puffin', 'Lynx',
+  'Wolf', 'Dolphin', 'Koala', 'Panda', 'Tiger', 'Leopard', 'Panther', 'Jaguar',
+  'Giraffe', 'Zebra', 'Bison', 'Moose', 'Seal', 'Penguin', 'Turtle', 'Parrot',
+  'Raven', 'Cobra', 'Viper', 'Gecko', 'Salmon', 'Manta',
+]);
+const DEFAULT_LEADERBOARD_NAME = LEADERBOARD_FALLBACK_ANIMALS[
+  Math.floor(Math.random() * LEADERBOARD_FALLBACK_ANIMALS.length)
+];
 const LOCAL_WEEKLY_TABLE_LABEL = "This device's weekly table";
 const GLOBAL_WEEKLY_TABLE_LABEL = 'Global weekly table';
 const LEADERBOARD_HANDLE_VALIDATION_PREFIXES = Object.freeze([
@@ -889,14 +898,18 @@ function createDefaultWeeklyLeaderboardState() {
   };
 }
 
+function sanitiseLeaderboardPlayerName(value, fallbackName = DEFAULT_LEADERBOARD_NAME) {
+  const candidate = typeof value === 'string' ? value.trim().slice(0, 24) : '';
+  if (!candidate) return fallbackName;
+  if (candidate.toLowerCase() === LEGACY_LEADERBOARD_NAME.toLowerCase()) return fallbackName;
+  return candidate;
+}
+
 function sanitiseWeeklyLeaderboardState(value) {
-  const defaults = createDefaultWeeklyLeaderboardState();
   const src = value && typeof value === 'object' ? value : {};
   return {
     playerId: typeof src.playerId === 'string' ? src.playerId.trim().slice(0, 64) : '',
-    playerName: typeof src.playerName === 'string' && src.playerName.trim()
-      ? src.playerName.trim().slice(0, 24)
-      : defaults.playerName,
+    playerName: sanitiseLeaderboardPlayerName(src.playerName),
   };
 }
 
@@ -1224,7 +1237,7 @@ async function tryClaimLeaderboardHandle(requestedName, options = {}) {
 
   const normalisedRequestedName = normaliseRequestedLeaderboardName(requestedName);
   if (!normalisedRequestedName) return '';
-  if (normalisedRequestedName.toLowerCase() === DEFAULT_LEADERBOARD_NAME.toLowerCase()) return '';
+  if (normalisedRequestedName.toLowerCase() === LEGACY_LEADERBOARD_NAME.toLowerCase()) return '';
 
   if (!weeklyLeaderboardHostedAdapter?.claimLeaderboardHandle) {
     if (options.requireClaim) {
@@ -5515,7 +5528,7 @@ function applySettingsState(nextSettings) {
   const requestedColor = sanitiseColorSetting(nextSettings.colorSetting);
   colorSetting = isColorwayOwned(requestedColor) ? requestedColor : colorSetting;
   rackSize = nextSettings.rackSize;
-  leaderboardPlayerName = (nextSettings.leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME).trim().slice(0, 24) || DEFAULT_LEADERBOARD_NAME;
+  leaderboardPlayerName = sanitiseLeaderboardPlayerName(nextSettings.leaderboardPlayerName);
   if (!leaderboardPlayerId) leaderboardPlayerId = createPseudoId();
   configureWeeklyLeaderboardAdapter();
 
@@ -5661,11 +5674,11 @@ document.getElementById('colorway-list').addEventListener('click', handleShopAct
 async function resolveLeaderboardNameForSave(requestedName) {
   const normalisedRequestedName = normaliseRequestedLeaderboardName(requestedName);
   if (!hasHostedWeeklyLeaderboardConfig()) {
-    return sanitiseLocalLeaderboardName(normalisedRequestedName);
+    return sanitiseLeaderboardPlayerName(sanitiseLocalLeaderboardName(normalisedRequestedName));
   }
 
   if (!normalisedRequestedName) {
-    return leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME;
+    return sanitiseLeaderboardPlayerName(leaderboardPlayerName);
   }
 
   const currentBaseName = hasClaimedLeaderboardHandle(leaderboardPlayerName)
@@ -5676,11 +5689,11 @@ async function resolveLeaderboardNameForSave(requestedName) {
   }
 
   const claimedHandle = await tryClaimLeaderboardHandle(normalisedRequestedName, { requireClaim: true });
-  return claimedHandle || sanitiseLocalLeaderboardName(normalisedRequestedName);
+  return claimedHandle || sanitiseLeaderboardPlayerName(sanitiseLocalLeaderboardName(normalisedRequestedName));
 }
 
 document.getElementById('btn-settings-save').addEventListener('click', async () => {
-  let resolvedLeaderboardName = leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME;
+  let resolvedLeaderboardName = sanitiseLeaderboardPlayerName(leaderboardPlayerName);
   try {
     resolvedLeaderboardName = await resolveLeaderboardNameForSave(
       document.getElementById('page-input-weekly-name').value,
@@ -5699,6 +5712,12 @@ document.getElementById('btn-settings-save').addEventListener('click', async () 
     rackSize: parseInt(document.getElementById('page-sel-rack').value, 10),
     leaderboardPlayerName: resolvedLeaderboardName,
   });
+  try {
+    await publishWeeklyLeaderboardEntry();
+    await refreshWeeklyLeaderboard(getCurrentUTCWeekId(), { force: true });
+  } catch (_) {
+    // Keep settings save responsive even if leaderboard sync fails.
+  }
   navigateTo('dashboard');
 });
 
