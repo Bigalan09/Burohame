@@ -231,6 +231,17 @@ html, body {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
 }
 
+.dash-hero--calm {
+  display: grid;
+  gap: 12px;
+}
+
+.dash-hero__value {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
 .dash-mark {
   display: inline-grid;
   grid-template-columns: repeat(3, 12px);
@@ -254,6 +265,16 @@ html, body {
 
 .dash-actions .wide {
   margin-top: 0;
+}
+
+.dash-actions--hero .pill-btn {
+  font-size: 16px;
+}
+
+.dash-progress-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .dash-hero-meta {
@@ -285,15 +306,8 @@ html, body {
   color: color-mix(in srgb, var(--accent-dk) 70%, var(--text));
 }
 
-.dashboard-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 14px;
-}
-
 .dashboard-stat {
-  padding: 12px 10px;
+  padding: 10px 10px;
   border-radius: 18px;
   background: color-mix(in srgb, var(--accent) 4%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--border));
@@ -315,8 +329,76 @@ html, body {
   color: var(--text);
 }
 
-.dashboard-retention {
-  margin-top: 18px;
+.dash-onboarding {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border));
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-card));
+}
+
+.dash-onboarding h2 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.dash-onboarding__steps {
+  margin-left: 18px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+  display: grid;
+  gap: 4px;
+}
+
+.dash-onboarding__reward {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent-dk) 74%, var(--text));
+}
+
+.dashboard-focus {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.focus-card {
+  width: 100%;
+  text-align: left;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--border));
+  background: color-mix(in srgb, var(--accent) 3%, var(--bg-card));
+  color: inherit;
+  font: inherit;
+}
+
+.focus-card__title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.focus-card__line {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.focus-card__meta {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.focus-card__action {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent-dk) 72%, var(--text));
 }
 
 .album-teaser {

@@ -3458,33 +3458,25 @@ function setTextIfPresent(id, value) {
 function renderDailyChallengePanels() {
   const challenge = ensureDailyChallengeForToday();
   const challengeStatus = getDailyChallengeStatus(challenge);
-  const title = challengeStatus.complete ? 'Today cleared' : `Target ${challenge.targetScore}`;
+  const isFirstRunExperience = getCompletedRunCount() === 0;
+  const title = challengeStatus.complete ? 'Today’s challenge complete' : 'Today’s challenge';
   const copy = challengeStatus.complete
-    ? `Completed on ${challenge.date}. Come back tomorrow to keep the streak alive.`
+    ? 'Great work. Come back tomorrow to keep your streak moving.'
     : challengeStatus.remaining
-      ? `${challengeStatus.remaining} points left to finish today’s shared seed.`
-      : 'A fresh seeded board is ready.';
-  const bestLabel = getDailyChallengeBestLabel(challenge);
-  const dayLabel = challengeStatus.streak === 1 ? 'day' : 'days';
-  const streakLabel = `🔥 ${challengeStatus.streak} ${dayLabel} streak`;
-  const rewardLabel = `${challengeStatus.reward} coin reward`;
+      ? `${challengeStatus.remaining} more points to reach today’s target.`
+      : isFirstRunExperience
+        ? 'Play today’s board to begin your streak.'
+        : 'A fresh shared board is ready.';
+  const progressLabel = challengeStatus.complete
+    ? `Reward earned: ${challengeStatus.reward} coins`
+    : `Reward: ${challengeStatus.reward} coins`;
 
   setTextIfPresent('dashboard-daily-title', title);
   setTextIfPresent('dashboard-daily-copy', copy);
-  setTextIfPresent('dashboard-daily-target', `Target ${challenge.targetScore}`);
-  setTextIfPresent('dashboard-daily-best', bestLabel);
-  setTextIfPresent('dashboard-daily-streak', streakLabel);
-  setTextIfPresent('dashboard-daily-reward', rewardLabel);
+  setTextIfPresent('dashboard-daily-progress', progressLabel);
 
   const playButton = document.getElementById('btn-dashboard-daily-play');
-  if (playButton) {
-    playButton.textContent = challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge';
-  }
-
-  const infoButton = document.getElementById('btn-dashboard-daily-info');
-  if (infoButton) {
-    infoButton.textContent = 'How it works';
-  }
+  if (playButton) playButton.setAttribute('aria-label', challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge');
 }
 
 function renderDailyMissions() {
@@ -4423,11 +4415,19 @@ function renderWeeklyLadder() {
   setTextIfPresent(pageIds.nextStep, nextStepText);
   setTextIfPresent(pageIds.reward, rewardLine);
 
-  setTextIfPresent('dashboard-weekly-card-title', `${league.badge} ${league.name} week`);
-  setTextIfPresent('dashboard-weekly-card-copy', copyText);
-  setTextIfPresent('dashboard-weekly-card-rank', rankLabel);
-  setTextIfPresent('dashboard-weekly-card-zone', zoneLabel);
-  setTextIfPresent('dashboard-weekly-card-countdown', timeRemaining);
+  const compactWeeklyTitle = countedRuns.length
+    ? `${league.badge} ${league.name} week`
+    : 'Weekly progress';
+  const compactWeeklyCopy = countedRuns.length
+    ? '1 more run could improve your rank.'
+    : 'Complete your first run this week.';
+  const compactWeeklyProgress = countedRuns.length
+    ? `${rankLabel} · ${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} runs counted`
+    : 'No runs counted yet';
+
+  setTextIfPresent('dashboard-weekly-card-title', compactWeeklyTitle);
+  setTextIfPresent('dashboard-weekly-card-copy', compactWeeklyCopy);
+  setTextIfPresent('dashboard-weekly-card-progress', compactWeeklyProgress);
 
   const bestRunsEl = document.getElementById(pageIds.bestRuns);
   if (bestRunsEl) {
@@ -4495,64 +4495,87 @@ function renderCollectionAlbumTeaser() {
     : `Grand reward · ${COLLECTION_ALBUM_GOAL.reward.name}`;
 }
 
+function renderDashboardUnlockPreview({ isFirstRunExperience = false } = {}) {
+  const albumStatus = getCollectionAlbumStatus();
+  const spotlight = albumStatus.spotlightSet;
+
+  let title = 'Next reward';
+  let copy = 'Complete your first run to start unlocking finishes.';
+  let progress = 'Collection progress starts after your first run';
+
+  if (!isFirstRunExperience) {
+    if (albumStatus.allSetsComplete) {
+      title = 'Collection complete';
+      copy = 'Every themed set is complete and ready to equip.';
+      progress = `${COLLECTION_ALBUM_GOAL.reward.name} unlocked`;
+    } else if (spotlight) {
+      title = 'Next unlock';
+      copy = spotlight.remainingCount === 1
+        ? `One more unlock completes ${spotlight.set.title}.`
+        : `${spotlight.remainingCount} more unlocks for ${spotlight.set.title}.`;
+      progress = `${albumStatus.completedCount}/${albumStatus.totalSets} sets complete`;
+    } else {
+      copy = 'Reach your next finish reward in the collection.';
+      progress = `${albumStatus.completedCount}/${albumStatus.totalSets} sets complete`;
+    }
+  }
+
+  setTextIfPresent('dashboard-unlock-title', title);
+  setTextIfPresent('dashboard-unlock-copy', copy);
+  setTextIfPresent('dashboard-unlock-progress', progress);
+}
+
 function renderDashboard() {
   const continueBtn = document.getElementById('btn-dashboard-continue');
-  const newGameBtn = document.getElementById('btn-dashboard-new');
+  const playNowBtn = document.getElementById('btn-dashboard-play');
   const intro = document.getElementById('dashboard-intro');
   const runState = document.getElementById('dashboard-run-state');
   const hasSavedGame = !!getSavedGameSession();
   const savedGame = getSavedGameSession();
   const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
   const isFirstRunExperience = getCompletedRunCount() === 0;
-  const starterGuide = document.getElementById('dashboard-starter-guide');
+  const onboarding = document.getElementById('dashboard-onboarding');
+  const firstReward = document.getElementById('dashboard-first-reward');
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
     continueBtn.disabled = !hasSavedGame;
     continueBtn.textContent = savedGame?.sessionType === 'daily' ? 'Continue daily challenge' : 'Continue run';
   }
-  if (newGameBtn) {
-    newGameBtn.textContent = hasSavedGame
-      ? 'Start fresh run'
-      : isFirstRunExperience
-        ? 'Start first run'
-        : 'Start new run';
-    newGameBtn.classList.toggle('pill-btn--secondary', hasSavedGame);
-  }
+  if (playNowBtn) playNowBtn.textContent = 'Play now';
   if (runState) {
     runState.textContent = savedGame?.sessionType === 'daily'
-      ? 'Daily challenge ready to resume'
+      ? 'Daily challenge ready to continue'
       : hasSavedGame
         ? 'Saved run ready to continue'
         : isFirstRunExperience
-          ? 'No run in progress yet'
-          : 'Ready for a fresh run';
+          ? 'Complete your first run to unlock rewards'
+          : `Ready to play with ${skin.name}`;
   }
   if (intro) {
     if (savedGame?.sessionType === 'daily') {
-      intro.textContent = 'Your daily challenge is still waiting.';
+      intro.textContent = 'Your daily challenge is waiting.';
     } else {
       intro.textContent = hasSavedGame
-        ? 'Pick up where you left off.'
+        ? 'Welcome back. Pick up where you left off.'
         : isFirstRunExperience
-          ? 'Welcome. Start your first run and learn one move at a time.'
-          : 'boo-roh-hah-meh';
+          ? 'Calm puzzle runs you can learn in seconds.'
+          : 'Clear rows, columns, and boxes in calm, quick runs.';
     }
   }
-  if (starterGuide) {
-    starterGuide.hidden = !isFirstRunExperience || hasSavedGame;
+  if (onboarding) {
+    onboarding.hidden = !isFirstRunExperience || hasSavedGame;
   }
+  if (firstReward) firstReward.textContent = `First run reward: ${scaleCoinReward(32, 'run')} coins`;
 
   document.getElementById('dashboard-coins').textContent = String(getCoinBalance());
   document.getElementById('dashboard-best').textContent = String(bestScore);
   document.getElementById('dashboard-today').textContent = String(todayScore);
-  document.getElementById('dashboard-finish').textContent = skin.name;
   renderSessionModeBadge();
   renderDailyChallengePanels();
   renderDailyMissions();
-  renderQuestBoard();
   renderWeeklyLadder();
-  renderCollectionAlbumTeaser();
+  renderDashboardUnlockPreview({ isFirstRunExperience });
 }
 
 function getCompletedRunCount() {
@@ -5733,35 +5756,25 @@ document.getElementById('btn-quick-settings-save').addEventListener('click', () 
   hideOverlay('ov-quick-settings');
 });
 
-document.getElementById('btn-dashboard-continue').addEventListener('click', () => {
+document.getElementById('btn-dashboard-continue')?.addEventListener('click', () => {
   if (!restoreSavedGame()) return;
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-new').addEventListener('click', () => {
+document.getElementById('btn-dashboard-play')?.addEventListener('click', () => {
   startNewGame({ resetPromptChain: true });
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-weekly-page').addEventListener('click', () => {
+document.getElementById('btn-dashboard-weekly-page')?.addEventListener('click', () => {
   navigateTo('weekly');
 });
-document.getElementById('btn-dashboard-quests-page').addEventListener('click', () => {
-  navigateTo('quests');
-});
-document.getElementById('btn-dashboard-missions-page').addEventListener('click', () => {
-  navigateTo('missions');
-});
-document.getElementById('btn-dashboard-album-page').addEventListener('click', () => {
+document.getElementById('btn-dashboard-unlock-page')?.addEventListener('click', () => {
   navigateTo('shop');
 });
-document.getElementById('btn-dashboard-daily-play').addEventListener('click', () => {
+document.getElementById('btn-dashboard-daily-play')?.addEventListener('click', () => {
   startNewGame({ sessionType: 'daily', resetPromptChain: true });
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-daily-info').addEventListener('click', () => {
-  const challenge = ensureDailyChallengeForToday();
-  alert(`Today’s daily challenge is shared worldwide for ${challenge.date}. Reach ${challenge.targetScore} points to keep your streak and earn a coin bonus.`);
-});
-document.getElementById('btn-dashboard-share').addEventListener('click', () => {
+document.getElementById('btn-dashboard-share')?.addEventListener('click', () => {
   shareBurohameApp();
 });
 document.querySelectorAll('[data-back-page]').forEach(button => {
