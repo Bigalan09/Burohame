@@ -887,7 +887,15 @@ function sanitiseWeeklyLeaderboardState(value) {
 
 function createPseudoId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return `player-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  // Fallback: use crypto.getRandomValues to generate a random hex suffix
+  if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+    const buf = new Uint32Array(4);
+    window.crypto.getRandomValues(buf);
+    const hex = Array.from(buf, n => n.toString(16).padStart(8, '0')).join('');
+    return `player-${hex}`;
+  }
+  // Last-resort fallback if crypto is entirely unavailable
+  return `player-${Date.now()}-fallback`;
 }
 
 function createLocalWeeklyLeaderboardAdapter() {
