@@ -5504,6 +5504,55 @@ function hideOverlay(id) {
   ov.hidden = true;
 }
 
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  const scratch = document.createElement('textarea');
+  scratch.value = text;
+  scratch.setAttribute('readonly', '');
+  scratch.style.position = 'fixed';
+  scratch.style.opacity = '0';
+  document.body.appendChild(scratch);
+  scratch.select();
+
+  const copied = document.execCommand('copy');
+  scratch.remove();
+  return copied;
+}
+
+async function shareBurohameApp() {
+  const shareUrl = `${window.location.origin}${window.location.pathname}`;
+  const sharePayload = {
+    title: 'Burohame',
+    text: 'I have been playing this 9×9 puzzle game. Give it a go.',
+    url: shareUrl,
+  };
+
+  if (navigator.share) {
+    try {
+      await navigator.share(sharePayload);
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+    }
+  }
+
+  try {
+    const copied = await copyTextToClipboard(shareUrl);
+    if (copied) {
+      alert('Link copied. Share it with a friend.');
+      return;
+    }
+  } catch (error) {
+    // Fallback alert below if clipboard is unavailable.
+  }
+
+  alert(`Share this link: ${shareUrl}`);
+}
+
 // ── Settings / overlays ────────────────────────────────────
 function applySettingsState(nextSettings) {
   const prevTraining = trainingMode;
@@ -5592,6 +5641,9 @@ document.getElementById('btn-dashboard-daily-play').addEventListener('click', ()
 document.getElementById('btn-dashboard-daily-info').addEventListener('click', () => {
   const challenge = ensureDailyChallengeForToday();
   alert(`Today’s daily challenge is shared worldwide for ${challenge.date}. Reach ${challenge.targetScore} points to keep your streak and earn a coin bonus.`);
+});
+document.getElementById('btn-dashboard-share').addEventListener('click', () => {
+  shareBurohameApp();
 });
 document.querySelectorAll('[data-back-page]').forEach(button => {
   button.addEventListener('click', () => {
