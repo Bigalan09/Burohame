@@ -29,7 +29,7 @@ Burohame is a mobile-first 9×9 block puzzle game built as a plain static web ap
 - No framework and no build step.
 - Main app files live at the repository root: `index.html`, `styles.css`, `app.js`, `sw.js`, and static assets.
 - GitHub Actions handle CI, PR previews, CodeQL, and production deployment to GitHub Pages.
-- Weekly leaderboard data is still local and simulated client-side. It is not yet multiplayer or backed by shared persistent storage.
+- Weekly leaderboard supports multiplayer reads and writes through a pluggable adapter, with Supabase as the first hosted backend and a local fallback mode for offline practice.
 
 ## Branch and PR workflow
 
@@ -72,12 +72,9 @@ After implementing an issue, also tidy the GitHub issue queue so the repository 
 
 ### TODO
 
-- [#83 Make the weekly leaderboard multiplayer with a pluggable hosted backend](https://github.com/Bigalan09/Burohame/issues/83)
-  - Use Supabase first for the release milestone.
-  - Keep reads and writes behind an adapter so the storage layer can later be swapped for self-hosted services or other APIs if scaling needs change.
-
 ### Completed
 
+- [#83 Make the weekly leaderboard multiplayer with a pluggable hosted backend](https://github.com/Bigalan09/Burohame/issues/83)
 - [#56 Add themed collection sets and album completion goals](https://github.com/Bigalan09/Burohame/issues/56)
 - [#55 Add multi-step quest chains on top of daily missions](https://github.com/Bigalan09/Burohame/issues/55)
 - [#54 Add contextual one-more-run prompts after game over](https://github.com/Bigalan09/Burohame/issues/54)
