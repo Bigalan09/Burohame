@@ -193,6 +193,21 @@ let dailyChallengeState = {
   targetScore: 0,
   randomState: 0,
 };
+let leaderboardPlayerName = 'Guest';
+let leaderboardPlayerId = '';
+let leaderboardBackend = 'local';
+let leaderboardSupabaseUrl = '';
+let leaderboardBackofficeCompleteAt = '';
+let leaderboardSupabaseAnonKey = '';
+let weeklyLeaderboardAdapter = null;
+let weeklyLeaderboardViewState = {
+  weekId: '',
+  entries: [],
+  loading: false,
+  error: '',
+  sourceLabel: 'Using local practice table',
+  fetchedAt: 0,
+};
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
@@ -221,6 +236,9 @@ const WEEKLY_LADDER_COUNTED_RUNS = 4;
 const WEEKLY_COHORT_SIZE = 20;
 const WEEKLY_PROMOTION_SLOTS = 4;
 const WEEKLY_RELEGATION_SLOTS = 4;
+const WEEKLY_LEADERBOARD_STORAGE_KEY = 'bst-weekly-leaderboard';
+const WEEKLY_LEADERBOARD_PULL_INTERVAL_MS = 60 * 1000;
+const WEEKLY_LEADERBOARD_MAX_ROWS = 20;
 const QUEST_BOARD_CHAIN_LIMIT = 3;
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
@@ -839,6 +857,266 @@ function formatOrdinal(value) {
   return `${value}th`;
 }
 
+function createDefaultWeeklyLeaderboardState() {
+  return {
+    backend: 'local',
+    playerId: '',
+    playerName: 'Guest',
+    supabaseUrl: '',
+    backofficeCompleteAt: '',
+    backofficeCompleteAt: typeof src.backofficeCompleteAt === 'string' ? src.backofficeCompleteAt : '',
+    supabaseAnonKey: '',
+  };
+}
+
+function sanitiseWeeklyLeaderboardState(value) {
+  const defaults = createDefaultWeeklyLeaderboardState();
+  const src = value && typeof value === 'object' ? value : {};
+  return {
+    backend: src.backend === 'supabase' ? 'supabase' : defaults.backend,
+    playerId: typeof src.playerId === 'string' ? src.playerId.trim().slice(0, 64) : '',
+    playerName: typeof src.playerName === 'string' && src.playerName.trim()
+      ? src.playerName.trim().slice(0, 24)
+      : defaults.playerName,
+    supabaseUrl: typeof src.supabaseUrl === 'string' ? src.supabaseUrl.trim() : '',
+    supabaseAnonKey: typeof src.supabaseAnonKey === 'string' ? src.supabaseAnonKey.trim() : '',
+  };
+}
+
+function createPseudoId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `player-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+}
+
+function createLocalWeeklyLeaderboardAdapter() {
+  function readAll() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(WEEKLY_LEADERBOARD_STORAGE_KEY) || '{}');
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeAll(payload) {
+    localStorage.setItem(WEEKLY_LEADERBOARD_STORAGE_KEY, JSON.stringify(payload));
+  }
+
+  return {
+    id: 'local',
+    sourceLabel: 'Using local practice table',
+    async fetchWeekEntries(weekId) {
+      const all = readAll();
+      const rows = Array.isArray(all[weekId]) ? all[weekId] : [];
+      return rows
+        .filter(item => item && typeof item === 'object')
+        .map(item => ({
+          playerId: String(item.playerId || ''),
+          playerName: String(item.playerName || 'Guest').slice(0, 24),
+          leagueId: String(item.leagueId || 'bronze'),
+          totalScore: clampWholeNumber(item.totalScore, 0),
+          countedRuns: sanitiseWeeklyBestRuns(item.countedRuns),
+          updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date(0).toISOString(),
+        }))
+        .sort((a, b) => b.totalScore - a.totalScore || b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, WEEKLY_LEADERBOARD_MAX_ROWS);
+    },
+    async upsertPlayerWeekEntry(entry) {
+      const all = readAll();
+      const rows = Array.isArray(all[entry.weekId]) ? all[entry.weekId] : [];
+      const nextRows = rows.filter(item => item?.playerId !== entry.playerId);
+      nextRows.push({
+        playerId: entry.playerId,
+        playerName: entry.playerName,
+        leagueId: entry.leagueId,
+        totalScore: entry.totalScore,
+        countedRuns: entry.countedRuns,
+        updatedAt: new Date().toISOString(),
+      });
+      all[entry.weekId] = nextRows;
+      writeAll(all);
+    },
+  };
+}
+
+function createSupabaseWeeklyLeaderboardAdapter(url, anonKey) {
+  const baseUrl = url.replace(/\/$/, '');
+  const headers = {
+    apikey: anonKey,
+    Authorization: `Bearer ${anonKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  function buildQuery(weekId) {
+    const params = new URLSearchParams();
+    params.set('select', 'player_id,player_name,league_id,total_score,counted_runs,updated_at');
+    params.set('week_id', `eq.${weekId}`);
+    params.set('order', 'total_score.desc,updated_at.desc');
+    params.set('limit', String(WEEKLY_LEADERBOARD_MAX_ROWS));
+    return `${baseUrl}/rest/v1/weekly_leaderboard_entries?${params.toString()}`;
+  }
+
+  return {
+    id: 'supabase',
+    sourceLabel: 'Live Supabase multiplayer table',
+    async fetchWeekEntries(weekId) {
+      const response = await fetch(buildQuery(weekId), { headers });
+      if (!response.ok) throw new Error(`Supabase fetch failed (${response.status})`);
+      const payload = await response.json();
+      return Array.isArray(payload)
+        ? payload.map(item => ({
+            playerId: typeof item.player_id === 'string' ? item.player_id : '',
+            playerName: typeof item.player_name === 'string' && item.player_name.trim() ? item.player_name.trim().slice(0, 24) : 'Guest',
+            leagueId: typeof item.league_id === 'string' ? item.league_id : 'bronze',
+            totalScore: clampWholeNumber(item.total_score, 0),
+            countedRuns: sanitiseWeeklyBestRuns(item.counted_runs),
+            updatedAt: typeof item.updated_at === 'string' ? item.updated_at : new Date(0).toISOString(),
+          }))
+        : [];
+    },
+    async upsertPlayerWeekEntry(entry) {
+      const response = await fetch(`${baseUrl}/rest/v1/weekly_leaderboard_entries`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        },
+        body: JSON.stringify({
+          week_id: entry.weekId,
+          player_id: entry.playerId,
+          player_name: entry.playerName,
+          league_id: entry.leagueId,
+          total_score: entry.totalScore,
+          counted_runs: entry.countedRuns,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+      if (!response.ok) throw new Error(`Supabase write failed (${response.status})`);
+    },
+  };
+}
+
+function configureWeeklyLeaderboardAdapter() {
+  const settings = sanitiseWeeklyLeaderboardState({
+    backend: leaderboardBackend,
+    playerId: leaderboardPlayerId,
+    playerName: leaderboardPlayerName,
+    supabaseUrl: leaderboardSupabaseUrl,
+    backofficeCompleteAt: leaderboardBackofficeCompleteAt,
+  leaderboardBackofficeCompleteAt = settings.backofficeCompleteAt;
+    supabaseAnonKey: leaderboardSupabaseAnonKey,
+  });
+  leaderboardBackend = settings.backend;
+  leaderboardPlayerId = settings.playerId || createPseudoId();
+  leaderboardPlayerName = settings.playerName;
+  leaderboardSupabaseUrl = settings.supabaseUrl;
+  leaderboardSupabaseAnonKey = settings.supabaseAnonKey;
+
+  const canUseSupabase = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseAnonKey;
+  weeklyLeaderboardAdapter = canUseSupabase
+    ? createSupabaseWeeklyLeaderboardAdapter(leaderboardSupabaseUrl, leaderboardSupabaseAnonKey)
+    : createLocalWeeklyLeaderboardAdapter();
+  weeklyLeaderboardViewState = {
+    ...weeklyLeaderboardViewState,
+    sourceLabel: weeklyLeaderboardAdapter.sourceLabel,
+    error: '',
+  };
+}
+
+function getWeeklyLeaderboardEntryPayload() {
+  const weekly = ensureWeeklyLadderForCurrentWeek();
+  const countedRuns = sanitiseWeeklyBestRuns(weekly.bestRuns);
+  const totalScore = countedRuns.reduce((sum, value) => sum + value, 0);
+  return {
+    weekId: weekly.currentWeekId,
+    playerId: leaderboardPlayerId,
+    playerName: leaderboardPlayerName,
+    leagueId: weekly.leagueId,
+    countedRuns,
+    totalScore,
+  };
+}
+
+async function publishWeeklyLeaderboardEntry() {
+  if (!weeklyLeaderboardAdapter || !leaderboardPlayerId) return;
+  const payload = getWeeklyLeaderboardEntryPayload();
+  try {
+    await weeklyLeaderboardAdapter.upsertPlayerWeekEntry(payload);
+  } catch (_) {
+    // Keep the game running even if hosted leaderboard writes fail.
+  }
+}
+
+async function refreshWeeklyLeaderboard(weekId, options = {}) {
+  if (!weeklyLeaderboardAdapter || !weekId) return;
+  const now = Date.now();
+  const shouldSkip = !options.force
+    && weeklyLeaderboardViewState.weekId === weekId
+    && now - weeklyLeaderboardViewState.fetchedAt < WEEKLY_LEADERBOARD_PULL_INTERVAL_MS;
+  if (shouldSkip) return;
+
+  weeklyLeaderboardViewState = {
+    ...weeklyLeaderboardViewState,
+    weekId,
+    loading: true,
+    error: '',
+  };
+  renderWeeklyGlobalLeaderboard();
+
+  try {
+    const rows = await weeklyLeaderboardAdapter.fetchWeekEntries(weekId);
+    weeklyLeaderboardViewState = {
+      ...weeklyLeaderboardViewState,
+      weekId,
+      entries: rows,
+      loading: false,
+      fetchedAt: Date.now(),
+      error: '',
+      sourceLabel: weeklyLeaderboardAdapter.sourceLabel,
+    };
+  } catch (_) {
+    weeklyLeaderboardViewState = {
+      ...weeklyLeaderboardViewState,
+      loading: false,
+      error: 'Shared table unavailable right now. Falling back to your local status.',
+    };
+  }
+  renderWeeklyGlobalLeaderboard();
+}
+
+function renderWeeklyGlobalLeaderboard() {
+  const statusEl = document.getElementById('weekly-global-status');
+  const listEl = document.getElementById('weekly-global-list');
+  if (!statusEl || !listEl) return;
+
+  const statusLine = weeklyLeaderboardViewState.error
+    ? weeklyLeaderboardViewState.error
+    : weeklyLeaderboardViewState.loading
+      ? `${weeklyLeaderboardViewState.sourceLabel} · Refreshing…`
+      : weeklyLeaderboardViewState.sourceLabel;
+  statusEl.textContent = statusLine;
+
+  listEl.innerHTML = '';
+  const rows = weeklyLeaderboardViewState.entries.slice(0, 8);
+  if (!rows.length) {
+    const empty = document.createElement('li');
+    empty.textContent = 'No shared runs yet this week. Your next run can set the pace.';
+    listEl.appendChild(empty);
+    return;
+  }
+
+  rows.forEach((entry, index) => {
+    const item = document.createElement('li');
+    const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
+    const nameEl = document.createElement('span');
+    nameEl.textContent = `${index + 1}. ${name}`;
+    const scoreEl = document.createElement('strong');
+    scoreEl.textContent = String(entry.totalScore);
+    item.append(nameEl, scoreEl);
+    listEl.appendChild(item);
+  });
+}
+
 function getLeagueById(leagueId) {
   return WEEKLY_LEAGUE_LOOKUP[leagueId] || WEEKLY_LEAGUES[0];
 }
@@ -1151,6 +1429,7 @@ function ensureWeeklyLadderForCurrentWeek() {
   }
 
   renderCosmeticsCollection();
+  publishWeeklyLeaderboardEntry();
   return nextState.weeklyLadder;
 }
 
@@ -1165,6 +1444,7 @@ function recordWeeklyRunScore(finalScore) {
     state.weeklyLadder = weekly;
     return state;
   });
+  publishWeeklyLeaderboardEntry();
 }
 
 function getWeeklyLadderStatus() {
@@ -3574,6 +3854,15 @@ function saveSettings() {
     dark:      darkMode,
     color:     colorSetting,
     rackSize:  rackSize,
+    weeklyLeaderboard: {
+      backend: leaderboardBackend,
+      playerId: leaderboardPlayerId,
+      playerName: leaderboardPlayerName,
+      supabaseUrl: leaderboardSupabaseUrl,
+      backofficeCompleteAt: leaderboardBackofficeCompleteAt,
+    leaderboardBackofficeCompleteAt = weeklyLeaderboardSettings.backofficeCompleteAt;
+      supabaseAnonKey: leaderboardSupabaseAnonKey,
+    },
   }));
 }
 
@@ -3585,6 +3874,13 @@ function loadSettings() {
     if (typeof s.color === 'string')      colorSetting   = sanitiseColorSetting(s.color);
     if (typeof s.rackSize === 'number' && s.rackSize >= 1 && s.rackSize <= 3)
       rackSize = s.rackSize;
+    const weeklyLeaderboardSettings = sanitiseWeeklyLeaderboardState(s.weeklyLeaderboard);
+    leaderboardBackend = weeklyLeaderboardSettings.backend;
+    leaderboardPlayerId = weeklyLeaderboardSettings.playerId || createPseudoId();
+    leaderboardPlayerName = weeklyLeaderboardSettings.playerName;
+    leaderboardSupabaseUrl = weeklyLeaderboardSettings.supabaseUrl;
+    leaderboardSupabaseAnonKey = weeklyLeaderboardSettings.supabaseAnonKey;
+    configureWeeklyLeaderboardAdapter();
     // Respect saved dark preference; fall back to OS preference on first launch
     if (typeof s.dark === 'boolean') {
       darkMode = s.dark;
@@ -3831,6 +4127,9 @@ function renderWeeklyLadder() {
     });
   }
 
+  renderWeeklyGlobalLeaderboard();
+  refreshWeeklyLeaderboard(weekly.currentWeekId);
+
   const resultBanner = document.getElementById(pageIds.resultBanner);
   const resultTitle = document.getElementById(pageIds.resultTitle);
   const resultCopy = document.getElementById(pageIds.resultCopy);
@@ -3947,7 +4246,27 @@ function populateSettingsPage() {
   }
   colorSelect.value = isColorwayOwned(colorSetting) ? colorSetting : 'orange';
   document.getElementById('page-sel-rack').value = String(rackSize);
+  document.getElementById('page-input-weekly-name').value = leaderboardPlayerName;
+  const backendStatus = document.getElementById('page-weekly-backend-status');
+  if (backendStatus) {
+    const hostedConfigured = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseApiKey;
+    backendStatus.textContent = hostedConfigured
+      ? 'Supabase multiplayer configured for this device.'
+      : leaderboardBackend === 'supabase'
+        ? 'Supabase selected but setup is incomplete.'
+        : 'Using local practice mode.';
+  }
   updateCosmeticLabel();
+}
+
+function populateBackofficePage() {
+  const backendSelect = document.getElementById('backoffice-sel-weekly-backend');
+  const urlInput = document.getElementById('backoffice-input-supabase-url');
+  const keyInput = document.getElementById('backoffice-input-supabase-key');
+  if (!backendSelect || !urlInput || !keyInput) return;
+  backendSelect.value = leaderboardBackend;
+  urlInput.value = leaderboardSupabaseUrl;
+  keyInput.value = leaderboardSupabaseApiKey;
 }
 
 function updatePrimaryPlayButton() {
@@ -4968,6 +5287,9 @@ function applySettingsState(nextSettings) {
   const requestedColor = sanitiseColorSetting(nextSettings.colorSetting);
   colorSetting = isColorwayOwned(requestedColor) ? requestedColor : colorSetting;
   rackSize = nextSettings.rackSize;
+  leaderboardPlayerName = (nextSettings.leaderboardPlayerName || 'Guest').trim().slice(0, 24) || 'Guest';
+  if (!leaderboardPlayerId) leaderboardPlayerId = createPseudoId();
+  configureWeeklyLeaderboardAdapter();
 
   applyDarkMode(darkMode);
   applyColor(colorSetting);
@@ -4999,6 +5321,18 @@ function openQuickSettingsOverlay() {
   showOverlay('ov-quick-settings');
 }
 
+function applyBackofficeSetup(settings) {
+  leaderboardBackend = settings.backend === 'supabase' ? 'supabase' : 'local';
+  leaderboardSupabaseUrl = (settings.supabaseUrl || '').trim();
+  leaderboardSupabaseApiKey = (settings.supabaseApiKey || '').trim();
+  leaderboardBackofficeCompleteAt = new Date().toISOString();
+  configureWeeklyLeaderboardAdapter();
+  saveSettings();
+  populateBackofficePage();
+  populateSettingsPage();
+  renderWeeklyLadder();
+}
+
 document.getElementById('btn-quick-settings').addEventListener('click', openQuickSettingsOverlay);
 document.getElementById('btn-quick-settings-close').addEventListener('click', () => {
   hideOverlay('ov-quick-settings');
@@ -5010,6 +5344,7 @@ document.getElementById('btn-quick-settings-save').addEventListener('click', () 
     darkMode: document.getElementById('quick-chk-dark').checked,
     colorSetting,
     rackSize,
+    leaderboardPlayerName,
   });
   hideOverlay('ov-quick-settings');
 });
@@ -5114,8 +5449,34 @@ document.getElementById('btn-settings-save').addEventListener('click', () => {
     darkMode: document.getElementById('page-chk-dark').checked,
     colorSetting: sanitiseColorSetting(document.getElementById('page-sel-color').value),
     rackSize: parseInt(document.getElementById('page-sel-rack').value, 10),
+    leaderboardPlayerName: document.getElementById('page-input-weekly-name').value,
   });
   navigateTo('dashboard');
+});
+
+document.getElementById('btn-settings-backoffice').addEventListener('click', () => {
+  populateBackofficePage();
+  navigateTo('backoffice');
+});
+
+document.getElementById('btn-backoffice-save').addEventListener('click', () => {
+  const backend = document.getElementById('backoffice-sel-weekly-backend').value;
+  const supabaseUrl = document.getElementById('backoffice-input-supabase-url').value.trim();
+  const supabaseApiKey = document.getElementById('backoffice-input-supabase-key').value.trim();
+  if (backend === 'supabase' && (!supabaseUrl || !supabaseApiKey)) {
+    alert('Supabase URL and publishable key are required for Supabase multiplayer.');
+    return;
+  }
+  applyBackofficeSetup({
+    backend,
+    supabaseUrl,
+    supabaseApiKey,
+  });
+  navigateTo('settings');
+});
+
+document.getElementById('btn-backoffice-cancel').addEventListener('click', () => {
+  navigateTo('settings');
 });
 
 document.getElementById('btn-clear-data').addEventListener('click', async () => {
@@ -5127,6 +5488,7 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   localStorage.removeItem('bst-settings');
   localStorage.removeItem(PROGRESSION_STORAGE_KEY);
   localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
+  localStorage.removeItem(WEEKLY_LEADERBOARD_STORAGE_KEY);
   progressionState = createDefaultProgressionState();
 
   // Unregister service workers so new assets are fetched on next load
@@ -5188,6 +5550,13 @@ document.addEventListener('touchstart', e => {
 }, { passive: false });
 
 // ── Init ───────────────────────────────────────────────────
+function shouldOpenBackofficeSetup() {
+  if (leaderboardBackofficeCompleteAt) return false;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('setup') === 'backoffice') return true;
+  return !leaderboardSupabaseUrl && !leaderboardSupabaseApiKey;
+}
+
 function init() {
   bestScore  = parseInt(localStorage.getItem('bst-best') || '0', 10);
   const todayKey = new Date().toISOString().slice(0, 10);
@@ -5204,6 +5573,7 @@ function init() {
   updateCoinUI();
   applyEquippedCosmeticSkin();
   loadSettings();
+  if (!weeklyLeaderboardAdapter) configureWeeklyLeaderboardAdapter();
   ensureSelectedColorway({ preserveLegacy: true });
   applyDarkMode(darkMode);
   applyColor(colorSetting);
@@ -5241,8 +5611,9 @@ function init() {
 
   populateQuickSettings();
   populateSettingsPage();
+  populateBackofficePage();
   renderDashboard();
-  navigateTo('dashboard');
+  navigateTo(shouldOpenBackofficeSetup() ? 'backoffice' : 'dashboard');
 }
 
 init();
