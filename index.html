@@ -201,7 +201,7 @@
           <div class="dashboard-weekly__global" aria-live="polite">
             <div class="dashboard-weekly__global-head">
               <strong>Weekly table</strong>
-              <span id="weekly-global-status">Using local practice table</span>
+              <span id="weekly-global-status">Loading weekly table…</span>
             </div>
             <ol class="dashboard-weekly__global-list" id="weekly-global-list" aria-label="Weekly leaderboard entries"></ol>
           </div>
@@ -426,16 +426,10 @@
           </div>
           <div class="setting-row setting-row--stack">
             <div>
-              <span>Weekly display name</span>
-              <small>Name shown in the weekly table.</small>
+              <span>Leaderboard name</span>
+              <small id="page-weekly-backend-status">Choose a leaderboard name to join the weekly table.</small>
             </div>
-            <input id="page-input-weekly-name" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Player name">
-          </div>
-          <div class="setting-row setting-row--stack">
-            <div>
-              <span>Weekly leaderboard mode</span>
-              <small id="page-weekly-backend-status">This build uses local practice mode.</small>
-            </div>
+            <input id="page-input-weekly-name" type="text" maxlength="18" autocomplete="off" spellcheck="false" placeholder="Choose a name">
           </div>
           <div class="setting-row setting-row--stack">
             <div>
@@ -595,6 +589,7 @@
   <div id="milestone-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
   <script src="config.js"></script>
+  <script src="leaderboard-handles.js"></script>
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

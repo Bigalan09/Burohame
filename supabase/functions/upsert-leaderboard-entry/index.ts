@@ -10,7 +10,6 @@ const corsHeaders = {
 };
 
 const WEEK_ID_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const PLAYER_NAME_PATTERN = /^[\p{L}\p{N} .,'_\-]{1,24}$/u;
 const VALID_LEAGUES = new Set(['bronze', 'silver', 'gold', 'diamond']);
 const MAX_COUNTED_RUNS = 4;
 const MAX_RUN_SCORE = 1_000_000;
@@ -108,10 +107,20 @@ Deno.serve(async (req: Request) => {
   }
   const playerId = tokenPlayerId;
 
-  const rawName = typeof entry.player_name === 'string' ? entry.player_name.trim() : '';
-  const playerName = rawName.slice(0, 24);
-  if (!PLAYER_NAME_PATTERN.test(playerName)) {
-    return jsonResponse(400, { error: 'player_name must be 1-24 safe characters' });
+  const { data: handleRow, error: handleError } = await serviceClient
+    .from('leaderboard_player_handles')
+    .select('display_name')
+    .eq('player_id', playerId)
+    .maybeSingle();
+
+  if (handleError) {
+    console.error('upsert-leaderboard-entry handle lookup error:', handleError.message);
+    return jsonResponse(500, { error: 'Internal server error' });
+  }
+
+  const playerName = typeof handleRow?.display_name === 'string' ? handleRow.display_name.trim() : '';
+  if (!playerName) {
+    return jsonResponse(409, { error: 'No claimed leaderboard handle. Choose a leaderboard name in Settings first.' });
   }
 
   const leagueId = typeof entry.league_id === 'string' ? entry.league_id.trim() : '';

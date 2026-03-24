@@ -15,13 +15,15 @@
 - Rows, columns and 3×3 boxes clear when full
 - Multi-clear and combo bonuses
 - Best score saved locally
-- Weekly leaderboard with global Supabase multiplayer config and automatic local fallback
+- Shared weekly table with claimed public handles and automatic local fallback
 - **Coach Mode** (toggle via ⚙️): colour-coded move hints, board health metrics, move quality feedback
 
-## Multiplayer weekly leaderboard deployment (Supabase)
+## Hosted weekly table deployment
 
-1. Apply the SQL in `supabase/weekly_leaderboard.sql` or `supabase/migrations/202603240001_weekly_leaderboard_hardening.sql`.
-2. Deploy the Edge Function at `supabase/functions/upsert-leaderboard-entry`.
+1. Apply the SQL in `supabase/weekly_leaderboard.sql` or the migrations in `supabase/migrations/`.
+2. Deploy these Edge Functions:
+   - `supabase/functions/claim-leaderboard-handle`
+   - `supabase/functions/upsert-leaderboard-entry`
 3. In GitHub repository settings, add these Actions variables for Pages deploys:
    - `SUPABASE_URL`
    - `SUPABASE_PUBLISHABLE_KEY`
@@ -31,9 +33,12 @@ If either Actions variable is missing, the deployed site stays in local practice
 
 ### Security model
 
-- Browser clients only use the Supabase URL plus a publishable API key.
+- Browser clients only use the hosted backend URL plus a publishable API key.
+- Browser clients claim leaderboard names through `POST /functions/v1/claim-leaderboard-handle`.
 - Browser reads use `GET /rest/v1/weekly_leaderboard_entries`.
 - Browser writes use `POST /functions/v1/upsert-leaderboard-entry` with a Supabase Auth user JWT.
+- Public leaderboard handles are stored server-side and formatted as `name#1234`.
+- Browser clients do not decide the final public handle shown on the weekly table.
 - The Edge Function requires an authenticated user token, derives `player_id` from the token subject, validates payload fields, and recomputes `total_score` from `counted_runs`.
 - The Edge Function writes with the service role key server-side.
 - RLS allows public read-only access and blocks direct client inserts, updates, and deletes.
@@ -45,6 +50,7 @@ If either Actions variable is missing, the deployed site stays in local practice
 # from the repository root
 supabase link --project-ref <your-project-ref>
 SUPABASE_DB_PASSWORD=<your-db-password> supabase db push --include-all
+supabase functions deploy claim-leaderboard-handle --no-verify-jwt
 supabase functions deploy upsert-leaderboard-entry --no-verify-jwt
 ```
 
@@ -53,7 +59,7 @@ Hosted Supabase Edge Functions already receive the default `SUPABASE_URL` and `S
 Enable Supabase Auth anonymous sign-ins for the project so the browser can obtain an authenticated JWT for Edge Function writes.
 The function validates that JWT inside the function itself because Supabase's built-in `verify_jwt` path is incompatible with projects using the newer JWT signing keys.
 
-If hosted multiplayer is unavailable or the browser is offline, Burohame falls back to local leaderboard storage on that device. Those local fallback runs are not synced later.
+If the hosted weekly table is unavailable or the browser is offline, Burohame falls back to local leaderboard storage on that device. Those local fallback runs are not synced later.
 
 ## Local dev
 

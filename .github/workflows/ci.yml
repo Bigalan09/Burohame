@@ -19,6 +19,12 @@ jobs:
       - name: Validate static site metadata
         run: sh scripts/validate-static-site.sh
 
+      - name: Test leaderboard handle helpers
+        run: node scripts/test-leaderboard-handles.js
+
+      - name: Validate leaderboard backend wiring
+        run: sh scripts/validate-leaderboard-backend.sh
+
       - name: Validate Pages workflows
         run: sh scripts/validate-github-pages-workflows.sh
 
