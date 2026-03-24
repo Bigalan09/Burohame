@@ -991,11 +991,13 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
         : [];
     },
     async upsertPlayerWeekEntry(entry) {
-      const response = await fetch(`${baseUrl}/rest/v1/weekly_leaderboard_entries`, {
+      // Writes go through the Edge Function so the service role key is never
+      // exposed to the browser and the payload is validated server-side.
+      const response = await fetch(`${baseUrl}/functions/v1/upsert-leaderboard-entry`, {
         method: 'POST',
         headers: {
           ...headers,
-          Prefer: 'resolution=merge-duplicates,return=minimal',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           week_id: entry.weekId,
@@ -1004,7 +1006,6 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
           league_id: entry.leagueId,
           total_score: entry.totalScore,
           counted_runs: entry.countedRuns,
-          updated_at: new Date().toISOString(),
         }),
       });
       if (!response.ok) throw new Error(`Supabase write failed (${response.status})`);
