@@ -428,27 +428,10 @@
           </div>
           <div class="setting-row setting-row--stack">
             <div>
-              <span>Weekly backend</span>
-              <small>Use Supabase for multiplayer or local mode for offline practice.</small>
+              <span>Leaderboard backend</span>
+              <small id="page-weekly-backend-status">Back-office setup status.</small>
             </div>
-            <select id="page-sel-weekly-backend">
-              <option value="local">Local practice</option>
-              <option value="supabase">Supabase multiplayer</option>
-            </select>
-          </div>
-          <div class="setting-row setting-row--stack">
-            <div>
-              <span>Supabase URL</span>
-              <small>Only required when Supabase multiplayer is selected.</small>
-            </div>
-            <input id="page-input-supabase-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://your-project.supabase.co">
-          </div>
-          <div class="setting-row setting-row--stack">
-            <div>
-              <span>Supabase anon key</span>
-              <small>Stored locally in your browser settings.</small>
-            </div>
-            <input id="page-input-supabase-key" type="password" autocomplete="off" spellcheck="false" placeholder="eyJ...">
+            <button class="pill-btn pill-btn--secondary" id="btn-settings-backoffice" type="button">Back-office setup</button>
           </div>
           <div class="setting-row setting-row--stack">
             <div>
@@ -456,6 +439,47 @@
               <small id="page-equipped-cosmetic-label">Classic finish equipped</small>
             </div>
             <button class="pill-btn pill-btn--secondary" id="btn-settings-shop" type="button">Open shop</button>
+          </div>
+          <button class="pill-btn wide" id="btn-settings-save" type="button">Save settings</button>
+          <button class="pill-btn wide danger" id="btn-clear-data" type="button">🗑️ Clear All Data</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page page--backoffice" data-page="backoffice" aria-label="Leaderboard back-office setup">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Back office</p>
+            <h2>Leaderboard setup</h2>
+            <p class="page-intro">This one-time setup controls hosted leaderboard access on this device.</p>
+          </div>
+        </header>
+
+        <div class="page-panel settings-page-panel">
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Weekly backend</span>
+              <small>Choose local practice mode or Supabase multiplayer.</small>
+            </div>
+            <select id="backoffice-sel-weekly-backend">
+              <option value="local">Local practice</option>
+              <option value="supabase">Supabase multiplayer</option>
+            </select>
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Supabase URL</span>
+              <small>Only needed for Supabase multiplayer.</small>
+            </div>
+            <input id="backoffice-input-supabase-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://your-project.supabase.co">
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <small>Stored locally on this browser only.</small>
+            <input id="backoffice-input-supabase-key" type="password" autocomplete="off" spellcheck="false" placeholder="sb_publishable_...">
+          <button class="pill-btn wide" id="btn-backoffice-save" type="button">Save setup</button>
+          <button class="pill-btn wide pill-btn--secondary" id="btn-backoffice-cancel" type="button">Back to settings</button>
           </div>
           <button class="pill-btn wide" id="btn-settings-save" type="button">Save settings</button>
           <button class="pill-btn wide danger" id="btn-clear-data" type="button">🗑️ Clear All Data</button>

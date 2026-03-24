@@ -29,8 +29,9 @@
    - `counted_runs` (int4[])
    - `updated_at` (timestamptz)
 2. Add a unique index on `(week_id, player_id)` so upserts work.
-3. In game settings, choose **Weekly backend → Supabase multiplayer**.
-4. Enter your Supabase URL and anon key.
+3. Open the **Leaderboard setup** back-office page on first run (or from Settings → Back-office setup).
+4. Choose **Supabase multiplayer** and enter your Supabase URL and publishable key.
+6. After saving setup once, credential fields are removed from standard settings.
 
 If Supabase is not configured, Burohame automatically falls back to local leaderboard storage.
 
