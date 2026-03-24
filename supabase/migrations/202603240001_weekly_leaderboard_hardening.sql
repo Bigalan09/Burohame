@@ -1,12 +1,6 @@
--- Weekly leaderboard table for Burohame multiplayer mode.
---
--- Threat model:
---   Reads  - allowed for any client holding the publishable API key.
---   Writes - must go through the upsert-leaderboard-entry Edge Function, which
---            validates the payload server-side and uses the service role key.
---            No direct write access is granted to browser clients so that a
---            malicious caller cannot impersonate another player_id or inject
---            arbitrary scores.
+-- Weekly leaderboard schema and security hardening.
+-- Reads are allowed with the publishable API key.
+-- Writes are only allowed through the upsert-leaderboard-entry Edge Function.
 
 create table if not exists public.weekly_leaderboard_entries (
   week_id text not null,
@@ -23,22 +17,21 @@ create table if not exists public.weekly_leaderboard_entries (
   constraint weekly_leaderboard_entries_pk primary key (week_id, player_id)
 );
 
+create unique index if not exists weekly_leaderboard_entries_week_player_uidx
+  on public.weekly_leaderboard_entries (week_id, player_id);
+
 create index if not exists weekly_leaderboard_entries_week_score_idx
   on public.weekly_leaderboard_entries (week_id, total_score desc, updated_at desc);
 
 alter table public.weekly_leaderboard_entries enable row level security;
 
--- Anyone using the publishable API key can read current and historic rows.
 create policy if not exists "weekly leaderboard read"
   on public.weekly_leaderboard_entries
   for select
   to anon, authenticated
   using (true);
 
--- Writes are intentionally restricted to the service role (used by the
--- upsert-leaderboard-entry Edge Function). No direct insert/update policies
--- are created for publishable key roles.
-
--- Drop the old open write policies if they exist on an existing deployment.
+-- Keep browser clients read-only.
 drop policy if exists "weekly leaderboard insert" on public.weekly_leaderboard_entries;
 drop policy if exists "weekly leaderboard update" on public.weekly_leaderboard_entries;
+drop policy if exists "weekly leaderboard delete" on public.weekly_leaderboard_entries;
