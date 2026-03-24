@@ -20,9 +20,9 @@
       <div class="page-scroll page-scroll--dashboard">
         <header class="page-top page-top--dashboard">
           <div>
-            <p class="page-kicker">9×9 block puzzle</p>
+            <p class="page-kicker">Calm 9×9 puzzle</p>
             <h1>Burohame</h1>
-            <p class="page-intro" id="dashboard-intro">Clear rows, columns, and boxes in calm, quick runs.</p>
+            <p class="page-intro" id="dashboard-intro">Place blocks, clear lines, and settle your next best run.</p>
           </div>
           <div class="header-actions">
             <button class="icon-btn icon-btn--share" id="btn-dashboard-share" type="button" aria-label="Share Burohame">
@@ -39,12 +39,12 @@
         </header>
 
         <section class="dash-hero dash-hero--calm" aria-label="Start playing">
-          <p class="dash-hero__value" id="dashboard-value-prop">Place three pieces, clear the board, and chase your next reward.</p>
+          <p class="dash-hero__value" id="dashboard-value-prop">Three pieces per turn. Clear rows, columns, and boxes to keep your run alive.</p>
           <div class="dash-actions dash-actions--hero">
             <button class="pill-btn wide" id="btn-dashboard-play" type="button">Play now</button>
             <button class="pill-btn wide pill-btn--secondary" id="btn-dashboard-continue" type="button" hidden>Continue run</button>
           </div>
-          <div class="dash-progress-strip" aria-label="Progress overview">
+          <div class="dash-progress-strip" id="dashboard-progress-strip" aria-label="Progress overview" hidden>
             <article class="dashboard-stat">
               <span>Coins</span>
               <strong id="dashboard-coins">0</strong>
@@ -62,12 +62,12 @@
         </section>
 
         <section class="dash-onboarding" id="dashboard-onboarding" hidden aria-label="How to play">
-          <h2>How to play</h2>
-          <ol class="dash-onboarding__steps">
-            <li>Drag each piece onto the 9×9 board.</li>
-            <li>Clear full rows, columns, or 3×3 boxes.</li>
-            <li>Stay alive and build your score.</li>
-          </ol>
+          <h2>Start in under a minute</h2>
+          <div class="dash-onboarding__steps" role="list" aria-label="Quick play steps">
+            <p role="listitem">Drop pieces onto the 9×9 board.</p>
+            <p role="listitem">Clear lines and 3×3 boxes.</p>
+            <p role="listitem">Keep placing to grow your score.</p>
+          </div>
           <p class="dash-onboarding__reward" id="dashboard-first-reward">First run reward: 20 coins</p>
         </section>
 
