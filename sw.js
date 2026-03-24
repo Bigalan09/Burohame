@@ -14,6 +14,7 @@ function shellAssetUrls() {
     scopeUrl(''),
     scopeUrl('index.html'),
     scopeUrl('config.js'),
+    scopeUrl('leaderboard-handles.js'),
     scopeUrl('app.js'),
     scopeUrl('styles.css'),
   ];

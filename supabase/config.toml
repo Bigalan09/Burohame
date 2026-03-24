@@ -1,4 +1,7 @@
 project_id = "burohame"
 
+[functions.claim-leaderboard-handle]
+verify_jwt = false
+
 [functions.upsert-leaderboard-entry]
 verify_jwt = false

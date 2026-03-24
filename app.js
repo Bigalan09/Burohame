@@ -203,7 +203,7 @@ let weeklyLeaderboardViewState = {
   entries: [],
   loading: false,
   error: '',
-  sourceLabel: 'Using local practice table',
+  sourceLabel: "This device's weekly table",
   fetchedAt: 0,
 };
 
@@ -248,6 +248,34 @@ const COIN_REWARDS = Object.freeze({
   endRunScoreBandCap: 10,
   personalBestBonus: 10,
 });
+const DEFAULT_LEADERBOARD_NAME = 'Guest';
+const LOCAL_WEEKLY_TABLE_LABEL = "This device's weekly table";
+const GLOBAL_WEEKLY_TABLE_LABEL = 'Global weekly table';
+const LEADERBOARD_HANDLE_VALIDATION_PREFIXES = Object.freeze([
+  'Leaderboard names must',
+  'That leaderboard name is reserved',
+  'That leaderboard name is not allowed',
+  'That leaderboard name is full',
+]);
+
+const leaderboardHandleHelpers = globalThis.LeaderboardHandles || {};
+const extractLeaderboardNameBase =
+  typeof leaderboardHandleHelpers.extractLeaderboardNameBase === 'function'
+    ? leaderboardHandleHelpers.extractLeaderboardNameBase
+    : (value) => String(value || DEFAULT_LEADERBOARD_NAME).trim() || DEFAULT_LEADERBOARD_NAME;
+const hasClaimedLeaderboardHandle =
+  typeof leaderboardHandleHelpers.hasClaimedLeaderboardHandle === 'function'
+    ? leaderboardHandleHelpers.hasClaimedLeaderboardHandle
+    : (value) => /#\d{4}$/.test(String(value || '').trim());
+const normaliseRequestedLeaderboardName =
+  typeof leaderboardHandleHelpers.normaliseRequestedLeaderboardName === 'function'
+    ? leaderboardHandleHelpers.normaliseRequestedLeaderboardName
+    : (value) => String(value || '').trim().replace(/\s+/g, ' ').replace(/[^A-Za-z0-9 ._'-]+/g, '').slice(0, 18);
+const sanitiseLocalLeaderboardName =
+  typeof leaderboardHandleHelpers.sanitiseLocalLeaderboardName === 'function'
+    ? leaderboardHandleHelpers.sanitiseLocalLeaderboardName
+    : (value) => normaliseRequestedLeaderboardName(value) || DEFAULT_LEADERBOARD_NAME;
+
 function scaleShopPrice(amount) {
   if (!amount) return 0;
   return Math.max(0, Math.round(amount * SHOP_PRICE_MULTIPLIER));
@@ -857,7 +885,7 @@ function formatOrdinal(value) {
 function createDefaultWeeklyLeaderboardState() {
   return {
     playerId: '',
-    playerName: 'Guest',
+    playerName: DEFAULT_LEADERBOARD_NAME,
   };
 }
 
@@ -941,7 +969,7 @@ function createLocalWeeklyLeaderboardAdapter() {
 
   return {
     id: 'local',
-    sourceLabel: 'Using local practice table',
+    sourceLabel: LOCAL_WEEKLY_TABLE_LABEL,
     async fetchWeekEntries(weekId) {
       const all = readAll();
       const rows = Array.isArray(all[weekId]) ? all[weekId] : [];
@@ -949,7 +977,7 @@ function createLocalWeeklyLeaderboardAdapter() {
         .filter(item => item && typeof item === 'object')
         .map(item => ({
           playerId: String(item.playerId || ''),
-          playerName: String(item.playerName || 'Guest').slice(0, 24),
+          playerName: String(item.playerName || DEFAULT_LEADERBOARD_NAME).slice(0, 24),
           leagueId: String(item.leagueId || 'bronze'),
           totalScore: clampWholeNumber(item.totalScore, 0),
           countedRuns: sanitiseWeeklyBestRuns(item.countedRuns),
@@ -1077,7 +1105,32 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
 
   return {
     id: 'supabase',
-    sourceLabel: 'Live Supabase multiplayer table',
+    sourceLabel: GLOBAL_WEEKLY_TABLE_LABEL,
+    async claimLeaderboardHandle(requestedName) {
+      const session = await ensureAuthSession();
+      const response = await fetch(`${baseUrl}/functions/v1/claim-leaderboard-handle`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${session.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requested_name: requestedName,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload?.error === 'string' && payload.error
+          ? payload.error
+          : `Could not claim leaderboard name (${response.status})`);
+      }
+      const displayName = typeof payload?.display_name === 'string' ? payload.display_name.trim() : '';
+      if (!displayName) {
+        throw new Error('Claim response did not include a leaderboard handle');
+      }
+      return displayName;
+    },
     async fetchWeekEntries(weekId) {
       const response = await fetch(buildQuery(weekId), { headers });
       if (!response.ok) throw new Error(`Supabase fetch failed (${response.status})`);
@@ -1085,7 +1138,7 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
       return Array.isArray(payload)
         ? payload.map(item => ({
             playerId: typeof item.player_id === 'string' ? item.player_id : '',
-            playerName: typeof item.player_name === 'string' && item.player_name.trim() ? item.player_name.trim().slice(0, 24) : 'Guest',
+            playerName: typeof item.player_name === 'string' && item.player_name.trim() ? item.player_name.trim().slice(0, 24) : DEFAULT_LEADERBOARD_NAME,
             leagueId: typeof item.league_id === 'string' ? item.league_id : 'bronze',
             totalScore: clampWholeNumber(item.total_score, 0),
             countedRuns: sanitiseWeeklyBestRuns(item.counted_runs),
@@ -1155,6 +1208,49 @@ function getWeeklyLeaderboardEntryPayload() {
   };
 }
 
+function isLeaderboardHandleValidationMessage(message) {
+  return LEADERBOARD_HANDLE_VALIDATION_PREFIXES.some(prefix => message.startsWith(prefix));
+}
+
+function getRequestedLeaderboardBaseName(value = leaderboardPlayerName) {
+  if (hasClaimedLeaderboardHandle(value)) {
+    return extractLeaderboardNameBase(value);
+  }
+  return normaliseRequestedLeaderboardName(value);
+}
+
+async function tryClaimLeaderboardHandle(requestedName, options = {}) {
+  if (!hasHostedWeeklyLeaderboardConfig()) return '';
+
+  const normalisedRequestedName = normaliseRequestedLeaderboardName(requestedName);
+  if (!normalisedRequestedName) return '';
+  if (normalisedRequestedName.toLowerCase() === DEFAULT_LEADERBOARD_NAME.toLowerCase()) return '';
+
+  if (!weeklyLeaderboardHostedAdapter?.claimLeaderboardHandle) {
+    if (options.requireClaim) {
+      throw new Error('Leaderboard name claims are unavailable right now.');
+    }
+    return '';
+  }
+
+  try {
+    return await weeklyLeaderboardHostedAdapter.claimLeaderboardHandle(normalisedRequestedName);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (options.requireClaim && isLeaderboardHandleValidationMessage(message)) {
+      throw error;
+    }
+    return '';
+  }
+}
+
+function persistClaimedLeaderboardHandle(claimedHandle) {
+  if (!claimedHandle || !hasClaimedLeaderboardHandle(claimedHandle)) return;
+  leaderboardPlayerName = claimedHandle;
+  saveSettings();
+  if (currentPage === 'settings') populateSettingsPage();
+}
+
 async function publishWeeklyLeaderboardEntry() {
   if (!leaderboardPlayerId) return;
   const payload = getWeeklyLeaderboardEntryPayload();
@@ -1166,6 +1262,22 @@ async function publishWeeklyLeaderboardEntry() {
     }
   }
   if (!weeklyLeaderboardHostedAdapter) return;
+
+  if (!hasClaimedLeaderboardHandle(leaderboardPlayerName)) {
+    const claimedHandle = await tryClaimLeaderboardHandle(getRequestedLeaderboardBaseName(), { requireClaim: false });
+    if (claimedHandle) {
+      persistClaimedLeaderboardHandle(claimedHandle);
+      if (weeklyLeaderboardLocalAdapter) {
+        try {
+          await weeklyLeaderboardLocalAdapter.upsertPlayerWeekEntry(getWeeklyLeaderboardEntryPayload());
+        } catch (_) {
+          // Keep the local fallback resilient as well.
+        }
+      }
+    }
+  }
+  if (!hasClaimedLeaderboardHandle(leaderboardPlayerName)) return;
+
   try {
     await weeklyLeaderboardHostedAdapter.upsertPlayerWeekEntry(payload);
   } catch (_) {
@@ -1216,9 +1328,9 @@ async function refreshWeeklyLeaderboard(weekId, options = {}) {
       loading: false,
       fetchedAt: weeklyLeaderboardHostedAdapter ? 0 : Date.now(),
       error: weeklyLeaderboardHostedAdapter
-        ? 'Shared table unavailable right now. Showing your local practice table.'
+        ? "Weekly table unavailable right now. Showing this device's table."
         : '',
-      sourceLabel: weeklyLeaderboardLocalAdapter?.sourceLabel || 'Using local practice table',
+      sourceLabel: weeklyLeaderboardLocalAdapter?.sourceLabel || LOCAL_WEEKLY_TABLE_LABEL,
     };
   }
   renderWeeklyGlobalLeaderboard();
@@ -1240,9 +1352,9 @@ function renderWeeklyGlobalLeaderboard() {
   const rows = weeklyLeaderboardViewState.entries.slice(0, 8);
   if (!rows.length) {
     const empty = document.createElement('li');
-    empty.textContent = weeklyLeaderboardViewState.sourceLabel === (weeklyLeaderboardLocalAdapter?.sourceLabel || 'Using local practice table')
-      ? 'No local practice runs are saved on this device yet.'
-      : 'No shared runs yet this week. Your next run can set the pace.';
+    empty.textContent = weeklyLeaderboardViewState.sourceLabel === (weeklyLeaderboardLocalAdapter?.sourceLabel || LOCAL_WEEKLY_TABLE_LABEL)
+      ? 'No runs are saved on this device yet.'
+      : 'No runs are on the weekly table yet. Your next run can set the pace.';
     listEl.appendChild(empty);
     return;
   }
@@ -4346,6 +4458,20 @@ function populateQuickSettings() {
   document.getElementById('quick-chk-dark').checked = darkMode;
 }
 
+function getLeaderboardHandleStatusText() {
+  if (hasClaimedLeaderboardHandle(leaderboardPlayerName)) {
+    return `Current handle: ${leaderboardPlayerName}`;
+  }
+  if (hasHostedWeeklyLeaderboardConfig()) {
+    const savedName = getRequestedLeaderboardBaseName();
+    if (savedName && savedName.toLowerCase() !== DEFAULT_LEADERBOARD_NAME.toLowerCase()) {
+      return `Saved locally as ${savedName}. It will join the weekly table when available.`;
+    }
+    return 'Choose a leaderboard name to join the weekly table.';
+  }
+  return 'This device will use the name below for weekly play.';
+}
+
 function populateSettingsPage() {
   document.getElementById('page-chk-coach').checked = trainingMode;
   document.getElementById('page-chk-extended').checked = extendedPieces;
@@ -4362,12 +4488,10 @@ function populateSettingsPage() {
   }
   colorSelect.value = isColorwayOwned(colorSetting) ? colorSetting : 'orange';
   document.getElementById('page-sel-rack').value = String(rackSize);
-  document.getElementById('page-input-weekly-name').value = leaderboardPlayerName;
+  document.getElementById('page-input-weekly-name').value = extractLeaderboardNameBase(leaderboardPlayerName);
   const backendStatus = document.getElementById('page-weekly-backend-status');
   if (backendStatus) {
-    backendStatus.textContent = hasHostedWeeklyLeaderboardConfig()
-      ? 'Hosted multiplayer is configured for this release. Local fallback is automatic offline.'
-      : 'This build uses local practice mode only.';
+    backendStatus.textContent = getLeaderboardHandleStatusText();
   }
   updateCosmeticLabel();
 }
@@ -5391,7 +5515,7 @@ function applySettingsState(nextSettings) {
   const requestedColor = sanitiseColorSetting(nextSettings.colorSetting);
   colorSetting = isColorwayOwned(requestedColor) ? requestedColor : colorSetting;
   rackSize = nextSettings.rackSize;
-  leaderboardPlayerName = (nextSettings.leaderboardPlayerName || 'Guest').trim().slice(0, 24) || 'Guest';
+  leaderboardPlayerName = (nextSettings.leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME).trim().slice(0, 24) || DEFAULT_LEADERBOARD_NAME;
   if (!leaderboardPlayerId) leaderboardPlayerId = createPseudoId();
   configureWeeklyLeaderboardAdapter();
 
@@ -5534,14 +5658,46 @@ function handleShopAction(event) {
 document.getElementById('collection-list').addEventListener('click', handleShopAction);
 document.getElementById('colorway-list').addEventListener('click', handleShopAction);
 
-document.getElementById('btn-settings-save').addEventListener('click', () => {
+async function resolveLeaderboardNameForSave(requestedName) {
+  const normalisedRequestedName = normaliseRequestedLeaderboardName(requestedName);
+  if (!hasHostedWeeklyLeaderboardConfig()) {
+    return sanitiseLocalLeaderboardName(normalisedRequestedName);
+  }
+
+  if (!normalisedRequestedName) {
+    return leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME;
+  }
+
+  const currentBaseName = hasClaimedLeaderboardHandle(leaderboardPlayerName)
+    ? extractLeaderboardNameBase(leaderboardPlayerName)
+    : normaliseRequestedLeaderboardName(leaderboardPlayerName);
+  if (hasClaimedLeaderboardHandle(leaderboardPlayerName) && currentBaseName === normalisedRequestedName) {
+    return leaderboardPlayerName;
+  }
+
+  const claimedHandle = await tryClaimLeaderboardHandle(normalisedRequestedName, { requireClaim: true });
+  return claimedHandle || sanitiseLocalLeaderboardName(normalisedRequestedName);
+}
+
+document.getElementById('btn-settings-save').addEventListener('click', async () => {
+  let resolvedLeaderboardName = leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME;
+  try {
+    resolvedLeaderboardName = await resolveLeaderboardNameForSave(
+      document.getElementById('page-input-weekly-name').value,
+    );
+  } catch (error) {
+    alert(error instanceof Error ? error.message : 'Could not update leaderboard name right now.');
+    populateSettingsPage();
+    return;
+  }
+
   applySettingsState({
     trainingMode: document.getElementById('page-chk-coach').checked,
     extendedPieces: document.getElementById('page-chk-extended').checked,
     darkMode: document.getElementById('page-chk-dark').checked,
     colorSetting: sanitiseColorSetting(document.getElementById('page-sel-color').value),
     rackSize: parseInt(document.getElementById('page-sel-rack').value, 10),
-    leaderboardPlayerName: document.getElementById('page-input-weekly-name').value,
+    leaderboardPlayerName: resolvedLeaderboardName,
   });
   navigateTo('dashboard');
 });

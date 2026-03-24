@@ -67,10 +67,18 @@ check_contains manifest.json "\"start_url\": \"/${name}/\"" \
   "manifest.json must use the current repository Pages path as start_url."
 check_contains index.html '<script src="config.js"></script>' \
   "index.html must load config.js."
-check_script_order index.html '<script src="config.js"></script>' '<script src="app.js"></script>' \
-  "index.html must load config.js before app.js."
+check_contains index.html '<script src="leaderboard-handles.js"></script>' \
+  "index.html must load leaderboard-handles.js."
+check_script_order index.html '<script src="config.js"></script>' '<script src="leaderboard-handles.js"></script>' \
+  "index.html must load config.js before leaderboard-handles.js."
+check_script_order index.html '<script src="leaderboard-handles.js"></script>' '<script src="app.js"></script>' \
+  "index.html must load leaderboard-handles.js before app.js."
 check_contains index.html "updateViaCache: 'none'" \
   "index.html must register the service worker with updateViaCache disabled."
+check_not_contains index.html 'Supabase' \
+  "index.html must not expose Supabase details to players."
+check_not_contains index.html 'multiplayer' \
+  "index.html must not expose multiplayer jargon to players."
 check_not_contains index.html 'id="btn-settings-backoffice"' \
   "index.html must not expose the back-office setup button."
 check_not_contains index.html 'data-page="backoffice"' \
@@ -79,6 +87,10 @@ check_not_contains app.js 'backoffice' \
   "app.js must not retain the removed back-office flow."
 check_not_contains styles.css 'data-page="backoffice"' \
   "styles.css must not retain selectors for the removed back-office page."
+check_not_contains app.js 'Hosted multiplayer is configured' \
+  "app.js must not show hosted backend jargon in the player UI."
+check_not_contains app.js 'local practice table' \
+  "app.js must not show the old local practice wording in the player UI."
 check_contains app.js "addListener(" \
   "app.js must keep a MediaQueryList listener fallback for Safari compatibility."
 check_contains sw.js "request.mode === 'navigate'" \
@@ -87,6 +99,8 @@ check_contains sw.js "fetch(request)" \
   "sw.js must attempt a network fetch before falling back to cache for shell requests."
 check_contains sw.js "scopeUrl('config.js')" \
   "sw.js must cache config.js as part of the offline app shell."
+check_contains sw.js "scopeUrl('leaderboard-handles.js')" \
+  "sw.js must cache leaderboard-handles.js as part of the offline app shell."
 
 for page in $(sed -n 's/.*data-page="\([^"]*\)".*/\1/p' index.html | sort -u); do
   selector="#app[data-page=\"${page}\"] .page[data-page=\"${page}\"]"
@@ -96,7 +110,7 @@ for page in $(sed -n 's/.*data-page="\([^"]*\)".*/\1/p' index.html | sort -u); d
   fi
 done
 
-for file in config.js index.html app.js styles.css manifest.json sw.js icon-192.png icon-512.png; do
+for file in config.js leaderboard-handles.js index.html app.js styles.css manifest.json sw.js icon-192.png icon-512.png; do
   check_file "$file"
 done
 
