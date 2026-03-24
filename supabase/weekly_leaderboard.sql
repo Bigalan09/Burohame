@@ -1,5 +1,12 @@
 -- Weekly leaderboard table for Burohame multiplayer mode.
--- Safe for browser clients when RLS is enabled with publishable keys.
+--
+-- Threat model:
+--   Reads  - allowed for any client holding the publishable (anon) key.
+--   Writes - must go through the upsert-leaderboard-entry Edge Function, which
+--            validates the payload server-side and uses the service role key.
+--            No direct write access is granted to anon clients so that a
+--            malicious caller cannot impersonate another player_id or inject
+--            arbitrary scores.
 
 create table if not exists public.weekly_leaderboard_entries (
   week_id text not null,
@@ -28,16 +35,10 @@ create policy if not exists "weekly leaderboard read"
   to anon, authenticated
   using (true);
 
--- Allow upserts from browser clients.
-create policy if not exists "weekly leaderboard insert"
-  on public.weekly_leaderboard_entries
-  for insert
-  to anon, authenticated
-  with check (true);
+-- Writes are intentionally restricted to the service role (used by the
+-- upsert-leaderboard-entry Edge Function). No direct insert/update policies
+-- are created for anon or authenticated roles.
 
-create policy if not exists "weekly leaderboard update"
-  on public.weekly_leaderboard_entries
-  for update
-  to anon, authenticated
-  using (true)
-  with check (true);
+-- Drop the old open write policies if they exist on an existing deployment.
+drop policy if exists "weekly leaderboard insert" on public.weekly_leaderboard_entries;
+drop policy if exists "weekly leaderboard update" on public.weekly_leaderboard_entries;
