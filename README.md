@@ -30,7 +30,8 @@
    - `updated_at` (timestamptz)
 2. Add a unique index on `(week_id, player_id)` so upserts work.
 3. In game settings, choose **Weekly backend → Supabase multiplayer**.
-4. Enter your Supabase URL and anon key.
+4. Enter your Supabase URL and publishable key.
+5. Optional shortcut: run the SQL in `supabase/weekly_leaderboard.sql` in the Supabase SQL editor.
 
 If Supabase is not configured, Burohame automatically falls back to local leaderboard storage.
 

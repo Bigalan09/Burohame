@@ -197,7 +197,7 @@ let leaderboardPlayerName = 'Guest';
 let leaderboardPlayerId = '';
 let leaderboardBackend = 'local';
 let leaderboardSupabaseUrl = '';
-let leaderboardSupabaseAnonKey = '';
+let leaderboardSupabaseApiKey = '';
 let weeklyLeaderboardAdapter = null;
 let weeklyLeaderboardViewState = {
   weekId: '',
@@ -862,7 +862,7 @@ function createDefaultWeeklyLeaderboardState() {
     playerId: '',
     playerName: 'Guest',
     supabaseUrl: '',
-    supabaseAnonKey: '',
+    supabaseApiKey: '',
   };
 }
 
@@ -876,7 +876,9 @@ function sanitiseWeeklyLeaderboardState(value) {
       ? src.playerName.trim().slice(0, 24)
       : defaults.playerName,
     supabaseUrl: typeof src.supabaseUrl === 'string' ? src.supabaseUrl.trim() : '',
-    supabaseAnonKey: typeof src.supabaseAnonKey === 'string' ? src.supabaseAnonKey.trim() : '',
+    supabaseApiKey: typeof (src.supabaseApiKey || src.supabaseAnonKey) === 'string'
+      ? String(src.supabaseApiKey || src.supabaseAnonKey).trim()
+      : '',
   };
 }
 
@@ -936,13 +938,19 @@ function createLocalWeeklyLeaderboardAdapter() {
   };
 }
 
-function createSupabaseWeeklyLeaderboardAdapter(url, anonKey) {
-  const baseUrl = url.replace(/\/$/, '');
+function createSupabaseHeaders(apiKey) {
   const headers = {
-    apikey: anonKey,
-    Authorization: `Bearer ${anonKey}`,
+    apikey: apiKey,
     'Content-Type': 'application/json',
   };
+  const keyLooksLikeJwt = apiKey.startsWith('eyJ') || apiKey.split('.').length === 3;
+  if (keyLooksLikeJwt) headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
+}
+
+function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
+  const baseUrl = url.replace(/\/$/, '');
+  const headers = createSupabaseHeaders(apiKey);
 
   function buildQuery(weekId) {
     const params = new URLSearchParams();
@@ -999,17 +1007,17 @@ function configureWeeklyLeaderboardAdapter() {
     playerId: leaderboardPlayerId,
     playerName: leaderboardPlayerName,
     supabaseUrl: leaderboardSupabaseUrl,
-    supabaseAnonKey: leaderboardSupabaseAnonKey,
+    supabaseApiKey: leaderboardSupabaseApiKey,
   });
   leaderboardBackend = settings.backend;
   leaderboardPlayerId = settings.playerId || createPseudoId();
   leaderboardPlayerName = settings.playerName;
   leaderboardSupabaseUrl = settings.supabaseUrl;
-  leaderboardSupabaseAnonKey = settings.supabaseAnonKey;
+  leaderboardSupabaseApiKey = settings.supabaseApiKey;
 
-  const canUseSupabase = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseAnonKey;
+  const canUseSupabase = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseApiKey;
   weeklyLeaderboardAdapter = canUseSupabase
-    ? createSupabaseWeeklyLeaderboardAdapter(leaderboardSupabaseUrl, leaderboardSupabaseAnonKey)
+    ? createSupabaseWeeklyLeaderboardAdapter(leaderboardSupabaseUrl, leaderboardSupabaseApiKey)
     : createLocalWeeklyLeaderboardAdapter();
   weeklyLeaderboardViewState = {
     ...weeklyLeaderboardViewState,
@@ -3854,7 +3862,7 @@ function saveSettings() {
       playerId: leaderboardPlayerId,
       playerName: leaderboardPlayerName,
       supabaseUrl: leaderboardSupabaseUrl,
-      supabaseAnonKey: leaderboardSupabaseAnonKey,
+      supabaseApiKey: leaderboardSupabaseApiKey,
     },
   }));
 }
@@ -3872,7 +3880,7 @@ function loadSettings() {
     leaderboardPlayerId = weeklyLeaderboardSettings.playerId || createPseudoId();
     leaderboardPlayerName = weeklyLeaderboardSettings.playerName;
     leaderboardSupabaseUrl = weeklyLeaderboardSettings.supabaseUrl;
-    leaderboardSupabaseAnonKey = weeklyLeaderboardSettings.supabaseAnonKey;
+    leaderboardSupabaseApiKey = weeklyLeaderboardSettings.supabaseApiKey;
     configureWeeklyLeaderboardAdapter();
     // Respect saved dark preference; fall back to OS preference on first launch
     if (typeof s.dark === 'boolean') {
@@ -4242,7 +4250,7 @@ function populateSettingsPage() {
   document.getElementById('page-input-weekly-name').value = leaderboardPlayerName;
   document.getElementById('page-sel-weekly-backend').value = leaderboardBackend;
   document.getElementById('page-input-supabase-url').value = leaderboardSupabaseUrl;
-  document.getElementById('page-input-supabase-key').value = leaderboardSupabaseAnonKey;
+  document.getElementById('page-input-supabase-key').value = leaderboardSupabaseApiKey;
   updateCosmeticLabel();
 }
 
@@ -5267,7 +5275,7 @@ function applySettingsState(nextSettings) {
   leaderboardPlayerName = (nextSettings.leaderboardPlayerName || 'Guest').trim().slice(0, 24) || 'Guest';
   leaderboardBackend = nextSettings.leaderboardBackend === 'supabase' ? 'supabase' : 'local';
   leaderboardSupabaseUrl = (nextSettings.leaderboardSupabaseUrl || '').trim();
-  leaderboardSupabaseAnonKey = (nextSettings.leaderboardSupabaseAnonKey || '').trim();
+  leaderboardSupabaseApiKey = (nextSettings.leaderboardSupabaseApiKey || '').trim();
   if (!leaderboardPlayerId) leaderboardPlayerId = createPseudoId();
   configureWeeklyLeaderboardAdapter();
 
@@ -5315,7 +5323,7 @@ document.getElementById('btn-quick-settings-save').addEventListener('click', () 
     leaderboardPlayerName,
     leaderboardBackend,
     leaderboardSupabaseUrl,
-    leaderboardSupabaseAnonKey,
+    leaderboardSupabaseApiKey,
   });
   hideOverlay('ov-quick-settings');
 });
@@ -5423,7 +5431,7 @@ document.getElementById('btn-settings-save').addEventListener('click', () => {
     leaderboardPlayerName: document.getElementById('page-input-weekly-name').value,
     leaderboardBackend: document.getElementById('page-sel-weekly-backend').value,
     leaderboardSupabaseUrl: document.getElementById('page-input-supabase-url').value,
-    leaderboardSupabaseAnonKey: document.getElementById('page-input-supabase-key').value,
+    leaderboardSupabaseApiKey: document.getElementById('page-input-supabase-key').value,
   });
   navigateTo('dashboard');
 });
