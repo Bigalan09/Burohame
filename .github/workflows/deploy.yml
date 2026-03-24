@@ -30,7 +30,7 @@ jobs:
       - name: Stamp cache version into service worker
         run: |
           COMMIT=$(git rev-parse --short HEAD)
-          sed -i "s/const CACHE_NAME = 'burohame-v[^']*'/const CACHE_NAME = 'burohame-${COMMIT}'/" sw.js
+          sed -i "s/__CACHE_VERSION__/${COMMIT}/g" sw.js
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

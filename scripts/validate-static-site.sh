@@ -39,6 +39,12 @@ check_contains index.html "$repo_url" \
   "index.html must link to the current GitHub repository."
 check_contains manifest.json "\"start_url\": \"/${name}/\"" \
   "manifest.json must use the current repository Pages path as start_url."
+check_contains index.html "updateViaCache: 'none'" \
+  "index.html must register the service worker with updateViaCache disabled."
+check_contains sw.js "request.mode === 'navigate'" \
+  "sw.js must treat navigation requests as part of the app shell."
+check_contains sw.js "fetch(request)" \
+  "sw.js must attempt a network fetch before falling back to cache for shell requests."
 
 for file in index.html app.js styles.css manifest.json sw.js icon-192.png icon-512.png; do
   check_file "$file"

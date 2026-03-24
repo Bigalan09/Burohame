@@ -642,7 +642,7 @@
       const hadController = !!navigator.serviceWorker.controller;
 
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js');
+        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
       });
 
       let refreshing = false;
