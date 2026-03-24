@@ -4595,18 +4595,44 @@ function populateQuickSettings() {
   document.getElementById('quick-chk-dark').checked = darkMode;
 }
 
-function getLeaderboardHandleStatusText() {
+function getLeaderboardNameAvailabilityText(rawValue) {
+  if (!hasHostedWeeklyLeaderboardConfig()) {
+    return 'Name saved locally on this device.';
+  }
+  const requestedName = normaliseRequestedLeaderboardName(rawValue);
+  if (!requestedName) {
+    return 'Type a name to claim a unique handle.';
+  }
+  if (requestedName.toLowerCase() === LEGACY_LEADERBOARD_NAME.toLowerCase()) {
+    return 'Please choose a different name.';
+  }
+  return `Available. It will be claimed with a unique suffix, for example ${requestedName}#1423.`;
+}
+
+function updateLeaderboardNameAvailabilityIndicator() {
+  const backendStatus = document.getElementById('page-weekly-backend-status');
+  if (!backendStatus) return;
+  const inputEl = document.getElementById('page-input-weekly-name');
   if (hasClaimedLeaderboardHandle(leaderboardPlayerName)) {
-    return `Current handle: ${leaderboardPlayerName}`;
-  }
-  if (hasHostedWeeklyLeaderboardConfig()) {
-    const savedName = getRequestedLeaderboardBaseName();
-    if (savedName && savedName.toLowerCase() !== DEFAULT_LEADERBOARD_NAME.toLowerCase()) {
-      return `Saved locally as ${savedName}. It will join the weekly table when available.`;
+    const currentBaseName = extractLeaderboardNameBase(leaderboardPlayerName);
+    const requestedName = normaliseRequestedLeaderboardName(inputEl?.value);
+    if (!requestedName || requestedName === currentBaseName) {
+      backendStatus.textContent = `Current handle: ${leaderboardPlayerName} · available`;
+      return;
     }
-    return 'Choose a leaderboard name to join the weekly table.';
   }
-  return 'This device will use the name below for weekly play.';
+  backendStatus.textContent = getLeaderboardNameAvailabilityText(inputEl?.value);
+}
+
+async function ensureLeaderboardHandleClaimedOnJoin() {
+  if (!hasHostedWeeklyLeaderboardConfig()) return;
+  if (hasClaimedLeaderboardHandle(leaderboardPlayerName)) return;
+  const requestedName = getRequestedLeaderboardBaseName();
+  if (!requestedName) return;
+  const claimedHandle = await tryClaimLeaderboardHandle(requestedName, { requireClaim: false });
+  if (!claimedHandle) return;
+  persistClaimedLeaderboardHandle(claimedHandle);
+  if (currentPage === 'settings') updateLeaderboardNameAvailabilityIndicator();
 }
 
 function populateSettingsPage() {
@@ -4626,10 +4652,7 @@ function populateSettingsPage() {
   colorSelect.value = isColorwayOwned(colorSetting) ? colorSetting : 'orange';
   document.getElementById('page-sel-rack').value = String(rackSize);
   document.getElementById('page-input-weekly-name').value = extractLeaderboardNameBase(leaderboardPlayerName);
-  const backendStatus = document.getElementById('page-weekly-backend-status');
-  if (backendStatus) {
-    backendStatus.textContent = getLeaderboardHandleStatusText();
-  }
+  updateLeaderboardNameAvailabilityIndicator();
   updateCosmeticLabel();
 }
 
@@ -5849,6 +5872,9 @@ function handleShopAction(event) {
 
 document.getElementById('collection-list').addEventListener('click', handleShopAction);
 document.getElementById('colorway-list').addEventListener('click', handleShopAction);
+document.getElementById('page-input-weekly-name').addEventListener('input', () => {
+  updateLeaderboardNameAvailabilityIndicator();
+});
 
 async function resolveLeaderboardNameForSave(requestedName) {
   const normalisedRequestedName = normaliseRequestedLeaderboardName(requestedName);
@@ -6005,6 +6031,9 @@ function init() {
   loadSettings();
   loadRuntimeConfig();
   if (!weeklyLeaderboardAdapter) configureWeeklyLeaderboardAdapter();
+  ensureLeaderboardHandleClaimedOnJoin().catch(() => {
+    // Keep startup fast and resilient if hosted claims are unavailable.
+  });
   ensureSelectedColorway({ preserveLegacy: true });
   applyDarkMode(darkMode);
   applyColor(colorSetting);
