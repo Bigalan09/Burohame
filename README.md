@@ -15,7 +15,24 @@
 - Rows, columns and 3×3 boxes clear when full
 - Multi-clear and combo bonuses
 - Best score saved locally
+- Weekly leaderboard with a pluggable multiplayer adapter (Supabase or local fallback)
 - **Coach Mode** (toggle via ⚙️): colour-coded move hints, board health metrics, move quality feedback
+
+## Multiplayer weekly leaderboard setup (Supabase)
+
+1. Create a `weekly_leaderboard_entries` table in Supabase with:
+   - `week_id` (text)
+   - `player_id` (text)
+   - `player_name` (text)
+   - `league_id` (text)
+   - `total_score` (int4)
+   - `counted_runs` (int4[])
+   - `updated_at` (timestamptz)
+2. Add a unique index on `(week_id, player_id)` so upserts work.
+3. In game settings, choose **Weekly backend → Supabase multiplayer**.
+4. Enter your Supabase URL and anon key.
+
+If Supabase is not configured, Burohame automatically falls back to local leaderboard storage.
 
 ## Local dev
 

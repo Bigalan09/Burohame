@@ -198,6 +198,13 @@
             </div>
             <div class="dashboard-weekly__best-runs" id="weekly-page-best-runs" aria-label="Counted weekly runs"></div>
           </div>
+          <div class="dashboard-weekly__global" aria-live="polite">
+            <div class="dashboard-weekly__global-head">
+              <strong>Shared weekly table</strong>
+              <span id="weekly-global-status">Using local practice table</span>
+            </div>
+            <ol class="dashboard-weekly__global-list" id="weekly-global-list" aria-label="Shared weekly leaderboard entries"></ol>
+          </div>
         </section>
       </div>
     </section>
@@ -411,6 +418,37 @@
               <option value="2">2</option>
               <option value="3">3</option>
             </select>
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Weekly display name</span>
+              <small>Name shown in the shared weekly table.</small>
+            </div>
+            <input id="page-input-weekly-name" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Player name">
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Weekly backend</span>
+              <small>Use Supabase for multiplayer or local mode for offline practice.</small>
+            </div>
+            <select id="page-sel-weekly-backend">
+              <option value="local">Local practice</option>
+              <option value="supabase">Supabase multiplayer</option>
+            </select>
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Supabase URL</span>
+              <small>Only required when Supabase multiplayer is selected.</small>
+            </div>
+            <input id="page-input-supabase-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://your-project.supabase.co">
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Supabase anon key</span>
+              <small>Stored locally in your browser settings.</small>
+            </div>
+            <input id="page-input-supabase-key" type="password" autocomplete="off" spellcheck="false" placeholder="eyJ...">
           </div>
           <div class="setting-row setting-row--stack">
             <div>
