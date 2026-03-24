@@ -1,6 +1,7 @@
 -- Weekly leaderboard schema and security hardening.
 -- Reads are allowed with the publishable API key.
--- Writes are only allowed through the upsert-leaderboard-entry Edge Function.
+-- Writes are only allowed through the upsert-leaderboard-entry Edge Function
+-- with authenticated user JWT validation.
 
 create table if not exists public.weekly_leaderboard_entries (
   week_id text not null,

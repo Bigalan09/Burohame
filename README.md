@@ -30,8 +30,9 @@
 
 - Browser clients only use the Supabase URL plus a publishable API key.
 - Browser reads use `GET /rest/v1/weekly_leaderboard_entries`.
-- Browser writes use `POST /functions/v1/upsert-leaderboard-entry`.
-- The Edge Function validates payloads and writes with the service role key server-side.
+- Browser writes use `POST /functions/v1/upsert-leaderboard-entry` with a Supabase Auth user JWT.
+- The Edge Function requires an authenticated user token, derives `player_id` from the token subject, validates payload fields, and recomputes `total_score` from `counted_runs`.
+- The Edge Function writes with the service role key server-side.
 - RLS allows public read-only access and blocks direct client inserts, updates, and deletes.
 
 ### Manual Supabase deploy steps
@@ -40,13 +41,15 @@
 # from the repository root
 supabase link --project-ref <your-project-ref>
 supabase db push
-supabase functions deploy upsert-leaderboard-entry --no-verify-jwt
+supabase functions deploy upsert-leaderboard-entry
 ```
 
 Set these function secrets in Supabase before testing writes:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+
+Enable Supabase Auth anonymous sign-ins for the project so the browser can obtain an authenticated JWT for Edge Function writes.
 
 If Supabase is not configured, Burohame automatically falls back to local leaderboard storage.
 
