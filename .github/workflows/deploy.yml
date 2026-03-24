@@ -34,18 +34,28 @@ jobs:
 
       - name: Generate runtime config
         env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_ANON_KEY || secrets.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY }}
         run: |
           node <<'EOF'
           const fs = require('fs');
 
-          const hasHostedLeaderboard = Boolean(process.env.SUPABASE_URL) && Boolean(process.env.SUPABASE_PUBLISHABLE_KEY);
+          const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+          const supabasePublishableKey = (process.env.SUPABASE_PUBLISHABLE_KEY || '').trim();
+          const hasHostedLeaderboard = Boolean(supabaseUrl) && Boolean(supabasePublishableKey);
+
+          if ((supabaseUrl && !supabasePublishableKey) || (!supabaseUrl && supabasePublishableKey)) {
+            console.error('Hosted leaderboard configuration is incomplete. Set both SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY).');
+            process.exit(1);
+          }
+
+          console.log(`Weekly leaderboard backend: ${hasHostedLeaderboard ? 'supabase' : 'local'}`);
+
           const config = {
             weeklyLeaderboard: {
               backend: hasHostedLeaderboard ? 'supabase' : 'local',
-              supabaseUrl: hasHostedLeaderboard ? process.env.SUPABASE_URL : '',
-              supabasePublishableKey: hasHostedLeaderboard ? process.env.SUPABASE_PUBLISHABLE_KEY : '',
+              supabaseUrl: hasHostedLeaderboard ? supabaseUrl : '',
+              supabasePublishableKey: hasHostedLeaderboard ? supabasePublishableKey : '',
             },
           };
 

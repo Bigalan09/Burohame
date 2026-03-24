@@ -27,6 +27,8 @@
 3. In GitHub repository settings, add these Actions variables for Pages deploys:
    - `SUPABASE_URL`
    - `SUPABASE_PUBLISHABLE_KEY`
+   - Optional fallback: `SUPABASE_ANON_KEY` (treated the same as `SUPABASE_PUBLISHABLE_KEY`)
+   - You can provide these as either Actions variables or Actions secrets.
 4. Deploy `main` to GitHub Pages through `.github/workflows/deploy.yml`.
 
 If either Actions variable is missing, the deployed site stays in local practice mode and still works offline.
@@ -73,6 +75,7 @@ chmod +x run_server.sh
 
 Pushes to `main` auto-deploy to GitHub Pages via `.github/workflows/deploy.yml`.
 Manual production deploys are available via `workflow_dispatch` in the same workflow.
+PR preview workflows do not publish live Pages deployments, so production stays tied to `main`.
 
 ## Tech
 
