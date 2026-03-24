@@ -52,6 +52,12 @@ check_contains "$deploy_workflow" 'workflow_dispatch:' \
   'deploy.yml must support manual production deployments via workflow_dispatch.'
 check_contains "$deploy_workflow" "__CACHE_VERSION__" \
   'deploy.yml must stamp the explicit service worker cache version placeholder.'
+check_contains "$deploy_workflow" 'SUPABASE_URL' \
+  'deploy.yml must read SUPABASE_URL from repository variables.'
+check_contains "$deploy_workflow" 'SUPABASE_PUBLISHABLE_KEY' \
+  'deploy.yml must read SUPABASE_PUBLISHABLE_KEY from repository variables.'
+check_contains "$deploy_workflow" 'cat > config.js' \
+  'deploy.yml must generate config.js in the deploy artifact.'
 check_contains "sw.js" "__CACHE_VERSION__" \
   'sw.js must define an explicit cache version placeholder for deploy stamping.'
 check_contains "$ci_workflow" 'sh scripts/validate-static-site.sh' \
