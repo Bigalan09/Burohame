@@ -962,6 +962,8 @@ function createSupabaseHeaders(apiKey) {
 function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
   const baseUrl = url.replace(/\/$/, '');
   const headers = createSupabaseHeaders(apiKey);
+  const authStorageKey = `bst-supabase-auth:${baseUrl}`;
+  let cachedSession = null;
 
   function buildQuery(weekId) {
     const params = new URLSearchParams();
@@ -970,6 +972,80 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
     params.set('order', 'total_score.desc,updated_at.desc');
     params.set('limit', String(WEEKLY_LEADERBOARD_MAX_ROWS));
     return `${baseUrl}/rest/v1/weekly_leaderboard_entries?${params.toString()}`;
+  }
+
+  function parseAuthPayload(payload) {
+    const accessToken = payload?.access_token || payload?.session?.access_token || '';
+    const refreshToken = payload?.refresh_token || payload?.session?.refresh_token || '';
+    const expiresIn = Number(payload?.expires_in || payload?.session?.expires_in || 0);
+    const userId = payload?.user?.id || payload?.session?.user?.id || '';
+    if (!accessToken || !refreshToken || !userId || !Number.isFinite(expiresIn) || expiresIn <= 0) return null;
+    return {
+      accessToken,
+      refreshToken,
+      userId,
+      expiresAt: Date.now() + (expiresIn * 1000),
+    };
+  }
+
+  function saveSession(session) {
+    cachedSession = session;
+    localStorage.setItem(authStorageKey, JSON.stringify(session));
+  }
+
+  function loadSession() {
+    if (cachedSession) return cachedSession;
+    try {
+      const raw = JSON.parse(localStorage.getItem(authStorageKey) || 'null');
+      if (raw && typeof raw === 'object') {
+        cachedSession = raw;
+        return raw;
+      }
+    } catch (_) {
+      // Ignore and refresh the session.
+    }
+    return null;
+  }
+
+  async function requestSession(urlPath, body) {
+    const response = await fetch(`${baseUrl}${urlPath}`, {
+      method: 'POST',
+      headers: {
+        apikey: apiKey,
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase auth failed (${response.status})`);
+    }
+
+    const payload = await response.json();
+    const session = parseAuthPayload(payload);
+    if (!session) {
+      throw new Error('Supabase auth response did not include a valid session');
+    }
+    saveSession(session);
+    return session;
+  }
+
+  async function ensureAuthSession() {
+    const current = loadSession();
+    if (current && typeof current.expiresAt === 'number' && current.expiresAt > Date.now() + 30_000) {
+      return current;
+    }
+
+    if (current?.refreshToken) {
+      try {
+        return await requestSession('/auth/v1/token?grant_type=refresh_token', { refresh_token: current.refreshToken });
+      } catch (_) {
+        // Fall through to a fresh anonymous session.
+      }
+    }
+
+    return requestSession('/auth/v1/signup', { data: {} });
   }
 
   return {
@@ -991,17 +1067,19 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
         : [];
     },
     async upsertPlayerWeekEntry(entry) {
+      const session = await ensureAuthSession();
       // Writes go through the Edge Function so the service role key is never
       // exposed to the browser and the payload is validated server-side.
       const response = await fetch(`${baseUrl}/functions/v1/upsert-leaderboard-entry`, {
         method: 'POST',
         headers: {
           ...headers,
+          Authorization: `Bearer ${session.accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           week_id: entry.weekId,
-          player_id: entry.playerId,
+          player_id: session.userId,
           player_name: entry.playerName,
           league_id: entry.leagueId,
           total_score: entry.totalScore,

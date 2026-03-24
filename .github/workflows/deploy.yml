@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -24,33 +24,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
       - name: Stamp cache version into service worker
         run: |
           COMMIT=$(git rev-parse --short HEAD)
           sed -i "s/const CACHE_NAME = 'burohame-v[^']*'/const CACHE_NAME = 'burohame-${COMMIT}'/" sw.js
 
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4.8.0
-        with:
-          folder: .
-          clean: true
-          force: false
-          clean-exclude: |
-            pr-preview/
-
-      - name: Checkout gh-pages for deployment
-        uses: actions/checkout@v6
-        with:
-          ref: gh-pages
-          path: _deploy
-
-      - name: Remove git metadata from deployment content
-        run: rm -rf _deploy/.git
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _deploy
+          path: .
 
       - name: Deploy to GitHub Pages
         id: deployment
