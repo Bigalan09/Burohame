@@ -48,6 +48,14 @@ check_contains sw.js "request.mode === 'navigate'" \
 check_contains sw.js "fetch(request)" \
   "sw.js must attempt a network fetch before falling back to cache for shell requests."
 
+for page in $(sed -n 's/.*data-page="\([^"]*\)".*/\1/p' index.html | sort -u); do
+  selector="#app[data-page=\"${page}\"] .page[data-page=\"${page}\"]"
+  if ! grep -Fq "$selector" styles.css; then
+    printf 'FAIL: styles.css must expose the "%s" page when it becomes active.\n' "$page"
+    fail=1
+  fi
+done
+
 for file in index.html app.js styles.css manifest.json sw.js icon-192.png icon-512.png; do
   check_file "$file"
 done
