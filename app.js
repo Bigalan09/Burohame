@@ -3461,12 +3461,12 @@ function renderDailyChallengePanels() {
   const isFirstRunExperience = getCompletedRunCount() === 0;
   const title = 'Today';
   const copy = challengeStatus.complete
-    ? 'Done for today. Come back tomorrow for a fresh board.'
+    ? 'Target cleared. A fresh board lands tomorrow.'
     : challengeStatus.remaining
-      ? `${challengeStatus.remaining} points to today’s target.`
+      ? `${challengeStatus.remaining} points left to clear today.`
       : isFirstRunExperience
-        ? 'Play today’s board.'
-        : 'A fresh board is ready.';
+        ? 'Set your first score today.'
+        : 'Play today’s board.';
   const progressLabel = challengeStatus.complete
     ? `Reward claimed: ${challengeStatus.reward} coins`
     : `Reward: ${challengeStatus.reward} coins`;
@@ -4497,7 +4497,7 @@ function renderDashboardUnlockPreview({ isFirstRunExperience = false } = {}) {
   const albumStatus = getCollectionAlbumStatus();
   const spotlight = albumStatus.spotlightSet;
 
-  let title = 'Next reward';
+  let title = 'Next unlock';
   let copy = 'Unlock your first finish reward.';
   let progress = 'Complete your first run';
 
@@ -4530,7 +4530,6 @@ function renderDashboard() {
   const runState = document.getElementById('dashboard-run-state');
   const hasSavedGame = !!getSavedGameSession();
   const savedGame = getSavedGameSession();
-  const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
   const isFirstRunExperience = getCompletedRunCount() === 0;
   const onboarding = document.getElementById('dashboard-onboarding');
   const firstReward = document.getElementById('dashboard-first-reward');
@@ -4552,7 +4551,7 @@ function renderDashboard() {
         ? 'Saved run ready to continue'
         : isFirstRunExperience
           ? 'Complete your first run to unlock rewards'
-          : `Ready to play with ${skin.name}`;
+          : 'Ready for your next run';
   }
   if (intro) {
     if (savedGame?.sessionType === 'daily') {
@@ -4562,7 +4561,7 @@ function renderDashboard() {
         ? 'Pick up where you left off.'
         : isFirstRunExperience
           ? 'Quick to learn, calm to replay.'
-          : 'Jump in for a clean puzzle run.';
+          : 'Play now and push your score higher.';
     }
   }
   if (onboarding) {
