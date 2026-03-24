@@ -1,21 +1,99 @@
 /* ===== Burohame Service Worker ===== */
 'use strict';
 
-const CACHE_NAME = 'burohame-v2';
+const CACHE_NAME = 'burohame-__CACHE_VERSION__';
 
 // Derive asset URLs from the SW registration scope so the worker
 // is portable across any deployment path (e.g. GitHub Pages sub-path).
-function assetUrls() {
-  const base = self.registration.scope;
+function scopeUrl(path = '') {
+  return new URL(path, self.registration.scope).toString();
+}
+
+function shellAssetUrls() {
   return [
-    base,
-    base + 'index.html',
-    base + 'app.js',
-    base + 'styles.css',
-    base + 'manifest.json',
-    base + 'icon-192.png',
-    base + 'icon-512.png',
+    scopeUrl(''),
+    scopeUrl('index.html'),
+    scopeUrl('app.js'),
+    scopeUrl('styles.css'),
   ];
+}
+
+function staticAssetUrls() {
+  return [
+    scopeUrl('manifest.json'),
+    scopeUrl('icon-192.png'),
+    scopeUrl('icon-512.png'),
+  ];
+}
+
+const SHELL_ASSET_URLS = new Set(shellAssetUrls());
+const STATIC_ASSET_URLS = new Set(staticAssetUrls());
+
+function assetUrls() {
+  return [...SHELL_ASSET_URLS, ...STATIC_ASSET_URLS];
+}
+
+function shellFallbackUrls() {
+  return [scopeUrl(''), scopeUrl('index.html')];
+}
+
+function isShellRequest(request) {
+  if (request.mode === 'navigate') return true;
+  return SHELL_ASSET_URLS.has(request.url);
+}
+
+function isStaticAssetRequest(request) {
+  return STATIC_ASSET_URLS.has(request.url);
+}
+
+async function cacheShellResponse(cache, request, response) {
+  if (!response || response.status !== 200) return response;
+  const cacheKey = request.mode === 'navigate' ? scopeUrl('') : request.url;
+  await cache.put(cacheKey, response.clone());
+  return response;
+}
+
+async function networkFirstShell(request) {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const response = await fetch(request);
+    return cacheShellResponse(cache, request, response);
+  } catch (_) {
+    if (request.mode === 'navigate') {
+      for (const fallbackUrl of shellFallbackUrls()) {
+        const cached = await cache.match(fallbackUrl);
+        if (cached) return cached;
+      }
+    }
+
+    const cached = await cache.match(request.url);
+    if (cached) return cached;
+    throw _;
+  }
+}
+
+async function cacheFirstStatic(request, event) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request.url);
+
+  if (cached) {
+    event.waitUntil(
+      fetch(request).then(response => {
+        if (response && response.status === 200) {
+          return cache.put(request.url, response.clone());
+        }
+        return undefined;
+      }).catch(() => undefined)
+    );
+    return cached;
+  }
+
+  const response = await fetch(request);
+  if (response && response.status === 200) {
+    await cache.put(request.url, response.clone());
+  }
+  return response;
 }
 
 self.addEventListener('install', event => {
@@ -40,32 +118,15 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Stale-while-revalidate: respond immediately from cache (fast load),
-  // but also fetch from network and update cache in the background.
-  // This ensures users see new deployments on their next visit after
-  // the first one following a deployment.
-  event.respondWith(
-    caches.open(CACHE_NAME).then(cache =>
-      cache.match(event.request).then(cached => {
-        if (cached) {
-          // Serve from cache; revalidate in the background (fire-and-forget)
-          event.waitUntil(
-            fetch(event.request).then(response => {
-              if (response && response.status === 200) {
-                cache.put(event.request, response.clone());
-              }
-            }).catch(() => { /* network unavailable – keep existing cache */ })
-          );
-          return cached;
-        }
-        // Cache miss: fetch from network, cache on success, and serve
-        return fetch(event.request).then(response => {
-          if (response && response.status === 200) {
-            cache.put(event.request, response.clone());
-          }
-          return response;
-        });
-      })
-    )
-  );
+  // The app shell should prefer the network so deploys show up immediately,
+  // but still fall back to cache offline.
+  if (isShellRequest(event.request)) {
+    event.respondWith(networkFirstShell(event.request));
+    return;
+  }
+
+  // Keep a small offline cache for static assets that do not affect app boot.
+  if (isStaticAssetRequest(event.request)) {
+    event.respondWith(cacheFirstStatic(event.request, event));
+  }
 });

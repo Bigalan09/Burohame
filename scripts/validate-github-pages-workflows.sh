@@ -50,6 +50,10 @@ check_not_contains "$prepare_workflow" 'uses: actions/upload-pages-artifact@v3' 
 
 check_contains "$deploy_workflow" 'workflow_dispatch:' \
   'deploy.yml must support manual production deployments via workflow_dispatch.'
+check_contains "$deploy_workflow" "__CACHE_VERSION__" \
+  'deploy.yml must stamp the explicit service worker cache version placeholder.'
+check_contains "sw.js" "__CACHE_VERSION__" \
+  'sw.js must define an explicit cache version placeholder for deploy stamping.'
 check_contains "$ci_workflow" 'sh scripts/validate-static-site.sh' \
   'ci.yml must validate the renamed site metadata.'
 check_contains "$codeql_workflow" 'github/codeql-action/init@v4' \
