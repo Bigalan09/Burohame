@@ -197,8 +197,8 @@ let leaderboardPlayerName = 'Guest';
 let leaderboardPlayerId = '';
 let leaderboardBackend = 'local';
 let leaderboardSupabaseUrl = '';
+let leaderboardSupabaseApiKey = '';
 let leaderboardBackofficeCompleteAt = '';
-let leaderboardSupabaseAnonKey = '';
 let weeklyLeaderboardAdapter = null;
 let weeklyLeaderboardViewState = {
   weekId: '',
@@ -863,9 +863,8 @@ function createDefaultWeeklyLeaderboardState() {
     playerId: '',
     playerName: 'Guest',
     supabaseUrl: '',
+    supabaseApiKey: '',
     backofficeCompleteAt: '',
-    backofficeCompleteAt: typeof src.backofficeCompleteAt === 'string' ? src.backofficeCompleteAt : '',
-    supabaseAnonKey: '',
   };
 }
 
@@ -879,13 +878,24 @@ function sanitiseWeeklyLeaderboardState(value) {
       ? src.playerName.trim().slice(0, 24)
       : defaults.playerName,
     supabaseUrl: typeof src.supabaseUrl === 'string' ? src.supabaseUrl.trim() : '',
-    supabaseAnonKey: typeof src.supabaseAnonKey === 'string' ? src.supabaseAnonKey.trim() : '',
+    supabaseApiKey: typeof (src.supabaseApiKey || src.supabaseAnonKey) === 'string'
+      ? String(src.supabaseApiKey || src.supabaseAnonKey).trim()
+      : '',
+    backofficeCompleteAt: typeof src.backofficeCompleteAt === 'string' ? src.backofficeCompleteAt : '',
   };
 }
 
 function createPseudoId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return `player-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  // Fallback: use crypto.getRandomValues to generate a random hex suffix
+  if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+    const buf = new Uint32Array(4);
+    window.crypto.getRandomValues(buf);
+    const hex = Array.from(buf, n => n.toString(16).padStart(8, '0')).join('');
+    return `player-${hex}`;
+  }
+  // Last-resort fallback if crypto is entirely unavailable
+  return `player-${Date.now()}-fallback`;
 }
 
 function createLocalWeeklyLeaderboardAdapter() {
@@ -939,13 +949,19 @@ function createLocalWeeklyLeaderboardAdapter() {
   };
 }
 
-function createSupabaseWeeklyLeaderboardAdapter(url, anonKey) {
-  const baseUrl = url.replace(/\/$/, '');
+function createSupabaseHeaders(apiKey) {
   const headers = {
-    apikey: anonKey,
-    Authorization: `Bearer ${anonKey}`,
+    apikey: apiKey,
     'Content-Type': 'application/json',
   };
+  const keyLooksLikeJwt = apiKey.startsWith('eyJ') || apiKey.split('.').length === 3;
+  if (keyLooksLikeJwt) headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
+}
+
+function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
+  const baseUrl = url.replace(/\/$/, '');
+  const headers = createSupabaseHeaders(apiKey);
 
   function buildQuery(weekId) {
     const params = new URLSearchParams();
@@ -975,11 +991,13 @@ function createSupabaseWeeklyLeaderboardAdapter(url, anonKey) {
         : [];
     },
     async upsertPlayerWeekEntry(entry) {
-      const response = await fetch(`${baseUrl}/rest/v1/weekly_leaderboard_entries`, {
+      // Writes go through the Edge Function so the service role key is never
+      // exposed to the browser and the payload is validated server-side.
+      const response = await fetch(`${baseUrl}/functions/v1/upsert-leaderboard-entry`, {
         method: 'POST',
         headers: {
           ...headers,
-          Prefer: 'resolution=merge-duplicates,return=minimal',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           week_id: entry.weekId,
@@ -988,7 +1006,6 @@ function createSupabaseWeeklyLeaderboardAdapter(url, anonKey) {
           league_id: entry.leagueId,
           total_score: entry.totalScore,
           counted_runs: entry.countedRuns,
-          updated_at: new Date().toISOString(),
         }),
       });
       if (!response.ok) throw new Error(`Supabase write failed (${response.status})`);
@@ -1002,19 +1019,19 @@ function configureWeeklyLeaderboardAdapter() {
     playerId: leaderboardPlayerId,
     playerName: leaderboardPlayerName,
     supabaseUrl: leaderboardSupabaseUrl,
+    supabaseApiKey: leaderboardSupabaseApiKey,
     backofficeCompleteAt: leaderboardBackofficeCompleteAt,
-  leaderboardBackofficeCompleteAt = settings.backofficeCompleteAt;
-    supabaseAnonKey: leaderboardSupabaseAnonKey,
   });
   leaderboardBackend = settings.backend;
   leaderboardPlayerId = settings.playerId || createPseudoId();
   leaderboardPlayerName = settings.playerName;
   leaderboardSupabaseUrl = settings.supabaseUrl;
-  leaderboardSupabaseAnonKey = settings.supabaseAnonKey;
+  leaderboardSupabaseApiKey = settings.supabaseApiKey;
+  leaderboardBackofficeCompleteAt = settings.backofficeCompleteAt;
 
-  const canUseSupabase = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseAnonKey;
+  const canUseSupabase = leaderboardBackend === 'supabase' && leaderboardSupabaseUrl && leaderboardSupabaseApiKey;
   weeklyLeaderboardAdapter = canUseSupabase
-    ? createSupabaseWeeklyLeaderboardAdapter(leaderboardSupabaseUrl, leaderboardSupabaseAnonKey)
+    ? createSupabaseWeeklyLeaderboardAdapter(leaderboardSupabaseUrl, leaderboardSupabaseApiKey)
     : createLocalWeeklyLeaderboardAdapter();
   weeklyLeaderboardViewState = {
     ...weeklyLeaderboardViewState,
@@ -3859,9 +3876,8 @@ function saveSettings() {
       playerId: leaderboardPlayerId,
       playerName: leaderboardPlayerName,
       supabaseUrl: leaderboardSupabaseUrl,
+      supabaseApiKey: leaderboardSupabaseApiKey,
       backofficeCompleteAt: leaderboardBackofficeCompleteAt,
-    leaderboardBackofficeCompleteAt = weeklyLeaderboardSettings.backofficeCompleteAt;
-      supabaseAnonKey: leaderboardSupabaseAnonKey,
     },
   }));
 }
@@ -3879,7 +3895,8 @@ function loadSettings() {
     leaderboardPlayerId = weeklyLeaderboardSettings.playerId || createPseudoId();
     leaderboardPlayerName = weeklyLeaderboardSettings.playerName;
     leaderboardSupabaseUrl = weeklyLeaderboardSettings.supabaseUrl;
-    leaderboardSupabaseAnonKey = weeklyLeaderboardSettings.supabaseAnonKey;
+    leaderboardSupabaseApiKey = weeklyLeaderboardSettings.supabaseApiKey;
+    leaderboardBackofficeCompleteAt = weeklyLeaderboardSettings.backofficeCompleteAt;
     configureWeeklyLeaderboardAdapter();
     // Respect saved dark preference; fall back to OS preference on first launch
     if (typeof s.dark === 'boolean') {
