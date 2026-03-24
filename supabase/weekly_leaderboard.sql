@@ -29,7 +29,9 @@ create index if not exists weekly_leaderboard_entries_week_score_idx
 alter table public.weekly_leaderboard_entries enable row level security;
 
 -- Anyone using the publishable API key can read current and historic rows.
-create policy if not exists "weekly leaderboard read"
+drop policy if exists "weekly leaderboard read" on public.weekly_leaderboard_entries;
+
+create policy "weekly leaderboard read"
   on public.weekly_leaderboard_entries
   for select
   to anon, authenticated
@@ -42,3 +44,7 @@ create policy if not exists "weekly leaderboard read"
 -- Drop the old open write policies if they exist on an existing deployment.
 drop policy if exists "weekly leaderboard insert" on public.weekly_leaderboard_entries;
 drop policy if exists "weekly leaderboard update" on public.weekly_leaderboard_entries;
+drop policy if exists "public read weekly leaderboard" on public.weekly_leaderboard_entries;
+drop policy if exists "public insert weekly leaderboard" on public.weekly_leaderboard_entries;
+drop policy if exists "public update weekly leaderboard" on public.weekly_leaderboard_entries;
+drop policy if exists "weekly leaderboard delete" on public.weekly_leaderboard_entries;
