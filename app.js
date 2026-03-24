@@ -2212,6 +2212,9 @@ function createDefaultProgressionState() {
       completedSetIds: [],
       claimedGoalIds: [],
     },
+    onboarding: {
+      completedRuns: 0,
+    },
   };
 }
 
@@ -2272,6 +2275,7 @@ function sanitiseProgressionState(rawState) {
   const cosmetics = src.cosmetics && typeof src.cosmetics === 'object' ? src.cosmetics : {};
   const streak = src.streak && typeof src.streak === 'object' ? src.streak : {};
   const collectionAlbum = src.collectionAlbum && typeof src.collectionAlbum === 'object' ? src.collectionAlbum : {};
+  const onboarding = src.onboarding && typeof src.onboarding === 'object' ? src.onboarding : {};
   const ownedThemes = (() => {
     const owned = uniqueStringList(unlocks.ownedThemes, defaults.unlocks.ownedThemes);
     return owned.includes('classic') ? owned : ['classic', ...owned];
@@ -2326,6 +2330,9 @@ function sanitiseProgressionState(rawState) {
         .filter(id => COLLECTION_SET_LOOKUP[id]),
       claimedGoalIds: uniqueStringList(collectionAlbum.claimedGoalIds, defaults.collectionAlbum.claimedGoalIds)
         .filter(id => id === COLLECTION_ALBUM_GOAL.id),
+    },
+    onboarding: {
+      completedRuns: clampWholeNumber(onboarding.completedRuns, defaults.onboarding.completedRuns),
     },
   };
 }
@@ -2845,7 +2852,7 @@ function renderGameOverSummary() {
       nextRunButton.dataset.promptType = prompt.id || '';
       nextRunButton.dataset.prompted = 'true';
     } else {
-      nextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Start next run';
+      nextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Play again';
       nextRunButton.dataset.sessionType = currentSessionType;
       nextRunButton.dataset.promptType = '';
       nextRunButton.dataset.prompted = 'false';
@@ -3557,14 +3564,15 @@ function renderQuestBoard(options = {}) {
       const currentStepMarkup = item.currentStep
         ? `
           <div class="quest-item__step">
-            <strong>Current step</strong>
+            <strong>Do this now</strong>
             <span>${item.currentStep.title}</span>
             <p>${item.currentStep.description}</p>
+            <p>${getQuestStepContextText(item.currentStep)}</p>
           </div>
           <div class="quest-progress" aria-hidden="true"><span style="width:${item.progressPercent}%"></span></div>
           <div class="quest-item__footer">
             <span>${getQuestStepProgressText(item.currentStep, item.currentProgress)}</span>
-            <strong>${item.nextStep ? `Next · ${item.nextStep.title}` : 'Final step'}</strong>
+            <strong>${item.nextStep ? `Next unlock · ${item.nextStep.title}` : 'Final step'}</strong>
           </div>
         `
         : `
@@ -3595,7 +3603,7 @@ function renderQuestBoard(options = {}) {
   };
 
   if (questsSubtitle) {
-    questsSubtitle.textContent = 'Ordered objectives unlock one step at a time across the week.';
+    questsSubtitle.textContent = 'Only one step is active in each chain. Finish the active step to unlock the next one and collect rewards.';
   }
   if (questCount) {
     questCount.textContent = `${status.completed}/${status.total} chains complete`;
@@ -3604,12 +3612,23 @@ function renderQuestBoard(options = {}) {
   const currentChain = status.chains.find(item => !item.isComplete && item.currentStep);
   setTextIfPresent('dashboard-quest-card-title', currentChain ? currentChain.chain.title : 'Weekly routes settled');
   setTextIfPresent('dashboard-quest-card-copy', currentChain
-    ? `${currentChain.currentStep.title} is the live step right now.`
+    ? `${currentChain.currentStep.title} is active now. Complete it to reveal the next step.`
     : 'Every active chain is complete for this cycle.');
   setTextIfPresent('dashboard-quest-card-progress', `${status.completed}/${status.total} chains complete`);
   setTextIfPresent('dashboard-quest-card-timer', status.countdown);
 
   renderQuestItems(questList);
+}
+
+function getQuestStepContextText(step) {
+  if (!step || typeof step !== 'object') return 'Complete the live objective to keep this chain moving.';
+  if (step.metric === 'singleRunScore') return 'Why this matters: stronger scoring runs unlock chain rewards faster.';
+  if (step.metric === 'totalScore') return 'Why this matters: every run adds progress, so steady play still counts.';
+  if (step.metric === 'regionsCleared' || step.metric === 'biggestClear') return 'Why this matters: line and box clears keep your board healthy for future turns.';
+  if (step.metric === 'maxCombo' || step.metric === 'coachMaxCombo') return 'Why this matters: combos boost points and teach cleaner sequencing.';
+  if (step.metric === 'racksCompleted') return 'Why this matters: surviving more racks helps your weekly placement and mission progress.';
+  if (step.metric === 'coachRuns' || step.metric === 'coachRegions') return 'Why this matters: Coach Mode highlights safer moves while you learn.';
+  return 'Complete the live objective to keep this chain moving.';
 }
 
 function getCollectionSubtitle() {
@@ -3881,6 +3900,50 @@ function canPlaceOnBoard(cells, row, col, b) {
   return true;
 }
 
+function canPlaceAnywhereOnBoard(cells, b) {
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (canPlaceOnBoard(cells, r, c, b)) return true;
+    }
+  }
+  return false;
+}
+
+function estimateTightPocketCount(b) {
+  let pockets = 0;
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (b[r][c]) continue;
+      let blockedNeighbours = 0;
+      const neighbours = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]];
+      for (const [nr, nc] of neighbours) {
+        if (nr < 0 || nr >= N || nc < 0 || nc >= N || b[nr][nc]) blockedNeighbours++;
+      }
+      if (blockedNeighbours >= 3) pockets++;
+    }
+  }
+  return pockets;
+}
+
+function findSmallRecoveryPiece(targetBoard) {
+  const candidates = PIECE_DEFS.filter(piece => piece.length <= 3 && canPlaceAnywhereOnBoard(piece, targetBoard));
+  if (!candidates.length) return null;
+  return candidates[Math.floor(randomValue() * candidates.length)];
+}
+
+function ensureSmallRecoveryPieceInRack(rack, targetBoard) {
+  const hasSmallFit = rack.some(piece => piece.length <= 3 && canPlaceAnywhereOnBoard(piece, targetBoard));
+  if (hasSmallFit) return;
+  const recoveryPiece = findSmallRecoveryPiece(targetBoard);
+  if (!recoveryPiece) return;
+  const replaceIndex = rack.findIndex(piece => piece.length > 3);
+  if (replaceIndex >= 0) {
+    rack[replaceIndex] = recoveryPiece;
+    return;
+  }
+  rack[Math.floor(randomValue() * rack.length)] = recoveryPiece;
+}
+
 // Try placing each piece (in the given slot order) at its first available
 // position and return whether all can be placed.
 function canFitAllInOrder(order) {
@@ -4005,6 +4068,12 @@ function ensureLookahead(p, rounds) {
 
   // Check that future rounds still offer clearing opportunities
   for (let round = 0; round < rounds; round++) {
+    const simulatedDensity = b.reduce((sum, row) => sum + row.reduce((rowSum, cell) => rowSum + cell, 0), 0) / (N * N);
+    const tightPocketCount = estimateTightPocketCount(b);
+    if (simulatedDensity >= 0.52 || tightPocketCount >= 3) {
+      ensureSmallRecoveryPieceInRack(p, b);
+    }
+
     const futureHasClear = PIECE_DEFS.some(pc => canCauseClearOnBoard(pc, b));
     if (!futureHasClear) {
       // Future board is too dense — inject a clear-enabling piece into current rack
@@ -4014,6 +4083,7 @@ function ensureLookahead(p, rounds) {
         const swapIdx = p.findIndex(pc => !canCauseClear(pc));
         if (swapIdx >= 0) p[swapIdx] = clearNow;
       }
+      ensureSmallRecoveryPieceInRack(p, b);
       return;
     }
 
@@ -4044,6 +4114,10 @@ function smartPieces() {
   const p = Array.from({ length: rackSize }, () =>
     earlyGame ? earlyPiece() : weightedRandomPiece()
   );
+
+  if (density >= 0.25 || score >= 120) {
+    ensureSmallRecoveryPieceInRack(p, board);
+  }
 
   // Guarantee at least one clearing opportunity in this rack
   if (!p.some(pc => canCauseClear(pc))) {
@@ -4429,6 +4503,7 @@ function renderDashboard() {
   const hasSavedGame = !!getSavedGameSession();
   const savedGame = getSavedGameSession();
   const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
+  const isFirstRunExperience = getCompletedRunCount() === 0;
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
@@ -4436,7 +4511,11 @@ function renderDashboard() {
     continueBtn.textContent = savedGame?.sessionType === 'daily' ? 'Continue daily challenge' : 'Continue run';
   }
   if (newGameBtn) {
-    newGameBtn.textContent = hasSavedGame ? 'Start fresh run' : 'Start new run';
+    newGameBtn.textContent = hasSavedGame
+      ? 'Start fresh run'
+      : isFirstRunExperience
+        ? 'Start first run'
+        : 'Start new run';
     newGameBtn.classList.toggle('pill-btn--secondary', hasSavedGame);
   }
   if (runState) {
@@ -4444,13 +4523,19 @@ function renderDashboard() {
       ? 'Daily challenge ready to resume'
       : hasSavedGame
         ? 'Saved run ready to continue'
-        : 'Ready for a fresh run';
+        : isFirstRunExperience
+          ? 'No run in progress yet'
+          : 'Ready for a fresh run';
   }
   if (intro) {
     if (savedGame?.sessionType === 'daily') {
       intro.textContent = 'Your daily challenge is still waiting.';
     } else {
-      intro.textContent = hasSavedGame ? 'Pick up where you left off.' : 'boo-roh-hah-meh';
+      intro.textContent = hasSavedGame
+        ? 'Pick up where you left off.'
+        : isFirstRunExperience
+          ? 'Welcome. Start your first run and place pieces where they fit to learn the flow.'
+          : 'boo-roh-hah-meh';
     }
   }
 
@@ -4464,6 +4549,10 @@ function renderDashboard() {
   renderQuestBoard();
   renderWeeklyLadder();
   renderCollectionAlbumTeaser();
+}
+
+function getCompletedRunCount() {
+  return progressionState?.onboarding?.completedRuns || 0;
 }
 
 function populateQuickSettings() {
@@ -4515,13 +4604,16 @@ function updatePrimaryPlayButton() {
   if (!playButton || !playLabel) return;
 
   const savedGame = getSavedGameSession();
+  const isFirstRunExperience = getCompletedRunCount() === 0 && !savedGame;
   const isDaily = savedGame?.sessionType === 'daily';
-  const label = isDaily ? 'Resume daily' : savedGame ? 'Resume' : 'Play';
+  const label = isDaily ? 'Resume daily' : savedGame ? 'Resume' : isFirstRunExperience ? 'First run' : 'Play';
   const ariaLabel = isDaily
     ? 'Resume daily challenge'
     : savedGame
       ? 'Resume saved run'
-      : 'Start new run';
+      : isFirstRunExperience
+        ? 'Start first run'
+        : 'Start new run';
 
   playLabel.textContent = label;
   playButton.setAttribute('aria-label', ariaLabel);
@@ -5076,6 +5168,16 @@ function triggerGameOver() {
   updateScoreUI();
   maybeCompleteDailyChallenge();
   evaluateRunObjectives();
+  updateProgressionState(state => {
+    const completedRuns = clampWholeNumber(state.onboarding?.completedRuns, 0);
+    return {
+      ...state,
+      onboarding: {
+        ...state.onboarding,
+        completedRuns: completedRuns + 1,
+      },
+    };
+  });
   updateDailyMissionProgress('runs', 1);
   ensureRunSummary().questHighlightIds = applyQuestChainProgress(ensureRunSummary()).changedChainIds;
   ensureRunSummary().continuePrompt = chooseOneMoreRunPrompt(ensureRunSummary());
