@@ -4504,6 +4504,7 @@ function renderDashboard() {
   const savedGame = getSavedGameSession();
   const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
   const isFirstRunExperience = getCompletedRunCount() === 0;
+  const starterGuide = document.getElementById('dashboard-starter-guide');
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
@@ -4534,9 +4535,12 @@ function renderDashboard() {
       intro.textContent = hasSavedGame
         ? 'Pick up where you left off.'
         : isFirstRunExperience
-          ? 'Welcome. Start your first run and place pieces where they fit to learn the flow.'
+          ? 'Welcome. Start your first run and learn one move at a time.'
           : 'boo-roh-hah-meh';
     }
+  }
+  if (starterGuide) {
+    starterGuide.hidden = !isFirstRunExperience || hasSavedGame;
   }
 
   document.getElementById('dashboard-coins').textContent = String(getCoinBalance());
