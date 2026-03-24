@@ -184,9 +184,8 @@ let currentSessionType = 'standard';
 let gameBannerQueue = [];
 let activeGameBanner = null;
 let gameBannerTimer = 0;
-let gameBannerRelativeTimer = 0;
 let gameBannerTransitionTimer = 0;
-let gameBannerMode = 'hidden';
+let gameBannerMode = 'idle';
 let dailyChallengeState = {
   date: '',
   seed: 0,
@@ -218,7 +217,6 @@ const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
 const GAME_BANNER_DISPLAY_MS = 2000;
 const GAME_BANNER_TRANSITION_MS = 320;
-const GAME_BANNER_TIMEAGO_TICK_MS = 1000;
 const SHOP_PRICE_MULTIPLIER = 2.78;
 const COIN_REWARD_MULTIPLIERS = Object.freeze({
   run: 0.45,
@@ -871,6 +869,8 @@ function createDefaultWeeklyLeaderboardState() {
 function sanitiseWeeklyLeaderboardState(value) {
   const defaults = createDefaultWeeklyLeaderboardState();
   const src = value && typeof value === 'object' ? value : {};
+  // Legacy compatibility: accept old saved `supabaseAnonKey` and normalise it
+  // into the publishable key setting name used by current builds.
   return {
     backend: src.backend === 'supabase' ? 'supabase' : defaults.backend,
     playerId: typeof src.playerId === 'string' ? src.playerId.trim().slice(0, 64) : '',
@@ -2119,16 +2119,6 @@ function recordRunUpdate({ title = '', detail = '' }) {
   }].slice(-4);
 }
 
-function formatGameBannerTimeAgo(timestamp) {
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-  if (elapsedSeconds < 5) return 'Just now';
-  if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`;
-  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-  if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
-  return `${elapsedHours}h ago`;
-}
-
 function getGameBannerElements() {
   const banner = document.getElementById('game-banner');
   const stack = document.getElementById('game-banner-stack');
@@ -2137,10 +2127,9 @@ function getGameBannerElements() {
 }
 
 function createGameBannerMessageNode(entry, options = {}) {
-  const { idle = false, stateClass = 'game-banner__message--live' } = options;
+  const { stateClass = 'game-banner__message--live', placeholder = false } = options;
   const article = document.createElement('article');
-  article.className = `game-banner__message ${stateClass}${idle ? ' is-idle' : ''}`;
-  article.dataset.bannerTimestamp = String(entry.createdAt || Date.now());
+  article.className = `game-banner__message ${stateClass}${placeholder ? ' game-banner__message--placeholder' : ''}`;
 
   const kicker = document.createElement('span');
   kicker.className = 'game-banner__kicker';
@@ -2150,53 +2139,51 @@ function createGameBannerMessageNode(entry, options = {}) {
   title.className = 'game-banner__title';
   title.textContent = entry.title;
 
-  const meta = document.createElement('span');
-  meta.className = 'game-banner__meta';
-  meta.textContent = idle ? formatGameBannerTimeAgo(entry.createdAt) : '';
-
-  article.append(kicker, title, meta);
+  article.append(kicker, title);
   return article;
 }
 
-function stopGameBannerRelativeTimer() {
-  if (!gameBannerRelativeTimer) return;
-  window.clearInterval(gameBannerRelativeTimer);
-  gameBannerRelativeTimer = 0;
-}
-
-function updateGameBannerTimeAgoLabel() {
-  if (gameBannerMode !== 'idle' || !activeGameBanner) return;
-  const elements = getGameBannerElements();
-  if (!elements) return;
-  const meta = elements.stack.querySelector('.game-banner__message--live .game-banner__meta');
-  if (meta) meta.textContent = formatGameBannerTimeAgo(activeGameBanner.createdAt);
-}
-
-function startGameBannerRelativeTimer() {
-  stopGameBannerRelativeTimer();
-  if (gameBannerMode !== 'idle' || !activeGameBanner || currentPage !== 'game' || gameOver) return;
-  updateGameBannerTimeAgoLabel();
-  gameBannerRelativeTimer = window.setInterval(updateGameBannerTimeAgoLabel, GAME_BANNER_TIMEAGO_TICK_MS);
+function createDefaultGameBannerMessageNode() {
+  return createGameBannerMessageNode({
+    kicker: 'Run updates',
+    title: 'Play to see live milestones.',
+  }, { placeholder: true });
 }
 
 function finishGameBannerCycle() {
   gameBannerTimer = 0;
-  if (gameBannerQueue.length) {
-    renderNextGameBanner();
-    return;
-  }
-  gameBannerMode = activeGameBanner ? 'idle' : 'hidden';
   const elements = getGameBannerElements();
   if (!elements) return;
+
   const liveMessage = elements.stack.querySelector('.game-banner__message--live');
-  if (liveMessage && activeGameBanner) {
-    liveMessage.classList.add('is-idle');
-    const meta = liveMessage.querySelector('.game-banner__meta');
-    if (meta) meta.textContent = formatGameBannerTimeAgo(activeGameBanner.createdAt);
-    startGameBannerRelativeTimer();
-  } else {
-    elements.banner.hidden = true;
+  if (liveMessage) {
+    liveMessage.classList.remove('game-banner__message--live');
+    liveMessage.classList.add('game-banner__message--outgoing');
   }
+
+  const transitionDuration = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 0
+    : GAME_BANNER_TRANSITION_MS;
+
+  gameBannerTransitionTimer = window.setTimeout(() => {
+    gameBannerTransitionTimer = 0;
+    if (liveMessage) liveMessage.remove();
+    activeGameBanner = null;
+    gameBannerMode = 'idle';
+    if (!gameBannerQueue.length) {
+      elements.stack.replaceChildren(createDefaultGameBannerMessageNode());
+      return;
+    }
+    renderNextGameBanner();
+  }, transitionDuration);
+}
+
+function showDefaultGameBannerMessage() {
+  const elements = getGameBannerElements();
+  if (!elements) return;
+  elements.banner.hidden = false;
+  if (elements.stack.querySelector('.game-banner__message')) return;
+  elements.stack.replaceChildren(createDefaultGameBannerMessageNode());
 }
 
 function clearGameBannerQueue() {
@@ -2210,27 +2197,23 @@ function clearGameBannerQueue() {
     window.clearTimeout(gameBannerTransitionTimer);
     gameBannerTransitionTimer = 0;
   }
-  stopGameBannerRelativeTimer();
-  gameBannerMode = 'hidden';
+  gameBannerMode = 'idle';
 
-  const elements = getGameBannerElements();
-  if (!elements) return;
-  elements.stack.replaceChildren();
-  elements.banner.hidden = true;
+  showDefaultGameBannerMessage();
 }
 
 function renderNextGameBanner() {
   if (currentPage !== 'game' || gameOver) return;
-  if (!gameBannerQueue.length) {
-    finishGameBannerCycle();
+  if (gameBannerQueue.length) {
+    if (gameBannerTimer || gameBannerTransitionTimer) return;
+  } else {
+    gameBannerMode = 'idle';
+    showDefaultGameBannerMessage();
     return;
   }
-  if (gameBannerTimer || gameBannerTransitionTimer) return;
 
   const elements = getGameBannerElements();
   if (!elements) return;
-
-  stopGameBannerRelativeTimer();
   const { banner, stack } = elements;
   const nextBanner = gameBannerQueue.shift();
   const existingMessage = stack.querySelector('.game-banner__message--live');
@@ -2252,7 +2235,7 @@ function renderNextGameBanner() {
     return;
   }
 
-  existingMessage.classList.remove('game-banner__message--live', 'is-idle');
+  existingMessage.classList.remove('game-banner__message--live');
   existingMessage.classList.add('game-banner__message--outgoing');
   stack.appendChild(incomingMessage);
   activeGameBanner = nextBanner;
@@ -4328,6 +4311,7 @@ function navigateTo(page) {
   if (page === 'quests') renderQuestBoard();
   if (page === 'shop') renderCosmeticsCollection();
   if (page === 'settings') populateSettingsPage();
+  if (page === 'game') showDefaultGameBannerMessage();
   updateBottomNav();
 }
 

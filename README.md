@@ -20,19 +20,33 @@
 
 ## Multiplayer weekly leaderboard setup (Supabase)
 
-1. Create a `weekly_leaderboard_entries` table in Supabase with:
-   - `week_id` (text)
-   - `player_id` (text)
-   - `player_name` (text)
-   - `league_id` (text)
-   - `total_score` (int4)
-   - `counted_runs` (int4[])
-   - `updated_at` (timestamptz)
-2. Add a unique index on `(week_id, player_id)` so upserts work.
+1. Apply the SQL in `supabase/weekly_leaderboard.sql` or `supabase/migrations/202603240001_weekly_leaderboard_hardening.sql`.
+2. Deploy the Edge Function at `supabase/functions/upsert-leaderboard-entry`.
 3. Open the **Leaderboard setup** back-office page on first run (or from Settings → Back-office setup).
 4. Choose **Supabase multiplayer** and enter your Supabase URL and publishable key.
-5. Optional shortcut: run the SQL in `supabase/weekly_leaderboard.sql` in the Supabase SQL editor.
-6. After saving setup once, credential fields are removed from standard settings.
+5. After saving setup once, credential fields are removed from standard settings.
+
+### Security model
+
+- Browser clients only use the Supabase URL plus a publishable API key.
+- Browser reads use `GET /rest/v1/weekly_leaderboard_entries`.
+- Browser writes use `POST /functions/v1/upsert-leaderboard-entry`.
+- The Edge Function validates payloads and writes with the service role key server-side.
+- RLS allows public read-only access and blocks direct client inserts, updates, and deletes.
+
+### Manual Supabase deploy steps
+
+```sh
+# from the repository root
+supabase link --project-ref <your-project-ref>
+supabase db push
+supabase functions deploy upsert-leaderboard-entry --no-verify-jwt
+```
+
+Set these function secrets in Supabase before testing writes:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
 If Supabase is not configured, Burohame automatically falls back to local leaderboard storage.
 
