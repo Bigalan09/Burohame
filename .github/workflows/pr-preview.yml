@@ -7,20 +7,18 @@ on:
 
 permissions:
   actions: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages-deploy
+  group: pr-preview-deploy
   cancel-in-progress: true
 
 jobs:
   deploy:
-    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    # GitHub Pages supports one live deployment at a time.
+    # PR previews are prepared on gh-pages, but we do not deploy them via
+    # deploy-pages because that would overwrite production.
+    if: false
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Download prepared preview site
         uses: actions/download-artifact@v4
@@ -34,7 +32,3 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
