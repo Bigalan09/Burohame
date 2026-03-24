@@ -914,6 +914,21 @@ html, body {
 }
 a.icon-btn { text-decoration: none; }
 .icon-btn:active { opacity: 0.6; }
+.icon-btn--share {
+  color: var(--accent-hi);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-hi) 25%, transparent), color-mix(in srgb, var(--accent) 22%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.icon-btn--share:hover,
+.icon-btn--share:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 20px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.icon-btn--share:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-hi) 60%, white);
+  outline-offset: 2px;
+}
 
 .bottom-nav {
   position: absolute;
