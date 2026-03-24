@@ -31,6 +31,7 @@
 2. Add a unique index on `(week_id, player_id)` so upserts work.
 3. Open the **Leaderboard setup** back-office page on first run (or from Settings → Back-office setup).
 4. Choose **Supabase multiplayer** and enter your Supabase URL and publishable key.
+5. Optional shortcut: run the SQL in `supabase/weekly_leaderboard.sql` in the Supabase SQL editor.
 6. After saving setup once, credential fields are removed from standard settings.
 
 If Supabase is not configured, Burohame automatically falls back to local leaderboard storage.
