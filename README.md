@@ -21,6 +21,9 @@
 ## Hosted weekly table deployment
 
 1. Apply the SQL in `supabase/weekly_leaderboard.sql` or the migrations in `supabase/migrations/`.
+   Existing hosted tables should include the latest backfill migration so older
+   free-form leaderboard names are converted into claimed handles where
+   possible.
 2. Deploy these Edge Functions:
    - `supabase/functions/claim-leaderboard-handle`
    - `supabase/functions/upsert-leaderboard-entry`

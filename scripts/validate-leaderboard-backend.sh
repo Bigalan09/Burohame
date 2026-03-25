@@ -29,6 +29,8 @@ check_file "supabase/functions/claim-leaderboard-handle/index.ts" \
   "claim-leaderboard-handle Edge Function must exist."
 check_file "supabase/migrations/202603241700_leaderboard_handles.sql" \
   "leaderboard handle migration must exist."
+check_file "supabase/migrations/202603250930_backfill_leaderboard_handles.sql" \
+  "leaderboard handle backfill migration must exist."
 
 check_contains "supabase/config.toml" "[functions.claim-leaderboard-handle]" \
   "supabase/config.toml must configure claim-leaderboard-handle."
@@ -40,6 +42,10 @@ check_contains "supabase/weekly_leaderboard.sql" "leaderboard_player_handles" \
   "weekly_leaderboard.sql must include the leaderboard handle schema."
 check_contains "supabase/weekly_leaderboard.sql" "claim_leaderboard_handle" \
   "weekly_leaderboard.sql must define the claim_leaderboard_handle function."
+check_contains "supabase/migrations/202603250930_backfill_leaderboard_handles.sql" "leaderboard_player_handles" \
+  "leaderboard handle backfill migration must populate claimed handles."
+check_contains "supabase/migrations/202603250930_backfill_leaderboard_handles.sql" "weekly_leaderboard_entries" \
+  "leaderboard handle backfill migration must refresh stored leaderboard names."
 
 if [ "$fail" -ne 0 ]; then
   exit 1
