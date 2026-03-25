@@ -15,7 +15,6 @@ with latest_player_names as (
   order by
     entries.player_id,
     entries.updated_at desc,
-    entries.created_at desc,
     entries.week_id desc
 ),
 prepared_backfill_candidates as (
