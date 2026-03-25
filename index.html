@@ -94,9 +94,9 @@
       <div class="page-scroll">
         <header class="page-top">
           <div>
-            <p class="page-kicker">Best four runs</p>
+            <p class="page-kicker">Live weekly competition</p>
             <h2>Weekly leaderboard</h2>
-            <p class="page-intro">Every week you sit in a calm league. Only your strongest four runs count, so quality beats grind.</p>
+            <p class="page-intro">Live standings reset each UTC Monday. Your best single score this week sets your competitive rank.</p>
           </div>
           <button class="icon-btn" data-back-page="dashboard" aria-label="Back to dashboard" type="button">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -144,9 +144,9 @@
             </div>
             <div class="dashboard-weekly__best-runs" id="weekly-page-best-runs" aria-label="Counted weekly runs"></div>
           </div>
-          <div class="dashboard-weekly__global" aria-live="polite">
+          <div class="dashboard-weekly__global" id="weekly-global-card" aria-live="polite" hidden>
             <div class="dashboard-weekly__global-head">
-              <strong>Weekly table</strong>
+              <strong>Live weekly table</strong>
               <span id="weekly-global-status">Loading weekly table…</span>
             </div>
             <ol class="dashboard-weekly__global-list" id="weekly-global-list" aria-label="Weekly leaderboard entries"></ol>
