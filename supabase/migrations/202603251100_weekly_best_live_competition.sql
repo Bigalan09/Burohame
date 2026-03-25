@@ -8,6 +8,19 @@ alter table public.weekly_leaderboard_entries
 alter table public.weekly_leaderboard_entries
   drop constraint if exists weekly_leaderboard_entries_runs_len;
 
+alter table public.weekly_leaderboard_entries
+  add column if not exists created_at timestamptz;
+
+update public.weekly_leaderboard_entries
+set created_at = coalesce(created_at, updated_at, now())
+where created_at is null;
+
+alter table public.weekly_leaderboard_entries
+  alter column created_at set default now();
+
+alter table public.weekly_leaderboard_entries
+  alter column created_at set not null;
+
 drop index if exists public.weekly_leaderboard_entries_week_score_idx;
 
 create index if not exists weekly_leaderboard_entries_week_score_idx

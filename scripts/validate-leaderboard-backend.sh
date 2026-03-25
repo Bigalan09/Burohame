@@ -42,6 +42,8 @@ check_file "supabase/migrations/202603241700_leaderboard_handles.sql" \
   "leaderboard handle migration must exist."
 check_file "supabase/migrations/202603250930_backfill_leaderboard_handles.sql" \
   "leaderboard handle backfill migration must exist."
+check_file "supabase/migrations/202603251100_weekly_best_live_competition.sql" \
+  "weekly best live competition migration must exist."
 
 check_contains "supabase/config.toml" "[functions.claim-leaderboard-handle]" \
   "supabase/config.toml must configure claim-leaderboard-handle."
@@ -59,6 +61,10 @@ check_contains "supabase/migrations/202603250930_backfill_leaderboard_handles.sq
   "leaderboard handle backfill migration must refresh stored leaderboard names."
 check_not_contains "supabase/migrations/202603250930_backfill_leaderboard_handles.sql" "entries.created_at" \
   "leaderboard handle backfill migration must not depend on a created_at column in weekly_leaderboard_entries."
+check_contains "supabase/migrations/202603251100_weekly_best_live_competition.sql" "add column if not exists created_at" \
+  "weekly best live competition migration must add created_at for older leaderboard deployments."
+check_contains "supabase/migrations/202603251100_weekly_best_live_competition.sql" "where created_at is null" \
+  "weekly best live competition migration must backfill created_at before using it as a tie-break."
 
 if [ "$fail" -ne 0 ]; then
   exit 1
