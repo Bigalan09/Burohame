@@ -195,16 +195,17 @@ let dailyChallengeState = {
 let leaderboardPlayerName = '';
 let leaderboardPlayerId = '';
 let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
-let weeklyLeaderboardAdapter = null;
 let weeklyLeaderboardHostedAdapter = null;
-let weeklyLeaderboardLocalAdapter = null;
+let weeklyLeaderboardPollTimer = 0;
 let weeklyLeaderboardViewState = {
   weekId: '',
   entries: [],
   loading: false,
   error: '',
-  sourceLabel: "This device's weekly table",
+  sourceLabel: 'Global weekly table',
+  currentPlayerRank: 0,
   fetchedAt: 0,
+  hidden: true,
 };
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
@@ -233,7 +234,6 @@ const WEEKLY_LADDER_COUNTED_RUNS = 4;
 const WEEKLY_COHORT_SIZE = 20;
 const WEEKLY_PROMOTION_SLOTS = 4;
 const WEEKLY_RELEGATION_SLOTS = 4;
-const WEEKLY_LEADERBOARD_STORAGE_KEY = 'bst-weekly-leaderboard';
 const WEEKLY_LEADERBOARD_PULL_INTERVAL_MS = 60 * 1000;
 const WEEKLY_LEADERBOARD_MAX_ROWS = 20;
 const QUEST_BOARD_CHAIN_LIMIT = 3;
@@ -258,7 +258,6 @@ const LEADERBOARD_FALLBACK_ANIMALS = Object.freeze([
 const DEFAULT_LEADERBOARD_NAME = LEADERBOARD_FALLBACK_ANIMALS[
   Math.floor(Math.random() * LEADERBOARD_FALLBACK_ANIMALS.length)
 ];
-const LOCAL_WEEKLY_TABLE_LABEL = "This device's weekly table";
 const GLOBAL_WEEKLY_TABLE_LABEL = 'Global weekly table';
 const LEADERBOARD_HANDLE_VALIDATION_PREFIXES = Object.freeze([
   'Leaderboard names must',
@@ -953,6 +952,10 @@ function hasHostedWeeklyLeaderboardConfig() {
     && !!weeklyLeaderboardRuntimeConfig.supabasePublishableKey;
 }
 
+function canShowHostedWeeklyLeaderboard() {
+  return hasHostedWeeklyLeaderboardConfig() && navigator.onLine;
+}
+
 function createPseudoId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   // Fallback: use crypto.getRandomValues to generate a random hex suffix
@@ -964,57 +967,6 @@ function createPseudoId() {
   }
   // Last-resort fallback if crypto is entirely unavailable
   return `player-${Date.now()}-fallback`;
-}
-
-function createLocalWeeklyLeaderboardAdapter() {
-  function readAll() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(WEEKLY_LEADERBOARD_STORAGE_KEY) || '{}');
-      return raw && typeof raw === 'object' ? raw : {};
-    } catch (_) {
-      return {};
-    }
-  }
-
-  function writeAll(payload) {
-    localStorage.setItem(WEEKLY_LEADERBOARD_STORAGE_KEY, JSON.stringify(payload));
-  }
-
-  return {
-    id: 'local',
-    sourceLabel: LOCAL_WEEKLY_TABLE_LABEL,
-    async fetchWeekEntries(weekId) {
-      const all = readAll();
-      const rows = Array.isArray(all[weekId]) ? all[weekId] : [];
-      return rows
-        .filter(item => item && typeof item === 'object')
-        .map(item => ({
-          playerId: String(item.playerId || ''),
-          playerName: String(item.playerName || DEFAULT_LEADERBOARD_NAME).slice(0, 24),
-          leagueId: String(item.leagueId || 'bronze'),
-          totalScore: clampWholeNumber(item.totalScore, 0),
-          countedRuns: sanitiseWeeklyBestRuns(item.countedRuns),
-          updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date(0).toISOString(),
-        }))
-        .sort((a, b) => b.totalScore - a.totalScore || b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, WEEKLY_LEADERBOARD_MAX_ROWS);
-    },
-    async upsertPlayerWeekEntry(entry) {
-      const all = readAll();
-      const rows = Array.isArray(all[entry.weekId]) ? all[entry.weekId] : [];
-      const nextRows = rows.filter(item => item?.playerId !== entry.playerId);
-      nextRows.push({
-        playerId: entry.playerId,
-        playerName: entry.playerName,
-        leagueId: entry.leagueId,
-        totalScore: entry.totalScore,
-        countedRuns: entry.countedRuns,
-        updatedAt: new Date().toISOString(),
-      });
-      all[entry.weekId] = nextRows;
-      writeAll(all);
-    },
-  };
 }
 
 function createSupabaseHeaders(apiKey) {
@@ -1035,9 +987,10 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
 
   function buildQuery(weekId) {
     const params = new URLSearchParams();
-    params.set('select', 'player_id,player_name,league_id,total_score,counted_runs,updated_at');
+    params.set('select', 'player_id,player_name,league_id,total_score,updated_at,created_at');
     params.set('week_id', `eq.${weekId}`);
-    params.set('order', 'total_score.desc,updated_at.desc');
+    // Tie-break: earliest created_at wins when scores are level.
+    params.set('order', 'total_score.desc,created_at.asc,player_id.asc');
     params.set('limit', String(WEEKLY_LEADERBOARD_MAX_ROWS));
     return `${baseUrl}/rest/v1/weekly_leaderboard_entries?${params.toString()}`;
   }
@@ -1154,8 +1107,8 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
             playerName: typeof item.player_name === 'string' && item.player_name.trim() ? item.player_name.trim().slice(0, 24) : DEFAULT_LEADERBOARD_NAME,
             leagueId: typeof item.league_id === 'string' ? item.league_id : 'bronze',
             totalScore: clampWholeNumber(item.total_score, 0),
-            countedRuns: sanitiseWeeklyBestRuns(item.counted_runs),
             updatedAt: typeof item.updated_at === 'string' ? item.updated_at : new Date(0).toISOString(),
+            createdAt: typeof item.created_at === 'string' ? item.created_at : new Date(0).toISOString(),
           }))
         : [];
     },
@@ -1173,10 +1126,8 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
         body: JSON.stringify({
           week_id: entry.weekId,
           player_id: session.userId,
-          player_name: entry.playerName,
           league_id: entry.leagueId,
           total_score: entry.totalScore,
-          counted_runs: entry.countedRuns,
         }),
       });
       if (!response.ok) throw new Error(`Supabase write failed (${response.status})`);
@@ -1192,32 +1143,29 @@ function configureWeeklyLeaderboardAdapter() {
   leaderboardPlayerId = settings.playerId || createPseudoId();
   leaderboardPlayerName = settings.playerName;
 
-  weeklyLeaderboardLocalAdapter = createLocalWeeklyLeaderboardAdapter();
   weeklyLeaderboardHostedAdapter = hasHostedWeeklyLeaderboardConfig()
     ? createSupabaseWeeklyLeaderboardAdapter(
         weeklyLeaderboardRuntimeConfig.supabaseUrl,
         weeklyLeaderboardRuntimeConfig.supabasePublishableKey,
       )
     : null;
-  weeklyLeaderboardAdapter = weeklyLeaderboardHostedAdapter || weeklyLeaderboardLocalAdapter;
   weeklyLeaderboardViewState = {
     ...weeklyLeaderboardViewState,
-    sourceLabel: weeklyLeaderboardAdapter.sourceLabel,
+    sourceLabel: GLOBAL_WEEKLY_TABLE_LABEL,
     error: '',
+    hidden: !canShowHostedWeeklyLeaderboard(),
+    currentPlayerRank: 0,
   };
 }
 
 function getWeeklyLeaderboardEntryPayload() {
   const weekly = ensureWeeklyLadderForCurrentWeek();
   const countedRuns = sanitiseWeeklyBestRuns(weekly.bestRuns);
-  const totalScore = countedRuns.reduce((sum, value) => sum + value, 0);
   return {
     weekId: weekly.currentWeekId,
     playerId: leaderboardPlayerId,
-    playerName: leaderboardPlayerName,
     leagueId: weekly.leagueId,
-    countedRuns,
-    totalScore,
+    totalScore: countedRuns[0] || 0,
   };
 }
 
@@ -1267,26 +1215,13 @@ function persistClaimedLeaderboardHandle(claimedHandle) {
 async function publishWeeklyLeaderboardEntry() {
   if (!leaderboardPlayerId) return;
   const payload = getWeeklyLeaderboardEntryPayload();
-  if (weeklyLeaderboardLocalAdapter) {
-    try {
-      await weeklyLeaderboardLocalAdapter.upsertPlayerWeekEntry(payload);
-    } catch (_) {
-      // Local fallback should never block the game loop.
-    }
-  }
   if (!weeklyLeaderboardHostedAdapter) return;
+  if (!navigator.onLine) return;
 
   if (!hasClaimedLeaderboardHandle(leaderboardPlayerName)) {
     const claimedHandle = await tryClaimLeaderboardHandle(getRequestedLeaderboardBaseName(), { requireClaim: false });
     if (claimedHandle) {
       persistClaimedLeaderboardHandle(claimedHandle);
-      if (weeklyLeaderboardLocalAdapter) {
-        try {
-          await weeklyLeaderboardLocalAdapter.upsertPlayerWeekEntry(getWeeklyLeaderboardEntryPayload());
-        } catch (_) {
-          // Keep the local fallback resilient as well.
-        }
-      }
     }
   }
   if (!hasClaimedLeaderboardHandle(leaderboardPlayerName)) return;
@@ -1299,7 +1234,21 @@ async function publishWeeklyLeaderboardEntry() {
 }
 
 async function refreshWeeklyLeaderboard(weekId, options = {}) {
-  if (!weeklyLeaderboardAdapter || !weekId) return;
+  if (!weeklyLeaderboardHostedAdapter || !weekId) return;
+  if (!canShowHostedWeeklyLeaderboard()) {
+    weeklyLeaderboardViewState = {
+      ...weeklyLeaderboardViewState,
+      weekId,
+      entries: [],
+      loading: false,
+      error: '',
+      hidden: true,
+      currentPlayerRank: 0,
+      fetchedAt: 0,
+    };
+    renderWeeklyGlobalLeaderboard();
+    return;
+  }
   const now = Date.now();
   const shouldSkip = !options.force
     && weeklyLeaderboardViewState.weekId === weekId
@@ -1311,11 +1260,13 @@ async function refreshWeeklyLeaderboard(weekId, options = {}) {
     weekId,
     loading: true,
     error: '',
+    hidden: false,
   };
   renderWeeklyGlobalLeaderboard();
 
   try {
-    const rows = await weeklyLeaderboardAdapter.fetchWeekEntries(weekId);
+    const rows = await weeklyLeaderboardHostedAdapter.fetchWeekEntries(weekId);
+    const currentPlayerRank = rows.findIndex((entry) => entry.playerId === leaderboardPlayerId) + 1;
     weeklyLeaderboardViewState = {
       ...weeklyLeaderboardViewState,
       weekId,
@@ -1323,51 +1274,59 @@ async function refreshWeeklyLeaderboard(weekId, options = {}) {
       loading: false,
       fetchedAt: Date.now(),
       error: '',
-      sourceLabel: weeklyLeaderboardAdapter.sourceLabel,
+      sourceLabel: weeklyLeaderboardHostedAdapter.sourceLabel,
+      currentPlayerRank,
+      hidden: false,
     };
   } catch (_) {
-    let fallbackRows = [];
-    if (weeklyLeaderboardLocalAdapter) {
-      try {
-        fallbackRows = await weeklyLeaderboardLocalAdapter.fetchWeekEntries(weekId);
-      } catch (_) {
-        fallbackRows = [];
-      }
-    }
     weeklyLeaderboardViewState = {
       ...weeklyLeaderboardViewState,
       weekId,
-      entries: fallbackRows,
+      entries: [],
       loading: false,
-      fetchedAt: weeklyLeaderboardHostedAdapter ? 0 : Date.now(),
-      error: weeklyLeaderboardHostedAdapter
-        ? "Weekly table unavailable right now. Showing this device's table."
-        : '',
-      sourceLabel: weeklyLeaderboardLocalAdapter?.sourceLabel || LOCAL_WEEKLY_TABLE_LABEL,
+      fetchedAt: 0,
+      error: 'Hosted weekly leaderboard is unavailable right now.',
+      sourceLabel: GLOBAL_WEEKLY_TABLE_LABEL,
+      hidden: true,
+      currentPlayerRank: 0,
     };
   }
   renderWeeklyGlobalLeaderboard();
 }
 
 function renderWeeklyGlobalLeaderboard() {
+  const cardEl = document.getElementById('weekly-global-card');
   const statusEl = document.getElementById('weekly-global-status');
   const listEl = document.getElementById('weekly-global-list');
-  if (!statusEl || !listEl) return;
+  if (!cardEl || !statusEl || !listEl) return;
 
-  const statusLine = weeklyLeaderboardViewState.error
-    ? weeklyLeaderboardViewState.error
-    : weeklyLeaderboardViewState.loading
-      ? `${weeklyLeaderboardViewState.sourceLabel} · Refreshing…`
-      : weeklyLeaderboardViewState.sourceLabel;
+  const shouldHide = weeklyLeaderboardViewState.hidden || !canShowHostedWeeklyLeaderboard() || !!weeklyLeaderboardViewState.error;
+  cardEl.hidden = shouldHide;
+  const currentPlayerEntry = weeklyLeaderboardViewState.entries.find((entry) => entry.playerId === leaderboardPlayerId) || null;
+  setTextIfPresent('weekly-page-score', String(currentPlayerEntry?.totalScore || 0));
+  setTextIfPresent(
+    'weekly-page-rank',
+    weeklyLeaderboardViewState.currentPlayerRank > 0 ? formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank) : 'Unranked',
+  );
+  if (shouldHide) {
+    listEl.innerHTML = '';
+    statusEl.textContent = '';
+    return;
+  }
+
+  const rankLine = weeklyLeaderboardViewState.currentPlayerRank > 0
+    ? ` · Your rank: ${formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)}`
+    : '';
+  const statusLine = weeklyLeaderboardViewState.loading
+    ? `${weeklyLeaderboardViewState.sourceLabel} · Refreshing live standings…`
+    : `${weeklyLeaderboardViewState.sourceLabel}${rankLine}`;
   statusEl.textContent = statusLine;
 
   listEl.innerHTML = '';
   const rows = weeklyLeaderboardViewState.entries.slice(0, 8);
   if (!rows.length) {
     const empty = document.createElement('li');
-    empty.textContent = weeklyLeaderboardViewState.sourceLabel === (weeklyLeaderboardLocalAdapter?.sourceLabel || LOCAL_WEEKLY_TABLE_LABEL)
-      ? 'No runs are saved on this device yet.'
-      : 'No runs are on the weekly table yet. Your next run can set the pace.';
+    empty.textContent = 'No runs are on this week’s leaderboard yet.';
     listEl.appendChild(empty);
     return;
   }
@@ -1376,12 +1335,29 @@ function renderWeeklyGlobalLeaderboard() {
     const item = document.createElement('li');
     const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
     const nameEl = document.createElement('span');
-    nameEl.textContent = `${index + 1}. ${name}`;
+    const league = getLeagueById(entry.leagueId);
+    nameEl.textContent = `${index + 1}. ${name} · ${league.badge} ${league.name}`;
     const scoreEl = document.createElement('strong');
     scoreEl.textContent = String(entry.totalScore);
     item.append(nameEl, scoreEl);
     listEl.appendChild(item);
   });
+}
+
+function stopWeeklyLeaderboardPolling() {
+  if (weeklyLeaderboardPollTimer) {
+    clearInterval(weeklyLeaderboardPollTimer);
+    weeklyLeaderboardPollTimer = 0;
+  }
+}
+
+function startWeeklyLeaderboardPolling() {
+  stopWeeklyLeaderboardPolling();
+  if (currentPage !== 'weekly' || !canShowHostedWeeklyLeaderboard()) return;
+  weeklyLeaderboardPollTimer = window.setInterval(() => {
+    const weekId = getCurrentUTCWeekId();
+    refreshWeeklyLeaderboard(weekId);
+  }, WEEKLY_LEADERBOARD_PULL_INTERVAL_MS);
 }
 
 function getLeagueById(leagueId) {
@@ -4414,110 +4390,24 @@ function renderSessionModeBadge() {
 
 
 function renderWeeklyLadder() {
-  const status = getWeeklyLadderStatus();
-  const { league, weekly, totalScore, rankLabel, rankBand, zoneLabel, countdown: timeRemaining, countedRuns, rewardPreview, promotionGap, safetyGap, projectedOutcome } = status;
-  const pageIds = {
-    title: 'weekly-page-title',
-    countdown: 'weekly-page-countdown',
-    copy: 'weekly-page-copy',
-    league: 'weekly-page-league',
-    score: 'weekly-page-score',
-    rank: 'weekly-page-rank',
-    band: 'weekly-page-band',
-    zone: 'weekly-page-zone',
-    runs: 'weekly-page-runs',
-    nextStep: 'weekly-page-next-step',
-    reward: 'weekly-page-reward',
-    bestRuns: 'weekly-page-best-runs',
-    resultBanner: 'weekly-page-result-banner',
-    resultTitle: 'weekly-page-result-title',
-    resultCopy: 'weekly-page-result-copy',
-  };
+  const weekId = getCurrentUTCWeekId();
+  const weekly = ensureWeeklyLadderForCurrentWeek();
+  const localBestScore = sanitiseWeeklyBestRuns(weekly.bestRuns)[0] || 0;
+  const liveRank = weeklyLeaderboardViewState.currentPlayerRank > 0
+    ? formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)
+    : 'Unranked';
 
-  let copyText = '';
-  let nextStepText = '';
-  if (!countedRuns.length) {
-    copyText = 'Your best four runs this week count. One strong session is enough to start shaping your table.';
-    nextStepText = 'Log a first run to join the weekly table.';
-  } else if (status.zone === 'promotion' && weekly.leagueId !== 'diamond') {
-    copyText = 'You are pacing for promotion if the week ended now.';
-    nextStepText = 'Stay in the top four to climb next Monday.';
-  } else if (status.zone === 'relegation' && weekly.leagueId !== 'bronze') {
-    copyText = `The table is still recoverable. ${safetyGap} more points would lift you back towards safety.`;
-    nextStepText = 'A cleaner run or two should be enough to settle the week.';
-  } else if (promotionGap > 0 && weekly.leagueId !== 'diamond') {
-    copyText = `${promotionGap} more points would move you into the promotion places.`;
-    nextStepText = 'Only your best four runs count, so quality still matters more than volume.';
-  } else {
-    copyText = 'The ladder favours calm consistency. Keep nudging your best four upwards.';
-    nextStepText = 'One good run can still redraw the standings before the reset.';
-  }
-
-  const rewardLine = projectedOutcome === 'promoted'
-    ? `Weekly reward preview · ${rewardPreview.coins} coins plus a bonus unlock if available`
-    : `Weekly reward preview · ${rewardPreview.coins} coins`;
-
-  setTextIfPresent(pageIds.title, `${league.badge} ${league.name} week`);
-  setTextIfPresent(pageIds.countdown, timeRemaining);
-  setTextIfPresent(pageIds.copy, copyText);
-  setTextIfPresent(pageIds.league, `${league.badge} ${league.name}`);
-  setTextIfPresent(pageIds.score, String(totalScore));
-  setTextIfPresent(pageIds.rank, rankLabel);
-  setTextIfPresent(pageIds.band, rankBand);
-  setTextIfPresent(pageIds.zone, zoneLabel);
-  setTextIfPresent(pageIds.runs, `${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} counted`);
-  setTextIfPresent(pageIds.nextStep, nextStepText);
-  setTextIfPresent(pageIds.reward, rewardLine);
-
-  const compactWeeklyTitle = 'This week';
-  const compactWeeklyCopy = countedRuns.length
-    ? 'One more strong run could lift your place.'
-    : 'Set your first weekly score.';
-  const compactWeeklyProgress = countedRuns.length
-    ? `${rankLabel} · ${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} runs counted`
-    : 'Complete your first run';
-
-  setTextIfPresent('dashboard-weekly-card-title', compactWeeklyTitle);
-  setTextIfPresent('dashboard-weekly-card-copy', compactWeeklyCopy);
-  setTextIfPresent('dashboard-weekly-card-progress', compactWeeklyProgress);
-
-  const bestRunsEl = document.getElementById(pageIds.bestRuns);
-  if (bestRunsEl) {
-    bestRunsEl.innerHTML = '';
-    const runsToShow = [...countedRuns];
-    while (runsToShow.length < WEEKLY_LADDER_COUNTED_RUNS) runsToShow.push(null);
-    runsToShow.forEach((value, index) => {
-      const chip = document.createElement('span');
-      chip.className = `dashboard-weekly__best-run${value ? '' : ' dashboard-weekly__best-run--empty'}`;
-      chip.textContent = value ? `Run ${index + 1} · ${value}` : `Run ${index + 1} open`;
-      bestRunsEl.appendChild(chip);
-    });
-  }
+  setTextIfPresent('weekly-page-title', 'Current UTC week');
+  setTextIfPresent('weekly-page-countdown', getUTCWeekCountdown());
+  setTextIfPresent('weekly-page-copy', 'Live standings update this week as players post better single-run scores.');
+  setTextIfPresent('weekly-page-score', String(localBestScore));
+  setTextIfPresent('weekly-page-rank', liveRank);
+  setTextIfPresent('dashboard-weekly-card-title', 'This week');
+  setTextIfPresent('dashboard-weekly-card-copy', 'Live global leaderboard');
+  setTextIfPresent('dashboard-weekly-card-progress', localBestScore > 0 ? `${liveRank} · best ${localBestScore}` : 'Set your first weekly score');
 
   renderWeeklyGlobalLeaderboard();
-  refreshWeeklyLeaderboard(weekly.currentWeekId);
-
-  const resultBanner = document.getElementById(pageIds.resultBanner);
-  const resultTitle = document.getElementById(pageIds.resultTitle);
-  const resultCopy = document.getElementById(pageIds.resultCopy);
-  if (resultBanner && resultTitle && resultCopy) {
-    if (weekly.pendingResult?.weekId) {
-      resultBanner.hidden = false;
-      const pendingLeague = getLeagueById(weekly.pendingResult.leagueId);
-      resultTitle.textContent = weekly.pendingResult.outcome === 'promoted'
-        ? `${pendingLeague.badge} Promoted last week`
-        : weekly.pendingResult.outcome === 'relegated'
-          ? `${pendingLeague.badge} Relegated last week`
-          : `${pendingLeague.badge} Held last week`;
-      let summary = describeWeeklyResult(weekly.pendingResult);
-      if (weekly.pendingResult.unlockName) {
-        summary += ` ${weekly.pendingResult.unlockName} joined your collection.`;
-      }
-      resultCopy.textContent = summary;
-    } else {
-      resultBanner.hidden = true;
-    }
-  }
+  refreshWeeklyLeaderboard(weekId);
 }
 
 function renderCollectionAlbumTeaser() {
@@ -4742,6 +4632,7 @@ function updateBottomNav() {
 
 function navigateTo(page) {
   if (page !== 'game') clearGameBannerQueue();
+  if (currentPage === 'weekly' && page !== 'weekly') stopWeeklyLeaderboardPolling();
   currentPage = page;
   document.getElementById('app').dataset.page = page;
   document.querySelectorAll('.page').forEach(section => {
@@ -4749,7 +4640,10 @@ function navigateTo(page) {
   });
 
   if (page === 'dashboard') renderDashboard();
-  if (page === 'weekly') renderWeeklyLadder();
+  if (page === 'weekly') {
+    renderWeeklyLadder();
+    startWeeklyLeaderboardPolling();
+  }
   if (page === 'missions') renderDailyMissions();
   if (page === 'quests') renderQuestBoard();
   if (page === 'shop') renderCosmeticsCollection();
@@ -5988,7 +5882,6 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   localStorage.removeItem('bst-settings');
   localStorage.removeItem(PROGRESSION_STORAGE_KEY);
   localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
-  localStorage.removeItem(WEEKLY_LEADERBOARD_STORAGE_KEY);
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
     if (key && key.startsWith('bst-supabase-auth:')) {
@@ -6083,7 +5976,7 @@ function init() {
   applyEquippedCosmeticSkin();
   loadSettings();
   loadRuntimeConfig();
-  if (!weeklyLeaderboardAdapter) configureWeeklyLeaderboardAdapter();
+  if (!weeklyLeaderboardHostedAdapter) configureWeeklyLeaderboardAdapter();
   ensureLeaderboardHandleClaimedOnJoin().catch(() => {
     // Keep startup fast and resilient if hosted claims are unavailable.
   });
@@ -6127,5 +6020,17 @@ function init() {
   renderDashboard();
   navigateTo('dashboard');
 }
+
+window.addEventListener('online', () => {
+  if (currentPage !== 'weekly') return;
+  renderWeeklyGlobalLeaderboard();
+  refreshWeeklyLeaderboard(getCurrentUTCWeekId(), { force: true });
+  startWeeklyLeaderboardPolling();
+});
+
+window.addEventListener('offline', () => {
+  stopWeeklyLeaderboardPolling();
+  renderWeeklyGlobalLeaderboard();
+});
 
 init();
