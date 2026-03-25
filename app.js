@@ -867,6 +867,10 @@ function getUTCWeekId(date = new Date()) {
   return getUTCDateKey(weekStart);
 }
 
+function getCurrentUTCWeekId(date = new Date()) {
+  return getUTCWeekId(date);
+}
+
 function getNextUTCWeekStart(date = new Date()) {
   const nextStart = getUTCWeekStart(date);
   nextStart.setUTCDate(nextStart.getUTCDate() + 7);

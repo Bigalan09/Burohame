@@ -91,6 +91,8 @@ check_not_contains app.js 'Hosted multiplayer is configured' \
   "app.js must not show hosted backend jargon in the player UI."
 check_not_contains app.js 'local practice table' \
   "app.js must not show the old local practice wording in the player UI."
+check_contains app.js "function getCurrentUTCWeekId" \
+  "app.js must expose getCurrentUTCWeekId for weekly leaderboard rendering."
 check_contains app.js "addListener(" \
   "app.js must keep a MediaQueryList listener fallback for Safari compatibility."
 check_contains sw.js "request.mode === 'navigate'" \
