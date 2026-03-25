@@ -15,7 +15,7 @@
 - Rows, columns and 3×3 boxes clear when full
 - Multi-clear and combo bonuses
 - Best score saved locally
-- Shared weekly table with claimed public handles and automatic local fallback
+- Live weekly competition table with claimed public handles
 - **Coach Mode** (toggle via ⚙️): colour-coded move hints, board health metrics, move quality feedback
 
 ## Hosted weekly table deployment
@@ -30,9 +30,11 @@
 3. In GitHub repository settings, add these Actions variables for Pages deploys:
    - `SUPABASE_URL`
    - `SUPABASE_PUBLISHABLE_KEY`
+   - Optional fallback: `SUPABASE_ANON_KEY` (treated the same as `SUPABASE_PUBLISHABLE_KEY`)
+   - You can provide these as either Actions variables or Actions secrets.
 4. Deploy `main` to GitHub Pages through `.github/workflows/deploy.yml`.
 
-If either Actions variable is missing, the deployed site stays in local practice mode and still works offline.
+If either Actions variable is missing, the game still runs, but the hosted weekly leaderboard card is hidden.
 
 ### Security model
 
@@ -42,10 +44,11 @@ If either Actions variable is missing, the deployed site stays in local practice
 - Browser writes use `POST /functions/v1/upsert-leaderboard-entry` with a Supabase Auth user JWT.
 - Public leaderboard handles are stored server-side and formatted as `name#1234`.
 - Browser clients do not decide the final public handle shown on the weekly table.
-- The Edge Function requires an authenticated user token, derives `player_id` from the token subject, validates payload fields, and recomputes `total_score` from `counted_runs`.
+- The Edge Function requires an authenticated user token, derives `player_id` from the token subject, validates payload fields, and stores `total_score` as `max(existing_best, submitted_score)` for the current UTC week.
 - The Edge Function writes with the service role key server-side.
 - RLS allows public read-only access and blocks direct client inserts, updates, and deletes.
 - Hosted leaderboard config is injected at deploy time through GitHub Actions, not entered by players in the browser.
+- Live standings sort by highest weekly best score, then by earliest `created_at` as a stable tie-break.
 
 ### Manual Supabase deploy steps
 
@@ -62,7 +65,11 @@ Hosted Supabase Edge Functions already receive the default `SUPABASE_URL` and `S
 Enable Supabase Auth anonymous sign-ins for the project so the browser can obtain an authenticated JWT for Edge Function writes.
 The function validates that JWT inside the function itself because Supabase's built-in `verify_jwt` path is incompatible with projects using the newer JWT signing keys.
 
-If the hosted weekly table is unavailable or the browser is offline, Burohame falls back to local leaderboard storage on that device. Those local fallback runs are not synced later.
+Weekly competition rules:
+- Each row is one player in one UTC Monday week (`week_id`).
+- Only a player’s best single run that week is used for ranking.
+- Lower later runs do not overwrite a higher weekly best score.
+- The leaderboard card is hidden entirely when the browser is offline, Supabase config is missing, or the hosted backend is unavailable.
 
 ## Local dev
 
@@ -76,6 +83,7 @@ chmod +x run_server.sh
 
 Pushes to `main` auto-deploy to GitHub Pages via `.github/workflows/deploy.yml`.
 Manual production deploys are available via `workflow_dispatch` in the same workflow.
+PR preview workflows do not publish live Pages deployments, so production stays tied to `main`.
 
 ## Tech
 

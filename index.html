@@ -22,124 +22,70 @@
           <div>
             <p class="page-kicker">9×9 block puzzle</p>
             <h1>Burohame</h1>
-            <p class="page-intro" id="dashboard-intro">boo-roh-hah-meh</p>
+            <p class="page-intro" id="dashboard-intro">Quick, calm runs built for one more go.</p>
           </div>
-          <a class="icon-btn" href="https://github.com/Bigalan09/Burohame" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>
-            </svg>
-          </a>
         </header>
 
-        <section class="dash-hero" aria-label="Start playing">
-          <div class="dash-mark" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
+        <section class="dash-hero dash-hero--calm" aria-label="Start playing">
+          <p class="dash-hero__value" id="dashboard-value-prop">Place three pieces per turn. Clear lines and 3×3 boxes to stay alive.</p>
+          <div class="dash-actions dash-actions--hero">
+            <button class="pill-btn wide" id="btn-dashboard-play" type="button">Play now</button>
+            <button class="pill-btn wide pill-btn--secondary" id="btn-dashboard-continue" type="button" hidden>Continue run</button>
           </div>
-          <div class="dash-actions">
-            <button class="pill-btn wide" id="btn-dashboard-continue">Continue run</button>
-            <button class="pill-btn wide pill-btn--secondary" id="btn-dashboard-new">Start new run</button>
+          <div class="dash-progress-strip" id="dashboard-progress-strip" aria-label="Progress overview" hidden>
+            <article class="dashboard-stat">
+              <span>Coins</span>
+              <strong id="dashboard-coins">0</strong>
+            </article>
+            <article class="dashboard-stat">
+              <span>Best run</span>
+              <strong id="dashboard-best">0</strong>
+            </article>
+            <article class="dashboard-stat">
+              <span>Today</span>
+              <strong id="dashboard-today">0</strong>
+            </article>
           </div>
-          <div class="dash-hero-meta" aria-label="Current dashboard status">
-            <p class="dash-hero-note">Equipped finish: <strong id="dashboard-finish">Classic</strong></p>
-            <span class="dash-hero-chip" id="dashboard-run-state">Ready for a fresh run</span>
-          </div>
+          <p class="dash-hero-chip" id="dashboard-run-state">Ready for a fresh run</p>
         </section>
 
-        <section class="dashboard-stats" aria-label="Dashboard statistics">
-          <article class="dashboard-stat">
-            <span>Coins</span>
-            <strong id="dashboard-coins">0</strong>
-          </article>
-          <article class="dashboard-stat">
-            <span>Best</span>
-            <strong id="dashboard-best">0</strong>
-          </article>
-          <article class="dashboard-stat">
-            <span>Today</span>
-            <strong id="dashboard-today">0</strong>
-          </article>
+        <section class="dash-onboarding" id="dashboard-onboarding" hidden aria-label="How to play">
+          <h2>Start in under a minute</h2>
+          <div class="dash-onboarding__steps" role="list" aria-label="Quick play steps">
+            <p role="listitem">Drop pieces onto the 9×9 board.</p>
+            <p role="listitem">Clear lines and 3×3 boxes.</p>
+            <p role="listitem">Keep placing to grow your score.</p>
+          </div>
+          <p class="dash-onboarding__reward" id="dashboard-first-reward">First run reward: 20 coins</p>
         </section>
 
-        <button class="album-teaser" id="btn-dashboard-album-page" type="button" aria-label="Open collection album">
-          <div>
-            <span class="album-teaser__kicker">Collection album</span>
-            <strong id="dashboard-album-title">Collection album</strong>
-            <p id="dashboard-album-copy">Browse themed cosmetic sets and track completion rewards.</p>
-          </div>
-          <div class="album-teaser__meta">
-            <span id="dashboard-album-progress">0/0 sets complete</span>
-            <span id="dashboard-album-reward">Grand reward</span>
-            <span id="dashboard-album-badge">No album badges yet</span>
-          </div>
-        </button>
-
-        <section class="dashboard-retention" aria-label="Extras">
-          <section class="dashboard-challenge" aria-label="Daily challenge status">
-            <div class="dashboard-challenge__head">
-              <div>
-                <span class="dashboard-challenge__kicker">Daily challenge</span>
-                <h2 id="dashboard-daily-title">Ready for today</h2>
-              </div>
-              <span class="dashboard-challenge__streak" id="dashboard-daily-streak">🔥 0 day streak</span>
+        <section class="dashboard-focus" aria-label="Today at a glance">
+          <button class="focus-card" id="btn-dashboard-daily-play" type="button" aria-label="Play daily challenge">
+            <span class="focus-card__title" id="dashboard-daily-title">Today</span>
+            <p class="focus-card__line" id="dashboard-daily-copy">Play today’s board.</p>
+            <div class="focus-card__meta">
+              <span id="dashboard-daily-progress">Reward: 12 coins</span>
+              <span class="focus-card__action">Play</span>
             </div>
-            <p class="dashboard-challenge__copy" id="dashboard-daily-copy">A fresh seeded board is ready.</p>
-            <div class="dashboard-challenge__meta">
-              <span id="dashboard-daily-target">Target 0</span>
-              <span id="dashboard-daily-best">Best 0</span>
-              <span id="dashboard-daily-reward">0 coin reward</span>
+          </button>
+
+          <button class="focus-card" id="btn-dashboard-weekly-page" type="button" aria-label="Open weekly progress">
+            <span class="focus-card__title" id="dashboard-weekly-card-title">This week</span>
+            <p class="focus-card__line" id="dashboard-weekly-card-copy">One more run could improve your rank.</p>
+            <div class="focus-card__meta">
+              <span id="dashboard-weekly-card-progress">Complete your first weekly run</span>
+              <span class="focus-card__action">View</span>
             </div>
-            <div class="dashboard-challenge__actions">
-              <button class="pill-btn" id="btn-dashboard-daily-play" type="button">Play daily challenge</button>
-              <button class="pill-btn pill-btn--secondary" id="btn-dashboard-daily-info" type="button">How it works</button>
+          </button>
+
+          <button class="focus-card" id="btn-dashboard-unlock-page" type="button" aria-label="Open next unlock">
+            <span class="focus-card__title" id="dashboard-unlock-title">Next unlock</span>
+            <p class="focus-card__line" id="dashboard-unlock-copy">Complete your first run to start unlocking finishes.</p>
+            <div class="focus-card__meta">
+              <span id="dashboard-unlock-progress">Collection progress starts after your first run</span>
+              <span class="focus-card__action">Open collection</span>
             </div>
-          </section>
-
-          <div class="retention-links">
-            <button class="retention-link retention-link--weekly" id="btn-dashboard-weekly-page" type="button" aria-label="Open weekly leaderboard page">
-              <span class="retention-link__kicker">Weekly leaderboard</span>
-              <strong id="dashboard-weekly-card-title">Bronze week</strong>
-              <p id="dashboard-weekly-card-copy">Your best four runs shape the table.</p>
-              <div class="retention-link__meta">
-                <span id="dashboard-weekly-card-rank">20th of 20</span>
-                <span id="dashboard-weekly-card-zone">Hold zone</span>
-                <span id="dashboard-weekly-card-countdown">0h left</span>
-              </div>
-              <div class="retention-link__footer" aria-hidden="true">
-                <span class="retention-link__cta">Open weekly leaderboard</span>
-                <span class="retention-link__arrow">→</span>
-              </div>
-            </button>
-
-            <button class="retention-link" id="btn-dashboard-quests-page" type="button" aria-label="Open quest chains page">
-              <span class="retention-link__kicker">Quest chains</span>
-              <strong id="dashboard-quest-card-title">Weekly routes</strong>
-              <p id="dashboard-quest-card-copy">Ordered objectives unlock one step at a time.</p>
-              <div class="retention-link__meta">
-                <span id="dashboard-quest-card-progress">0/0 chains complete</span>
-                <span id="dashboard-quest-card-timer">0h left</span>
-              </div>
-              <div class="retention-link__footer" aria-hidden="true">
-                <span class="retention-link__cta">Open quest chains</span>
-                <span class="retention-link__arrow">→</span>
-              </div>
-            </button>
-
-            <button class="retention-link" id="btn-dashboard-missions-page" type="button" aria-label="Open daily missions page">
-              <span class="retention-link__kicker">Daily missions</span>
-              <strong id="dashboard-mission-card-title">Today’s goals</strong>
-              <p id="dashboard-mission-copy">Fresh goals are on the way.</p>
-              <div class="retention-link__meta">
-                <span id="dashboard-mission-card-progress">0/0 completed</span>
-                <span class="dashboard-mission-pill" id="mission-badge" hidden>0/0</span>
-              </div>
-              <div class="retention-link__footer" aria-hidden="true">
-                <span class="retention-link__cta">Open daily missions</span>
-                <span class="retention-link__arrow">→</span>
-              </div>
-            </button>
-          </div>
+          </button>
         </section>
       </div>
     </section>
@@ -148,9 +94,9 @@
       <div class="page-scroll">
         <header class="page-top">
           <div>
-            <p class="page-kicker">Best four runs</p>
+            <p class="page-kicker">Live weekly competition</p>
             <h2>Weekly leaderboard</h2>
-            <p class="page-intro">Every week you sit in a calm league. Only your strongest four runs count, so quality beats grind.</p>
+            <p class="page-intro">Live standings reset each UTC Monday. Your best single score this week sets your competitive rank.</p>
           </div>
           <button class="icon-btn" data-back-page="dashboard" aria-label="Back to dashboard" type="button">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -162,45 +108,25 @@
         <section class="dashboard-weekly page-panel page-panel--retention" aria-label="Weekly ladder and leagues">
           <div class="dashboard-weekly__head">
             <div>
-              <span class="dashboard-weekly__kicker">Weekly ladder</span>
-              <h2 id="weekly-page-title">Bronze week</h2>
+              <span class="dashboard-weekly__kicker">Hosted weekly competition</span>
+              <h2 id="weekly-page-title">Current UTC week</h2>
             </div>
             <span class="dashboard-weekly__countdown" id="weekly-page-countdown">0h left</span>
           </div>
-          <p class="dashboard-weekly__copy" id="weekly-page-copy">Your best four runs this week count towards a calm, low-pressure league table.</p>
-          <div class="dashboard-weekly__result" id="weekly-page-result-banner" hidden>
-            <strong id="weekly-page-result-title">Last week settled</strong>
-            <span id="weekly-page-result-copy">Coins and unlocks land automatically at the weekly reset.</span>
-          </div>
+          <p class="dashboard-weekly__copy" id="weekly-page-copy">Your best single score this week decides your live global rank.</p>
           <div class="dashboard-weekly__stats">
             <article>
-              <span>League</span>
-              <strong id="weekly-page-league">Bronze</strong>
-            </article>
-            <article>
-              <span>Score</span>
+              <span>Your best</span>
               <strong id="weekly-page-score">0</strong>
             </article>
             <article>
-              <span>Rank</span>
+              <span>Your live rank</span>
               <strong id="weekly-page-rank">20th</strong>
             </article>
           </div>
-          <div class="dashboard-weekly__meta">
-            <span id="weekly-page-band">Steady pack</span>
-            <span id="weekly-page-zone">Hold zone</span>
-            <span id="weekly-page-runs">0/4 counted</span>
-          </div>
-          <div class="dashboard-weekly__progress">
-            <div class="dashboard-weekly__progress-copy">
-              <strong id="weekly-page-next-step">One good run can change your week.</strong>
-              <span id="weekly-page-reward">Weekly reward preview · 0 coins</span>
-            </div>
-            <div class="dashboard-weekly__best-runs" id="weekly-page-best-runs" aria-label="Counted weekly runs"></div>
-          </div>
-          <div class="dashboard-weekly__global" aria-live="polite">
+          <div class="dashboard-weekly__global" id="weekly-global-card" aria-live="polite" hidden>
             <div class="dashboard-weekly__global-head">
-              <strong>Weekly table</strong>
+              <strong>Live weekly table</strong>
               <span id="weekly-global-status">Loading weekly table…</span>
             </div>
             <ol class="dashboard-weekly__global-list" id="weekly-global-list" aria-label="Weekly leaderboard entries"></ol>
@@ -228,7 +154,7 @@
           <div class="missions-head">
             <div>
               <h2>Quest chains</h2>
-              <p id="quests-subtitle">Ordered objectives unlock one step at a time across the week.</p>
+              <p id="quests-subtitle">Only one step is active in each chain. Finish the active step to unlock the next reward.</p>
             </div>
             <span class="missions-count" id="quests-count">0/0 chains complete</span>
           </div>
@@ -532,8 +458,8 @@
         <p class="summary-note" id="go-summary-note" hidden>One tidy line for this run.</p>
         <section class="summary-continue" id="go-continue-prompt" hidden aria-labelledby="go-continue-title">
           <span class="summary-continue__eyebrow" id="go-continue-eyebrow">One more run</span>
-          <h3 id="go-continue-title">A calm nudge for the next run</h3>
-          <p id="go-continue-copy">You’re close to something meaningful, so the next run is only one tap away.</p>
+          <h3 id="go-continue-title">A calm nudge to play again</h3>
+          <p id="go-continue-copy">You’re close to something meaningful, so another run is only one tap away.</p>
           <span class="summary-continue__meta" id="go-continue-meta">Reward · progress nearby</span>
         </section>
         <section class="summary-challenge" id="go-daily-summary" hidden>
@@ -543,7 +469,7 @@
           </div>
           <p id="go-daily-copy">Today’s target is still waiting for you.</p>
         </section>
-        <button class="pill-btn wide summary-primary-btn" id="btn-new" type="button">Start next run</button>
+        <button class="pill-btn wide summary-primary-btn" id="btn-new" type="button">Play again</button>
       </div>
     </div>
 
