@@ -38,6 +38,10 @@ check_contains "$preview_workflow" 'uses: actions/download-artifact@v4' \
   'pr-preview.yml must download the prepared site artifact in the deploy workflow.'
 check_contains "$preview_workflow" 'uses: actions/upload-pages-artifact@v3' \
   'pr-preview.yml must upload a Pages artifact in the deploy workflow before deploy-pages runs.'
+check_contains "$preview_workflow" 'if: false' \
+  'pr-preview.yml deploy job must stay disabled to avoid overwriting production Pages.'
+check_not_contains "$preview_workflow" 'uses: actions/deploy-pages@v4' \
+  'pr-preview.yml must not deploy via deploy-pages because GitHub Pages supports one live deployment.'
 check_not_contains "$preview_workflow" 'artifact_url:' \
   'pr-preview.yml must not pass unsupported artifact_url input to actions/deploy-pages.'
 
@@ -56,6 +60,12 @@ check_contains "$deploy_workflow" 'SUPABASE_URL' \
   'deploy.yml must read SUPABASE_URL from repository variables.'
 check_contains "$deploy_workflow" 'SUPABASE_PUBLISHABLE_KEY' \
   'deploy.yml must read SUPABASE_PUBLISHABLE_KEY from repository variables.'
+check_contains "$deploy_workflow" 'SUPABASE_ANON_KEY' \
+  'deploy.yml must support SUPABASE_ANON_KEY as a publishable key fallback.'
+check_contains "$deploy_workflow" 'secrets.SUPABASE_URL' \
+  'deploy.yml must support SUPABASE_URL from secrets as a fallback.'
+check_contains "$deploy_workflow" 'secrets.SUPABASE_PUBLISHABLE_KEY' \
+  'deploy.yml must support SUPABASE_PUBLISHABLE_KEY from secrets as a fallback.'
 check_contains "$deploy_workflow" "writeFileSync('config.js'" \
   'deploy.yml must generate config.js in the deploy artifact.'
 check_contains "sw.js" "__CACHE_VERSION__" \

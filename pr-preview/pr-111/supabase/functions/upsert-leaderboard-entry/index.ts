@@ -11,7 +11,6 @@ const corsHeaders = {
 
 const WEEK_ID_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const VALID_LEAGUES = new Set(['bronze', 'silver', 'gold', 'diamond']);
-const MAX_COUNTED_RUNS = 4;
 const MAX_RUN_SCORE = 1_000_000;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_AUTH_KEY =
@@ -46,13 +45,6 @@ function isMondayUtcDate(dateKey: string): boolean {
 
 function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
-}
-
-function isDescending(values: number[]): boolean {
-  for (let i = 1; i < values.length; i += 1) {
-    if (values[i - 1] < values[i]) return false;
-  }
-  return true;
 }
 
 Deno.serve(async (req: Request) => {
@@ -128,48 +120,29 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(400, { error: 'league_id must be one of bronze, silver, gold, diamond' });
   }
 
-  if (!Array.isArray(entry.counted_runs)) {
-    return jsonResponse(400, { error: 'counted_runs must be an array' });
+  if (!isNonNegativeInteger(entry.total_score) || entry.total_score > MAX_RUN_SCORE) {
+    return jsonResponse(400, { error: 'total_score must be a non-negative integer within bounds' });
   }
 
-  if (entry.counted_runs.length > MAX_COUNTED_RUNS) {
-    return jsonResponse(400, { error: 'counted_runs cannot contain more than 4 items' });
-  }
+  const submittedScore = entry.total_score;
 
-  const countedRuns = entry.counted_runs as unknown[];
-  if (!countedRuns.every((value) => isNonNegativeInteger(value) && value <= MAX_RUN_SCORE)) {
-    return jsonResponse(400, { error: 'counted_runs must contain non-negative integers within bounds' });
-  }
-
-  const numericRuns = countedRuns as number[];
-  if (!isDescending(numericRuns)) {
-    return jsonResponse(400, { error: 'counted_runs must be sorted descending' });
-  }
-
-  const derivedTotalScore = numericRuns.reduce((sum, value) => sum + value, 0);
-  if (isNonNegativeInteger(entry.total_score) && entry.total_score !== derivedTotalScore) {
-    return jsonResponse(400, { error: 'total_score must match counted_runs sum' });
-  }
-
-  const { error } = await serviceClient
-    .from('weekly_leaderboard_entries')
-    .upsert(
-      {
-        week_id: weekId,
-        player_id: playerId,
-        player_name: playerName,
-        league_id: leagueId,
-        total_score: derivedTotalScore,
-        counted_runs: numericRuns,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'week_id,player_id' },
-    );
+  const { data, error } = await serviceClient.rpc('upsert_weekly_best_leaderboard_entry', {
+    p_week_id: weekId,
+    p_player_id: playerId,
+    p_player_name: playerName,
+    p_league_id: leagueId,
+    p_submitted_score: submittedScore,
+  });
 
   if (error) {
     console.error('upsert-leaderboard-entry DB error:', error.message);
     return jsonResponse(500, { error: 'Internal server error' });
   }
 
-  return jsonResponse(200, { ok: true, total_score: derivedTotalScore });
+  const storedEntry = Array.isArray(data) ? data[0] : data;
+  const storedBestScore = isNonNegativeInteger(storedEntry?.total_score)
+    ? storedEntry.total_score
+    : submittedScore;
+
+  return jsonResponse(200, { ok: true, total_score: storedBestScore });
 });

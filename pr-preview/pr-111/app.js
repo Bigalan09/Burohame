@@ -192,19 +192,20 @@ let dailyChallengeState = {
   targetScore: 0,
   randomState: 0,
 };
-let leaderboardPlayerName = 'Guest';
+let leaderboardPlayerName = '';
 let leaderboardPlayerId = '';
 let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
-let weeklyLeaderboardAdapter = null;
 let weeklyLeaderboardHostedAdapter = null;
-let weeklyLeaderboardLocalAdapter = null;
+let weeklyLeaderboardPollTimer = 0;
 let weeklyLeaderboardViewState = {
   weekId: '',
   entries: [],
   loading: false,
   error: '',
-  sourceLabel: "This device's weekly table",
+  sourceLabel: 'Global weekly table',
+  currentPlayerRank: 0,
   fetchedAt: 0,
+  hidden: true,
 };
 
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
@@ -233,7 +234,6 @@ const WEEKLY_LADDER_COUNTED_RUNS = 4;
 const WEEKLY_COHORT_SIZE = 20;
 const WEEKLY_PROMOTION_SLOTS = 4;
 const WEEKLY_RELEGATION_SLOTS = 4;
-const WEEKLY_LEADERBOARD_STORAGE_KEY = 'bst-weekly-leaderboard';
 const WEEKLY_LEADERBOARD_PULL_INTERVAL_MS = 60 * 1000;
 const WEEKLY_LEADERBOARD_MAX_ROWS = 20;
 const QUEST_BOARD_CHAIN_LIMIT = 3;
@@ -248,8 +248,16 @@ const COIN_REWARDS = Object.freeze({
   endRunScoreBandCap: 10,
   personalBestBonus: 10,
 });
-const DEFAULT_LEADERBOARD_NAME = 'Guest';
-const LOCAL_WEEKLY_TABLE_LABEL = "This device's weekly table";
+const LEGACY_LEADERBOARD_NAME = 'Guest';
+const LEADERBOARD_FALLBACK_ANIMALS = Object.freeze([
+  'Otter', 'Badger', 'Fox', 'Hedgehog', 'Robin', 'Falcon', 'Puffin', 'Lynx',
+  'Wolf', 'Dolphin', 'Koala', 'Panda', 'Tiger', 'Leopard', 'Panther', 'Jaguar',
+  'Giraffe', 'Zebra', 'Bison', 'Moose', 'Seal', 'Penguin', 'Turtle', 'Parrot',
+  'Raven', 'Cobra', 'Viper', 'Gecko', 'Salmon', 'Manta',
+]);
+const DEFAULT_LEADERBOARD_NAME = LEADERBOARD_FALLBACK_ANIMALS[
+  Math.floor(Math.random() * LEADERBOARD_FALLBACK_ANIMALS.length)
+];
 const GLOBAL_WEEKLY_TABLE_LABEL = 'Global weekly table';
 const LEADERBOARD_HANDLE_VALIDATION_PREFIXES = Object.freeze([
   'Leaderboard names must',
@@ -889,14 +897,18 @@ function createDefaultWeeklyLeaderboardState() {
   };
 }
 
+function sanitiseLeaderboardPlayerName(value, fallbackName = DEFAULT_LEADERBOARD_NAME) {
+  const candidate = typeof value === 'string' ? value.trim().slice(0, 24) : '';
+  if (!candidate) return fallbackName;
+  if (candidate.toLowerCase() === LEGACY_LEADERBOARD_NAME.toLowerCase()) return fallbackName;
+  return candidate;
+}
+
 function sanitiseWeeklyLeaderboardState(value) {
-  const defaults = createDefaultWeeklyLeaderboardState();
   const src = value && typeof value === 'object' ? value : {};
   return {
     playerId: typeof src.playerId === 'string' ? src.playerId.trim().slice(0, 64) : '',
-    playerName: typeof src.playerName === 'string' && src.playerName.trim()
-      ? src.playerName.trim().slice(0, 24)
-      : defaults.playerName,
+    playerName: sanitiseLeaderboardPlayerName(src.playerName),
   };
 }
 
@@ -940,6 +952,10 @@ function hasHostedWeeklyLeaderboardConfig() {
     && !!weeklyLeaderboardRuntimeConfig.supabasePublishableKey;
 }
 
+function canShowHostedWeeklyLeaderboard() {
+  return hasHostedWeeklyLeaderboardConfig() && navigator.onLine;
+}
+
 function createPseudoId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   // Fallback: use crypto.getRandomValues to generate a random hex suffix
@@ -951,57 +967,6 @@ function createPseudoId() {
   }
   // Last-resort fallback if crypto is entirely unavailable
   return `player-${Date.now()}-fallback`;
-}
-
-function createLocalWeeklyLeaderboardAdapter() {
-  function readAll() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(WEEKLY_LEADERBOARD_STORAGE_KEY) || '{}');
-      return raw && typeof raw === 'object' ? raw : {};
-    } catch (_) {
-      return {};
-    }
-  }
-
-  function writeAll(payload) {
-    localStorage.setItem(WEEKLY_LEADERBOARD_STORAGE_KEY, JSON.stringify(payload));
-  }
-
-  return {
-    id: 'local',
-    sourceLabel: LOCAL_WEEKLY_TABLE_LABEL,
-    async fetchWeekEntries(weekId) {
-      const all = readAll();
-      const rows = Array.isArray(all[weekId]) ? all[weekId] : [];
-      return rows
-        .filter(item => item && typeof item === 'object')
-        .map(item => ({
-          playerId: String(item.playerId || ''),
-          playerName: String(item.playerName || DEFAULT_LEADERBOARD_NAME).slice(0, 24),
-          leagueId: String(item.leagueId || 'bronze'),
-          totalScore: clampWholeNumber(item.totalScore, 0),
-          countedRuns: sanitiseWeeklyBestRuns(item.countedRuns),
-          updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date(0).toISOString(),
-        }))
-        .sort((a, b) => b.totalScore - a.totalScore || b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, WEEKLY_LEADERBOARD_MAX_ROWS);
-    },
-    async upsertPlayerWeekEntry(entry) {
-      const all = readAll();
-      const rows = Array.isArray(all[entry.weekId]) ? all[entry.weekId] : [];
-      const nextRows = rows.filter(item => item?.playerId !== entry.playerId);
-      nextRows.push({
-        playerId: entry.playerId,
-        playerName: entry.playerName,
-        leagueId: entry.leagueId,
-        totalScore: entry.totalScore,
-        countedRuns: entry.countedRuns,
-        updatedAt: new Date().toISOString(),
-      });
-      all[entry.weekId] = nextRows;
-      writeAll(all);
-    },
-  };
 }
 
 function createSupabaseHeaders(apiKey) {
@@ -1022,9 +987,10 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
 
   function buildQuery(weekId) {
     const params = new URLSearchParams();
-    params.set('select', 'player_id,player_name,league_id,total_score,counted_runs,updated_at');
+    params.set('select', 'player_id,player_name,league_id,total_score,updated_at,created_at');
     params.set('week_id', `eq.${weekId}`);
-    params.set('order', 'total_score.desc,updated_at.desc');
+    // Tie-break: earliest created_at wins when scores are level.
+    params.set('order', 'total_score.desc,created_at.asc,player_id.asc');
     params.set('limit', String(WEEKLY_LEADERBOARD_MAX_ROWS));
     return `${baseUrl}/rest/v1/weekly_leaderboard_entries?${params.toString()}`;
   }
@@ -1141,8 +1107,8 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
             playerName: typeof item.player_name === 'string' && item.player_name.trim() ? item.player_name.trim().slice(0, 24) : DEFAULT_LEADERBOARD_NAME,
             leagueId: typeof item.league_id === 'string' ? item.league_id : 'bronze',
             totalScore: clampWholeNumber(item.total_score, 0),
-            countedRuns: sanitiseWeeklyBestRuns(item.counted_runs),
             updatedAt: typeof item.updated_at === 'string' ? item.updated_at : new Date(0).toISOString(),
+            createdAt: typeof item.created_at === 'string' ? item.created_at : new Date(0).toISOString(),
           }))
         : [];
     },
@@ -1160,10 +1126,8 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
         body: JSON.stringify({
           week_id: entry.weekId,
           player_id: session.userId,
-          player_name: entry.playerName,
           league_id: entry.leagueId,
           total_score: entry.totalScore,
-          counted_runs: entry.countedRuns,
         }),
       });
       if (!response.ok) throw new Error(`Supabase write failed (${response.status})`);
@@ -1179,32 +1143,29 @@ function configureWeeklyLeaderboardAdapter() {
   leaderboardPlayerId = settings.playerId || createPseudoId();
   leaderboardPlayerName = settings.playerName;
 
-  weeklyLeaderboardLocalAdapter = createLocalWeeklyLeaderboardAdapter();
   weeklyLeaderboardHostedAdapter = hasHostedWeeklyLeaderboardConfig()
     ? createSupabaseWeeklyLeaderboardAdapter(
         weeklyLeaderboardRuntimeConfig.supabaseUrl,
         weeklyLeaderboardRuntimeConfig.supabasePublishableKey,
       )
     : null;
-  weeklyLeaderboardAdapter = weeklyLeaderboardHostedAdapter || weeklyLeaderboardLocalAdapter;
   weeklyLeaderboardViewState = {
     ...weeklyLeaderboardViewState,
-    sourceLabel: weeklyLeaderboardAdapter.sourceLabel,
+    sourceLabel: GLOBAL_WEEKLY_TABLE_LABEL,
     error: '',
+    hidden: !canShowHostedWeeklyLeaderboard(),
+    currentPlayerRank: 0,
   };
 }
 
 function getWeeklyLeaderboardEntryPayload() {
   const weekly = ensureWeeklyLadderForCurrentWeek();
   const countedRuns = sanitiseWeeklyBestRuns(weekly.bestRuns);
-  const totalScore = countedRuns.reduce((sum, value) => sum + value, 0);
   return {
     weekId: weekly.currentWeekId,
     playerId: leaderboardPlayerId,
-    playerName: leaderboardPlayerName,
     leagueId: weekly.leagueId,
-    countedRuns,
-    totalScore,
+    totalScore: countedRuns[0] || 0,
   };
 }
 
@@ -1224,7 +1185,7 @@ async function tryClaimLeaderboardHandle(requestedName, options = {}) {
 
   const normalisedRequestedName = normaliseRequestedLeaderboardName(requestedName);
   if (!normalisedRequestedName) return '';
-  if (normalisedRequestedName.toLowerCase() === DEFAULT_LEADERBOARD_NAME.toLowerCase()) return '';
+  if (normalisedRequestedName.toLowerCase() === LEGACY_LEADERBOARD_NAME.toLowerCase()) return '';
 
   if (!weeklyLeaderboardHostedAdapter?.claimLeaderboardHandle) {
     if (options.requireClaim) {
@@ -1254,26 +1215,13 @@ function persistClaimedLeaderboardHandle(claimedHandle) {
 async function publishWeeklyLeaderboardEntry() {
   if (!leaderboardPlayerId) return;
   const payload = getWeeklyLeaderboardEntryPayload();
-  if (weeklyLeaderboardLocalAdapter) {
-    try {
-      await weeklyLeaderboardLocalAdapter.upsertPlayerWeekEntry(payload);
-    } catch (_) {
-      // Local fallback should never block the game loop.
-    }
-  }
   if (!weeklyLeaderboardHostedAdapter) return;
+  if (!navigator.onLine) return;
 
   if (!hasClaimedLeaderboardHandle(leaderboardPlayerName)) {
     const claimedHandle = await tryClaimLeaderboardHandle(getRequestedLeaderboardBaseName(), { requireClaim: false });
     if (claimedHandle) {
       persistClaimedLeaderboardHandle(claimedHandle);
-      if (weeklyLeaderboardLocalAdapter) {
-        try {
-          await weeklyLeaderboardLocalAdapter.upsertPlayerWeekEntry(getWeeklyLeaderboardEntryPayload());
-        } catch (_) {
-          // Keep the local fallback resilient as well.
-        }
-      }
     }
   }
   if (!hasClaimedLeaderboardHandle(leaderboardPlayerName)) return;
@@ -1286,7 +1234,21 @@ async function publishWeeklyLeaderboardEntry() {
 }
 
 async function refreshWeeklyLeaderboard(weekId, options = {}) {
-  if (!weeklyLeaderboardAdapter || !weekId) return;
+  if (!weeklyLeaderboardHostedAdapter || !weekId) return;
+  if (!canShowHostedWeeklyLeaderboard()) {
+    weeklyLeaderboardViewState = {
+      ...weeklyLeaderboardViewState,
+      weekId,
+      entries: [],
+      loading: false,
+      error: '',
+      hidden: true,
+      currentPlayerRank: 0,
+      fetchedAt: 0,
+    };
+    renderWeeklyGlobalLeaderboard();
+    return;
+  }
   const now = Date.now();
   const shouldSkip = !options.force
     && weeklyLeaderboardViewState.weekId === weekId
@@ -1298,11 +1260,13 @@ async function refreshWeeklyLeaderboard(weekId, options = {}) {
     weekId,
     loading: true,
     error: '',
+    hidden: false,
   };
   renderWeeklyGlobalLeaderboard();
 
   try {
-    const rows = await weeklyLeaderboardAdapter.fetchWeekEntries(weekId);
+    const rows = await weeklyLeaderboardHostedAdapter.fetchWeekEntries(weekId);
+    const currentPlayerRank = rows.findIndex((entry) => entry.playerId === leaderboardPlayerId) + 1;
     weeklyLeaderboardViewState = {
       ...weeklyLeaderboardViewState,
       weekId,
@@ -1310,51 +1274,59 @@ async function refreshWeeklyLeaderboard(weekId, options = {}) {
       loading: false,
       fetchedAt: Date.now(),
       error: '',
-      sourceLabel: weeklyLeaderboardAdapter.sourceLabel,
+      sourceLabel: weeklyLeaderboardHostedAdapter.sourceLabel,
+      currentPlayerRank,
+      hidden: false,
     };
   } catch (_) {
-    let fallbackRows = [];
-    if (weeklyLeaderboardLocalAdapter) {
-      try {
-        fallbackRows = await weeklyLeaderboardLocalAdapter.fetchWeekEntries(weekId);
-      } catch (_) {
-        fallbackRows = [];
-      }
-    }
     weeklyLeaderboardViewState = {
       ...weeklyLeaderboardViewState,
       weekId,
-      entries: fallbackRows,
+      entries: [],
       loading: false,
-      fetchedAt: weeklyLeaderboardHostedAdapter ? 0 : Date.now(),
-      error: weeklyLeaderboardHostedAdapter
-        ? "Weekly table unavailable right now. Showing this device's table."
-        : '',
-      sourceLabel: weeklyLeaderboardLocalAdapter?.sourceLabel || LOCAL_WEEKLY_TABLE_LABEL,
+      fetchedAt: 0,
+      error: 'Hosted weekly leaderboard is unavailable right now.',
+      sourceLabel: GLOBAL_WEEKLY_TABLE_LABEL,
+      hidden: true,
+      currentPlayerRank: 0,
     };
   }
   renderWeeklyGlobalLeaderboard();
 }
 
 function renderWeeklyGlobalLeaderboard() {
+  const cardEl = document.getElementById('weekly-global-card');
   const statusEl = document.getElementById('weekly-global-status');
   const listEl = document.getElementById('weekly-global-list');
-  if (!statusEl || !listEl) return;
+  if (!cardEl || !statusEl || !listEl) return;
 
-  const statusLine = weeklyLeaderboardViewState.error
-    ? weeklyLeaderboardViewState.error
-    : weeklyLeaderboardViewState.loading
-      ? `${weeklyLeaderboardViewState.sourceLabel} · Refreshing…`
-      : weeklyLeaderboardViewState.sourceLabel;
+  const shouldHide = weeklyLeaderboardViewState.hidden || !canShowHostedWeeklyLeaderboard() || !!weeklyLeaderboardViewState.error;
+  cardEl.hidden = shouldHide;
+  const currentPlayerEntry = weeklyLeaderboardViewState.entries.find((entry) => entry.playerId === leaderboardPlayerId) || null;
+  setTextIfPresent('weekly-page-score', String(currentPlayerEntry?.totalScore || 0));
+  setTextIfPresent(
+    'weekly-page-rank',
+    weeklyLeaderboardViewState.currentPlayerRank > 0 ? formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank) : 'Unranked',
+  );
+  if (shouldHide) {
+    listEl.innerHTML = '';
+    statusEl.textContent = '';
+    return;
+  }
+
+  const rankLine = weeklyLeaderboardViewState.currentPlayerRank > 0
+    ? ` · Your rank: ${formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)}`
+    : '';
+  const statusLine = weeklyLeaderboardViewState.loading
+    ? `${weeklyLeaderboardViewState.sourceLabel} · Refreshing live standings…`
+    : `${weeklyLeaderboardViewState.sourceLabel}${rankLine}`;
   statusEl.textContent = statusLine;
 
   listEl.innerHTML = '';
   const rows = weeklyLeaderboardViewState.entries.slice(0, 8);
   if (!rows.length) {
     const empty = document.createElement('li');
-    empty.textContent = weeklyLeaderboardViewState.sourceLabel === (weeklyLeaderboardLocalAdapter?.sourceLabel || LOCAL_WEEKLY_TABLE_LABEL)
-      ? 'No runs are saved on this device yet.'
-      : 'No runs are on the weekly table yet. Your next run can set the pace.';
+    empty.textContent = 'No runs are on this week’s leaderboard yet.';
     listEl.appendChild(empty);
     return;
   }
@@ -1363,12 +1335,29 @@ function renderWeeklyGlobalLeaderboard() {
     const item = document.createElement('li');
     const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
     const nameEl = document.createElement('span');
-    nameEl.textContent = `${index + 1}. ${name}`;
+    const league = getLeagueById(entry.leagueId);
+    nameEl.textContent = `${index + 1}. ${name} · ${league.badge} ${league.name}`;
     const scoreEl = document.createElement('strong');
     scoreEl.textContent = String(entry.totalScore);
     item.append(nameEl, scoreEl);
     listEl.appendChild(item);
   });
+}
+
+function stopWeeklyLeaderboardPolling() {
+  if (weeklyLeaderboardPollTimer) {
+    clearInterval(weeklyLeaderboardPollTimer);
+    weeklyLeaderboardPollTimer = 0;
+  }
+}
+
+function startWeeklyLeaderboardPolling() {
+  stopWeeklyLeaderboardPolling();
+  if (currentPage !== 'weekly' || !canShowHostedWeeklyLeaderboard()) return;
+  weeklyLeaderboardPollTimer = window.setInterval(() => {
+    const weekId = getCurrentUTCWeekId();
+    refreshWeeklyLeaderboard(weekId);
+  }, WEEKLY_LEADERBOARD_PULL_INTERVAL_MS);
 }
 
 function getLeagueById(leagueId) {
@@ -2199,6 +2188,9 @@ function createDefaultProgressionState() {
       completedSetIds: [],
       claimedGoalIds: [],
     },
+    onboarding: {
+      completedRuns: 0,
+    },
   };
 }
 
@@ -2259,6 +2251,7 @@ function sanitiseProgressionState(rawState) {
   const cosmetics = src.cosmetics && typeof src.cosmetics === 'object' ? src.cosmetics : {};
   const streak = src.streak && typeof src.streak === 'object' ? src.streak : {};
   const collectionAlbum = src.collectionAlbum && typeof src.collectionAlbum === 'object' ? src.collectionAlbum : {};
+  const onboarding = src.onboarding && typeof src.onboarding === 'object' ? src.onboarding : {};
   const ownedThemes = (() => {
     const owned = uniqueStringList(unlocks.ownedThemes, defaults.unlocks.ownedThemes);
     return owned.includes('classic') ? owned : ['classic', ...owned];
@@ -2313,6 +2306,9 @@ function sanitiseProgressionState(rawState) {
         .filter(id => COLLECTION_SET_LOOKUP[id]),
       claimedGoalIds: uniqueStringList(collectionAlbum.claimedGoalIds, defaults.collectionAlbum.claimedGoalIds)
         .filter(id => id === COLLECTION_ALBUM_GOAL.id),
+    },
+    onboarding: {
+      completedRuns: clampWholeNumber(onboarding.completedRuns, defaults.onboarding.completedRuns),
     },
   };
 }
@@ -2832,7 +2828,7 @@ function renderGameOverSummary() {
       nextRunButton.dataset.promptType = prompt.id || '';
       nextRunButton.dataset.prompted = 'true';
     } else {
-      nextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Start next run';
+      nextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Play again';
       nextRunButton.dataset.sessionType = currentSessionType;
       nextRunButton.dataset.promptType = '';
       nextRunButton.dataset.prompted = 'false';
@@ -3438,33 +3434,25 @@ function setTextIfPresent(id, value) {
 function renderDailyChallengePanels() {
   const challenge = ensureDailyChallengeForToday();
   const challengeStatus = getDailyChallengeStatus(challenge);
-  const title = challengeStatus.complete ? 'Today cleared' : `Target ${challenge.targetScore}`;
+  const isFirstRunExperience = getCompletedRunCount() === 0;
+  const title = 'Today';
   const copy = challengeStatus.complete
-    ? `Completed on ${challenge.date}. Come back tomorrow to keep the streak alive.`
+    ? 'Target cleared. A fresh board lands tomorrow.'
     : challengeStatus.remaining
-      ? `${challengeStatus.remaining} points left to finish today’s shared seed.`
-      : 'A fresh seeded board is ready.';
-  const bestLabel = getDailyChallengeBestLabel(challenge);
-  const dayLabel = challengeStatus.streak === 1 ? 'day' : 'days';
-  const streakLabel = `🔥 ${challengeStatus.streak} ${dayLabel} streak`;
-  const rewardLabel = `${challengeStatus.reward} coin reward`;
+      ? `${challengeStatus.remaining} points left to clear today.`
+      : isFirstRunExperience
+        ? 'Set your first score today.'
+        : 'Play today’s board.';
+  const progressLabel = challengeStatus.complete
+    ? `Reward claimed: ${challengeStatus.reward} coins`
+    : `Reward: ${challengeStatus.reward} coins`;
 
   setTextIfPresent('dashboard-daily-title', title);
   setTextIfPresent('dashboard-daily-copy', copy);
-  setTextIfPresent('dashboard-daily-target', `Target ${challenge.targetScore}`);
-  setTextIfPresent('dashboard-daily-best', bestLabel);
-  setTextIfPresent('dashboard-daily-streak', streakLabel);
-  setTextIfPresent('dashboard-daily-reward', rewardLabel);
+  setTextIfPresent('dashboard-daily-progress', progressLabel);
 
   const playButton = document.getElementById('btn-dashboard-daily-play');
-  if (playButton) {
-    playButton.textContent = challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge';
-  }
-
-  const infoButton = document.getElementById('btn-dashboard-daily-info');
-  if (infoButton) {
-    infoButton.textContent = 'How it works';
-  }
+  if (playButton) playButton.setAttribute('aria-label', challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge');
 }
 
 function renderDailyMissions() {
@@ -3544,14 +3532,15 @@ function renderQuestBoard(options = {}) {
       const currentStepMarkup = item.currentStep
         ? `
           <div class="quest-item__step">
-            <strong>Current step</strong>
+            <strong>Do this now</strong>
             <span>${item.currentStep.title}</span>
             <p>${item.currentStep.description}</p>
+            <p>${getQuestStepContextText(item.currentStep)}</p>
           </div>
           <div class="quest-progress" aria-hidden="true"><span style="width:${item.progressPercent}%"></span></div>
           <div class="quest-item__footer">
             <span>${getQuestStepProgressText(item.currentStep, item.currentProgress)}</span>
-            <strong>${item.nextStep ? `Next · ${item.nextStep.title}` : 'Final step'}</strong>
+            <strong>${item.nextStep ? `Next unlock · ${item.nextStep.title}` : 'Final step'}</strong>
           </div>
         `
         : `
@@ -3582,7 +3571,7 @@ function renderQuestBoard(options = {}) {
   };
 
   if (questsSubtitle) {
-    questsSubtitle.textContent = 'Ordered objectives unlock one step at a time across the week.';
+    questsSubtitle.textContent = 'Only one step is active in each chain. Finish the active step to unlock the next one and collect rewards.';
   }
   if (questCount) {
     questCount.textContent = `${status.completed}/${status.total} chains complete`;
@@ -3591,12 +3580,23 @@ function renderQuestBoard(options = {}) {
   const currentChain = status.chains.find(item => !item.isComplete && item.currentStep);
   setTextIfPresent('dashboard-quest-card-title', currentChain ? currentChain.chain.title : 'Weekly routes settled');
   setTextIfPresent('dashboard-quest-card-copy', currentChain
-    ? `${currentChain.currentStep.title} is the live step right now.`
+    ? `${currentChain.currentStep.title} is active now. Complete it to reveal the next step.`
     : 'Every active chain is complete for this cycle.');
   setTextIfPresent('dashboard-quest-card-progress', `${status.completed}/${status.total} chains complete`);
   setTextIfPresent('dashboard-quest-card-timer', status.countdown);
 
   renderQuestItems(questList);
+}
+
+function getQuestStepContextText(step) {
+  if (!step || typeof step !== 'object') return 'Complete the live objective to keep this chain moving.';
+  if (step.metric === 'singleRunScore') return 'Why this matters: stronger scoring runs unlock chain rewards faster.';
+  if (step.metric === 'totalScore') return 'Why this matters: every run adds progress, so steady play still counts.';
+  if (step.metric === 'regionsCleared' || step.metric === 'biggestClear') return 'Why this matters: line and box clears keep your board healthy for future turns.';
+  if (step.metric === 'maxCombo' || step.metric === 'coachMaxCombo') return 'Why this matters: combos boost points and teach cleaner sequencing.';
+  if (step.metric === 'racksCompleted') return 'Why this matters: surviving more racks helps your weekly placement and mission progress.';
+  if (step.metric === 'coachRuns' || step.metric === 'coachRegions') return 'Why this matters: Coach Mode highlights safer moves while you learn.';
+  return 'Complete the live objective to keep this chain moving.';
 }
 
 function getCollectionSubtitle() {
@@ -3868,6 +3868,50 @@ function canPlaceOnBoard(cells, row, col, b) {
   return true;
 }
 
+function canPlaceAnywhereOnBoard(cells, b) {
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (canPlaceOnBoard(cells, r, c, b)) return true;
+    }
+  }
+  return false;
+}
+
+function estimateTightPocketCount(b) {
+  let pockets = 0;
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (b[r][c]) continue;
+      let blockedNeighbours = 0;
+      const neighbours = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]];
+      for (const [nr, nc] of neighbours) {
+        if (nr < 0 || nr >= N || nc < 0 || nc >= N || b[nr][nc]) blockedNeighbours++;
+      }
+      if (blockedNeighbours >= 3) pockets++;
+    }
+  }
+  return pockets;
+}
+
+function findSmallRecoveryPiece(targetBoard) {
+  const candidates = PIECE_DEFS.filter(piece => piece.length <= 3 && canPlaceAnywhereOnBoard(piece, targetBoard));
+  if (!candidates.length) return null;
+  return candidates[Math.floor(randomValue() * candidates.length)];
+}
+
+function ensureSmallRecoveryPieceInRack(rack, targetBoard) {
+  const hasSmallFit = rack.some(piece => piece.length <= 3 && canPlaceAnywhereOnBoard(piece, targetBoard));
+  if (hasSmallFit) return;
+  const recoveryPiece = findSmallRecoveryPiece(targetBoard);
+  if (!recoveryPiece) return;
+  const replaceIndex = rack.findIndex(piece => piece.length > 3);
+  if (replaceIndex >= 0) {
+    rack[replaceIndex] = recoveryPiece;
+    return;
+  }
+  rack[Math.floor(randomValue() * rack.length)] = recoveryPiece;
+}
+
 // Try placing each piece (in the given slot order) at its first available
 // position and return whether all can be placed.
 function canFitAllInOrder(order) {
@@ -3912,25 +3956,65 @@ function randomPiece() {
   return PIECE_DEFS[Math.floor(randomValue() * PIECE_DEFS.length)];
 }
 
+function getPieceDifficultyProfile() {
+  const roundsCompleted = runSummary?.stats?.racksCompleted || 0;
+  const randomMixChance = roundsCompleted >= 20 ? 0.10 : 0;
+
+  // Focus the first 150 score on forgiving shapes only.
+  if (score <= 150) {
+    return {
+      maxCells: 3,
+      minSmallPieces: 2,
+      fillCap: 0.12,
+      randomMixChance,
+    };
+  }
+
+  // Ramp difficulty roughly every 100–150 points (125-point bands).
+  const rampStage = Math.min(6, Math.floor((score - 151) / 125) + 1);
+  const stagedProfiles = [
+    { maxCells: 4, minSmallPieces: 1, fillCap: 0.45 },
+    { maxCells: 5, minSmallPieces: 1, fillCap: 0.75 },
+    { maxCells: 5, minSmallPieces: 0, fillCap: 1.00 },
+    { maxCells: 5, minSmallPieces: 0, fillCap: 1.20 },
+    { maxCells: 5, minSmallPieces: 0, fillCap: 1.35 },
+    { maxCells: 5, minSmallPieces: 0, fillCap: 1.50 },
+  ];
+
+  return {
+    ...stagedProfiles[rampStage - 1],
+    randomMixChance,
+  };
+}
+
 // ── Difficulty-weighted piece selection ────────────────────
 // As score grows, larger/harder pieces become progressively more likely.
-function weightedRandomPiece() {
+function weightedRandomPiece(options = {}) {
+  const {
+    targetScore = score,
+    pool = PIECE_DEFS,
+    fillCapOverride,
+  } = options;
+
+  if (!Array.isArray(pool) || pool.length === 0) return randomPiece();
+
   // fill: 0 at score 0, 1 at score 200, reaches 1.5 at score 300
-  const fill = Math.min(1.5, score / 200);
-  // Each piece gets a weight = 1 + fill × (cellCount - 1) × 0.5
-  // At fill=0 all weights are equal; at fill=1.5 a 5-cell piece is 4× as likely as a 1-cell piece.
+  const rawFill = Math.min(1.5, targetScore / 200);
+  const fill = typeof fillCapOverride === 'number' ? Math.min(rawFill, fillCapOverride) : rawFill;
+
   let totalWeight = 0;
-  const weights = PIECE_DEFS.map(p => {
-    const w = 1 + fill * (p.length - 1) * 0.5;
-    totalWeight += w;
-    return w;
+  const weights = pool.map(piece => {
+    const weight = 1 + fill * (piece.length - 1) * 0.5;
+    totalWeight += weight;
+    return weight;
   });
+
   let rand = randomValue() * totalWeight;
-  for (let i = 0; i < PIECE_DEFS.length; i++) {
+  for (let i = 0; i < pool.length; i++) {
     rand -= weights[i];
-    if (rand <= 0) return PIECE_DEFS[i];
+    if (rand <= 0) return pool[i];
   }
-  return PIECE_DEFS[PIECE_DEFS.length - 1];
+  return pool[pool.length - 1];
 }
 
 // ── Smart piece selection ──────────────────────────────────
@@ -3960,12 +4044,20 @@ function canCauseClearOnBoard(cells, b) {
   return false;
 }
 
-// Piece well-suited to an early game (sparse board, score < 200).
-// Prefers 3–4 cell pieces for meaningful scoring on an open board.
-function earlyPiece() {
-  const pool = PIECE_DEFS.filter(p => p.length >= 3 && p.length <= 4);
-  if (pool.length === 0) return weightedRandomPiece();
-  return pool[Math.floor(randomValue() * pool.length)];
+function pickPieceForProfile(profile, options = {}) {
+  const { forceSmall = false } = options;
+  const randomInMix = profile.randomMixChance > 0 && randomValue() < profile.randomMixChance;
+  if (randomInMix) return randomPiece();
+
+  const constrainedPool = PIECE_DEFS.filter(piece => piece.length <= profile.maxCells);
+  const smallPool = constrainedPool.filter(piece => piece.length <= 3);
+
+  if (forceSmall && smallPool.length) {
+    return weightedRandomPiece({ pool: smallPool, fillCapOverride: profile.fillCap });
+  }
+
+  if (!constrainedPool.length) return weightedRandomPiece();
+  return weightedRandomPiece({ pool: constrainedPool, fillCapOverride: profile.fillCap });
 }
 
 // Verify the next `rounds` future rounds will still have clearing opportunities.
@@ -3992,6 +4084,12 @@ function ensureLookahead(p, rounds) {
 
   // Check that future rounds still offer clearing opportunities
   for (let round = 0; round < rounds; round++) {
+    const simulatedDensity = b.reduce((sum, row) => sum + row.reduce((rowSum, cell) => rowSum + cell, 0), 0) / (N * N);
+    const tightPocketCount = estimateTightPocketCount(b);
+    if (simulatedDensity >= 0.52 || tightPocketCount >= 3) {
+      ensureSmallRecoveryPieceInRack(p, b);
+    }
+
     const futureHasClear = PIECE_DEFS.some(pc => canCauseClearOnBoard(pc, b));
     if (!futureHasClear) {
       // Future board is too dense — inject a clear-enabling piece into current rack
@@ -4001,6 +4099,7 @@ function ensureLookahead(p, rounds) {
         const swapIdx = p.findIndex(pc => !canCauseClear(pc));
         if (swapIdx >= 0) p[swapIdx] = clearNow;
       }
+      ensureSmallRecoveryPieceInRack(p, b);
       return;
     }
 
@@ -4025,12 +4124,22 @@ function ensureLookahead(p, rounds) {
 function smartPieces() {
   const filled = board.reduce((s, r) => s + r.reduce((t, c) => t + c, 0), 0);
   const density = filled / (N * N);
-  const earlyGame = density < 0.10 && score < 200;
+  const profile = getPieceDifficultyProfile();
 
-  // Generate candidate rack based on difficulty
-  const p = Array.from({ length: rackSize }, () =>
-    earlyGame ? earlyPiece() : weightedRandomPiece()
-  );
+  const p = [];
+  let requiredSmallPieces = Math.min(rackSize, profile.minSmallPieces);
+  for (let i = 0; i < rackSize; i++) {
+    const slotsRemaining = rackSize - i;
+    const mustForceSmall = requiredSmallPieces >= slotsRemaining;
+    const shouldPreferSmall = requiredSmallPieces > 0 && !mustForceSmall && randomValue() < 0.72;
+    const nextPiece = pickPieceForProfile(profile, { forceSmall: mustForceSmall || shouldPreferSmall });
+    p.push(nextPiece);
+    if (nextPiece.length <= 3 && requiredSmallPieces > 0) requiredSmallPieces--;
+  }
+
+  if (density >= 0.25 || score >= 120) {
+    ensureSmallRecoveryPieceInRack(p, board);
+  }
 
   // Guarantee at least one clearing opportunity in this rack
   if (!p.some(pc => canCauseClear(pc))) {
@@ -4281,104 +4390,24 @@ function renderSessionModeBadge() {
 
 
 function renderWeeklyLadder() {
-  const status = getWeeklyLadderStatus();
-  const { league, weekly, totalScore, rankLabel, rankBand, zoneLabel, countdown: timeRemaining, countedRuns, rewardPreview, promotionGap, safetyGap, projectedOutcome } = status;
-  const pageIds = {
-    title: 'weekly-page-title',
-    countdown: 'weekly-page-countdown',
-    copy: 'weekly-page-copy',
-    league: 'weekly-page-league',
-    score: 'weekly-page-score',
-    rank: 'weekly-page-rank',
-    band: 'weekly-page-band',
-    zone: 'weekly-page-zone',
-    runs: 'weekly-page-runs',
-    nextStep: 'weekly-page-next-step',
-    reward: 'weekly-page-reward',
-    bestRuns: 'weekly-page-best-runs',
-    resultBanner: 'weekly-page-result-banner',
-    resultTitle: 'weekly-page-result-title',
-    resultCopy: 'weekly-page-result-copy',
-  };
+  const weekId = getCurrentUTCWeekId();
+  const weekly = ensureWeeklyLadderForCurrentWeek();
+  const localBestScore = sanitiseWeeklyBestRuns(weekly.bestRuns)[0] || 0;
+  const liveRank = weeklyLeaderboardViewState.currentPlayerRank > 0
+    ? formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)
+    : 'Unranked';
 
-  let copyText = '';
-  let nextStepText = '';
-  if (!countedRuns.length) {
-    copyText = 'Your best four runs this week count. One strong session is enough to start shaping your table.';
-    nextStepText = 'Log a first run to join the weekly table.';
-  } else if (status.zone === 'promotion' && weekly.leagueId !== 'diamond') {
-    copyText = 'You are pacing for promotion if the week ended now.';
-    nextStepText = 'Stay in the top four to climb next Monday.';
-  } else if (status.zone === 'relegation' && weekly.leagueId !== 'bronze') {
-    copyText = `The table is still recoverable. ${safetyGap} more points would lift you back towards safety.`;
-    nextStepText = 'A cleaner run or two should be enough to settle the week.';
-  } else if (promotionGap > 0 && weekly.leagueId !== 'diamond') {
-    copyText = `${promotionGap} more points would move you into the promotion places.`;
-    nextStepText = 'Only your best four runs count, so quality still matters more than volume.';
-  } else {
-    copyText = 'The ladder favours calm consistency. Keep nudging your best four upwards.';
-    nextStepText = 'One good run can still redraw the standings before the reset.';
-  }
-
-  const rewardLine = projectedOutcome === 'promoted'
-    ? `Weekly reward preview · ${rewardPreview.coins} coins plus a bonus unlock if available`
-    : `Weekly reward preview · ${rewardPreview.coins} coins`;
-
-  setTextIfPresent(pageIds.title, `${league.badge} ${league.name} week`);
-  setTextIfPresent(pageIds.countdown, timeRemaining);
-  setTextIfPresent(pageIds.copy, copyText);
-  setTextIfPresent(pageIds.league, `${league.badge} ${league.name}`);
-  setTextIfPresent(pageIds.score, String(totalScore));
-  setTextIfPresent(pageIds.rank, rankLabel);
-  setTextIfPresent(pageIds.band, rankBand);
-  setTextIfPresent(pageIds.zone, zoneLabel);
-  setTextIfPresent(pageIds.runs, `${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} counted`);
-  setTextIfPresent(pageIds.nextStep, nextStepText);
-  setTextIfPresent(pageIds.reward, rewardLine);
-
-  setTextIfPresent('dashboard-weekly-card-title', `${league.badge} ${league.name} week`);
-  setTextIfPresent('dashboard-weekly-card-copy', copyText);
-  setTextIfPresent('dashboard-weekly-card-rank', rankLabel);
-  setTextIfPresent('dashboard-weekly-card-zone', zoneLabel);
-  setTextIfPresent('dashboard-weekly-card-countdown', timeRemaining);
-
-  const bestRunsEl = document.getElementById(pageIds.bestRuns);
-  if (bestRunsEl) {
-    bestRunsEl.innerHTML = '';
-    const runsToShow = [...countedRuns];
-    while (runsToShow.length < WEEKLY_LADDER_COUNTED_RUNS) runsToShow.push(null);
-    runsToShow.forEach((value, index) => {
-      const chip = document.createElement('span');
-      chip.className = `dashboard-weekly__best-run${value ? '' : ' dashboard-weekly__best-run--empty'}`;
-      chip.textContent = value ? `Run ${index + 1} · ${value}` : `Run ${index + 1} open`;
-      bestRunsEl.appendChild(chip);
-    });
-  }
+  setTextIfPresent('weekly-page-title', 'Current UTC week');
+  setTextIfPresent('weekly-page-countdown', getUTCWeekCountdown());
+  setTextIfPresent('weekly-page-copy', 'Live standings update this week as players post better single-run scores.');
+  setTextIfPresent('weekly-page-score', String(localBestScore));
+  setTextIfPresent('weekly-page-rank', liveRank);
+  setTextIfPresent('dashboard-weekly-card-title', 'This week');
+  setTextIfPresent('dashboard-weekly-card-copy', 'Live global leaderboard');
+  setTextIfPresent('dashboard-weekly-card-progress', localBestScore > 0 ? `${liveRank} · best ${localBestScore}` : 'Set your first weekly score');
 
   renderWeeklyGlobalLeaderboard();
-  refreshWeeklyLeaderboard(weekly.currentWeekId);
-
-  const resultBanner = document.getElementById(pageIds.resultBanner);
-  const resultTitle = document.getElementById(pageIds.resultTitle);
-  const resultCopy = document.getElementById(pageIds.resultCopy);
-  if (resultBanner && resultTitle && resultCopy) {
-    if (weekly.pendingResult?.weekId) {
-      resultBanner.hidden = false;
-      const pendingLeague = getLeagueById(weekly.pendingResult.leagueId);
-      resultTitle.textContent = weekly.pendingResult.outcome === 'promoted'
-        ? `${pendingLeague.badge} Promoted last week`
-        : weekly.pendingResult.outcome === 'relegated'
-          ? `${pendingLeague.badge} Relegated last week`
-          : `${pendingLeague.badge} Held last week`;
-      let summary = describeWeeklyResult(weekly.pendingResult);
-      if (weekly.pendingResult.unlockName) {
-        summary += ` ${weekly.pendingResult.unlockName} joined your collection.`;
-      }
-      resultCopy.textContent = summary;
-    } else {
-      resultBanner.hidden = true;
-    }
-  }
+  refreshWeeklyLeaderboard(weekId);
 }
 
 function renderCollectionAlbumTeaser() {
@@ -4408,49 +4437,100 @@ function renderCollectionAlbumTeaser() {
     : `Grand reward · ${COLLECTION_ALBUM_GOAL.reward.name}`;
 }
 
+function renderDashboardUnlockPreview({ isFirstRunExperience = false } = {}) {
+  const albumStatus = getCollectionAlbumStatus();
+  const spotlight = albumStatus.spotlightSet;
+
+  let title = 'Next unlock';
+  let copy = 'Unlock your first finish reward.';
+  let progress = 'Complete your first run';
+
+  if (!isFirstRunExperience) {
+    if (albumStatus.allSetsComplete) {
+      title = 'Next unlock';
+      copy = 'Your collection is complete. Try a higher weekly finish for bonus rewards.';
+      progress = `${COLLECTION_ALBUM_GOAL.reward.name} unlocked`;
+    } else if (spotlight) {
+      title = 'Next unlock';
+      copy = spotlight.remainingCount === 1
+        ? `One more unlock completes ${spotlight.set.title}.`
+        : `${spotlight.remainingCount} more unlocks for ${spotlight.set.title}.`;
+      progress = `${albumStatus.completedCount}/${albumStatus.totalSets} sets complete`;
+    } else {
+      copy = 'Reach your next finish reward in the collection.';
+      progress = `${albumStatus.completedCount}/${albumStatus.totalSets} sets complete`;
+    }
+  }
+
+  setTextIfPresent('dashboard-unlock-title', title);
+  setTextIfPresent('dashboard-unlock-copy', copy);
+  setTextIfPresent('dashboard-unlock-progress', progress);
+}
+
 function renderDashboard() {
   const continueBtn = document.getElementById('btn-dashboard-continue');
-  const newGameBtn = document.getElementById('btn-dashboard-new');
+  const playNowBtn = document.getElementById('btn-dashboard-play');
   const intro = document.getElementById('dashboard-intro');
   const runState = document.getElementById('dashboard-run-state');
   const hasSavedGame = !!getSavedGameSession();
   const savedGame = getSavedGameSession();
-  const skin = BLOCK_SKIN_LOOKUP[getEquippedBlockSkin()] || BLOCK_SKIN_LOOKUP.classic;
+  const isFirstRunExperience = getCompletedRunCount() === 0;
+  const onboarding = document.getElementById('dashboard-onboarding');
+  const firstReward = document.getElementById('dashboard-first-reward');
+  const progressStrip = document.getElementById('dashboard-progress-strip');
+  const focusCards = document.querySelector('.dashboard-focus');
+  const coins = getCoinBalance();
+  const hasMeaningfulProgress = coins > 0 || bestScore > 0 || todayScore > 0;
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
     continueBtn.disabled = !hasSavedGame;
     continueBtn.textContent = savedGame?.sessionType === 'daily' ? 'Continue daily challenge' : 'Continue run';
   }
-  if (newGameBtn) {
-    newGameBtn.textContent = hasSavedGame ? 'Start fresh run' : 'Start new run';
-    newGameBtn.classList.toggle('pill-btn--secondary', hasSavedGame);
-  }
+  if (playNowBtn) playNowBtn.textContent = 'Play now';
   if (runState) {
     runState.textContent = savedGame?.sessionType === 'daily'
-      ? 'Daily challenge ready to resume'
+      ? 'Daily challenge ready to continue'
       : hasSavedGame
         ? 'Saved run ready to continue'
-        : 'Ready for a fresh run';
+        : isFirstRunExperience
+          ? 'Complete your first run to unlock rewards'
+          : 'Ready for your next run';
   }
   if (intro) {
     if (savedGame?.sessionType === 'daily') {
-      intro.textContent = 'Your daily challenge is still waiting.';
+      intro.textContent = 'Your daily challenge is waiting.';
     } else {
-      intro.textContent = hasSavedGame ? 'Pick up where you left off.' : 'boo-roh-hah-meh';
+      intro.textContent = hasSavedGame
+        ? 'Pick up where you left off.'
+        : isFirstRunExperience
+          ? 'Quick to learn, calm to replay.'
+          : 'Play now and push your score higher.';
     }
   }
+  if (onboarding) {
+    onboarding.hidden = !isFirstRunExperience || hasSavedGame;
+  }
+  if (firstReward) firstReward.textContent = `First run reward: ${scaleCoinReward(32, 'run')} coins`;
+  if (focusCards) {
+    focusCards.hidden = isFirstRunExperience && !hasSavedGame;
+  }
+  if (progressStrip) {
+    progressStrip.hidden = !hasMeaningfulProgress;
+  }
 
-  document.getElementById('dashboard-coins').textContent = String(getCoinBalance());
+  document.getElementById('dashboard-coins').textContent = String(coins);
   document.getElementById('dashboard-best').textContent = String(bestScore);
   document.getElementById('dashboard-today').textContent = String(todayScore);
-  document.getElementById('dashboard-finish').textContent = skin.name;
   renderSessionModeBadge();
   renderDailyChallengePanels();
   renderDailyMissions();
-  renderQuestBoard();
   renderWeeklyLadder();
-  renderCollectionAlbumTeaser();
+  renderDashboardUnlockPreview({ isFirstRunExperience });
+}
+
+function getCompletedRunCount() {
+  return progressionState?.onboarding?.completedRuns || 0;
 }
 
 function populateQuickSettings() {
@@ -4458,18 +4538,44 @@ function populateQuickSettings() {
   document.getElementById('quick-chk-dark').checked = darkMode;
 }
 
-function getLeaderboardHandleStatusText() {
+function getLeaderboardNameAvailabilityText(rawValue) {
+  if (!hasHostedWeeklyLeaderboardConfig()) {
+    return 'Name saved locally on this device.';
+  }
+  const requestedName = normaliseRequestedLeaderboardName(rawValue);
+  if (!requestedName) {
+    return 'Type a name to claim a unique handle.';
+  }
+  if (requestedName.toLowerCase() === LEGACY_LEADERBOARD_NAME.toLowerCase()) {
+    return 'Please choose a different name.';
+  }
+  return `Available. It will be claimed with a unique suffix, for example ${requestedName}#1423.`;
+}
+
+function updateLeaderboardNameAvailabilityIndicator() {
+  const backendStatus = document.getElementById('page-weekly-backend-status');
+  if (!backendStatus) return;
+  const inputEl = document.getElementById('page-input-weekly-name');
   if (hasClaimedLeaderboardHandle(leaderboardPlayerName)) {
-    return `Current handle: ${leaderboardPlayerName}`;
-  }
-  if (hasHostedWeeklyLeaderboardConfig()) {
-    const savedName = getRequestedLeaderboardBaseName();
-    if (savedName && savedName.toLowerCase() !== DEFAULT_LEADERBOARD_NAME.toLowerCase()) {
-      return `Saved locally as ${savedName}. It will join the weekly table when available.`;
+    const currentBaseName = extractLeaderboardNameBase(leaderboardPlayerName);
+    const requestedName = normaliseRequestedLeaderboardName(inputEl?.value);
+    if (!requestedName || requestedName === currentBaseName) {
+      backendStatus.textContent = `Current handle: ${leaderboardPlayerName} · available`;
+      return;
     }
-    return 'Choose a leaderboard name to join the weekly table.';
   }
-  return 'This device will use the name below for weekly play.';
+  backendStatus.textContent = getLeaderboardNameAvailabilityText(inputEl?.value);
+}
+
+async function ensureLeaderboardHandleClaimedOnJoin() {
+  if (!hasHostedWeeklyLeaderboardConfig()) return;
+  if (hasClaimedLeaderboardHandle(leaderboardPlayerName)) return;
+  const requestedName = getRequestedLeaderboardBaseName();
+  if (!requestedName) return;
+  const claimedHandle = await tryClaimLeaderboardHandle(requestedName, { requireClaim: false });
+  if (!claimedHandle) return;
+  persistClaimedLeaderboardHandle(claimedHandle);
+  if (currentPage === 'settings') updateLeaderboardNameAvailabilityIndicator();
 }
 
 function populateSettingsPage() {
@@ -4489,10 +4595,7 @@ function populateSettingsPage() {
   colorSelect.value = isColorwayOwned(colorSetting) ? colorSetting : 'orange';
   document.getElementById('page-sel-rack').value = String(rackSize);
   document.getElementById('page-input-weekly-name').value = extractLeaderboardNameBase(leaderboardPlayerName);
-  const backendStatus = document.getElementById('page-weekly-backend-status');
-  if (backendStatus) {
-    backendStatus.textContent = getLeaderboardHandleStatusText();
-  }
+  updateLeaderboardNameAvailabilityIndicator();
   updateCosmeticLabel();
 }
 
@@ -4502,13 +4605,16 @@ function updatePrimaryPlayButton() {
   if (!playButton || !playLabel) return;
 
   const savedGame = getSavedGameSession();
+  const isFirstRunExperience = getCompletedRunCount() === 0 && !savedGame;
   const isDaily = savedGame?.sessionType === 'daily';
-  const label = isDaily ? 'Resume daily' : savedGame ? 'Resume' : 'Play';
+  const label = isDaily ? 'Resume daily' : savedGame ? 'Resume' : isFirstRunExperience ? 'First run' : 'Play';
   const ariaLabel = isDaily
     ? 'Resume daily challenge'
     : savedGame
       ? 'Resume saved run'
-      : 'Start new run';
+      : isFirstRunExperience
+        ? 'Start first run'
+        : 'Start new run';
 
   playLabel.textContent = label;
   playButton.setAttribute('aria-label', ariaLabel);
@@ -4526,6 +4632,7 @@ function updateBottomNav() {
 
 function navigateTo(page) {
   if (page !== 'game') clearGameBannerQueue();
+  if (currentPage === 'weekly' && page !== 'weekly') stopWeeklyLeaderboardPolling();
   currentPage = page;
   document.getElementById('app').dataset.page = page;
   document.querySelectorAll('.page').forEach(section => {
@@ -4533,7 +4640,10 @@ function navigateTo(page) {
   });
 
   if (page === 'dashboard') renderDashboard();
-  if (page === 'weekly') renderWeeklyLadder();
+  if (page === 'weekly') {
+    renderWeeklyLadder();
+    startWeeklyLeaderboardPolling();
+  }
   if (page === 'missions') renderDailyMissions();
   if (page === 'quests') renderQuestBoard();
   if (page === 'shop') renderCosmeticsCollection();
@@ -5063,6 +5173,16 @@ function triggerGameOver() {
   updateScoreUI();
   maybeCompleteDailyChallenge();
   evaluateRunObjectives();
+  updateProgressionState(state => {
+    const completedRuns = clampWholeNumber(state.onboarding?.completedRuns, 0);
+    return {
+      ...state,
+      onboarding: {
+        ...state.onboarding,
+        completedRuns: completedRuns + 1,
+      },
+    };
+  });
   updateDailyMissionProgress('runs', 1);
   ensureRunSummary().questHighlightIds = applyQuestChainProgress(ensureRunSummary()).changedChainIds;
   ensureRunSummary().continuePrompt = chooseOneMoreRunPrompt(ensureRunSummary());
@@ -5504,6 +5624,55 @@ function hideOverlay(id) {
   ov.hidden = true;
 }
 
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  const scratch = document.createElement('textarea');
+  scratch.value = text;
+  scratch.setAttribute('readonly', '');
+  scratch.style.position = 'fixed';
+  scratch.style.opacity = '0';
+  document.body.appendChild(scratch);
+  scratch.select();
+
+  const copied = document.execCommand('copy');
+  scratch.remove();
+  return copied;
+}
+
+async function shareBurohameApp() {
+  const shareUrl = `${window.location.origin}${window.location.pathname}`;
+  const sharePayload = {
+    title: 'Burohame',
+    text: 'I have been playing this 9×9 puzzle game. Give it a go.',
+    url: shareUrl,
+  };
+
+  if (navigator.share) {
+    try {
+      await navigator.share(sharePayload);
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+    }
+  }
+
+  try {
+    const copied = await copyTextToClipboard(shareUrl);
+    if (copied) {
+      alert('Link copied. Share it with a friend.');
+      return;
+    }
+  } catch (error) {
+    // Fallback alert below if clipboard is unavailable.
+  }
+
+  alert(`Share this link: ${shareUrl}`);
+}
+
 // ── Settings / overlays ────────────────────────────────────
 function applySettingsState(nextSettings) {
   const prevTraining = trainingMode;
@@ -5515,7 +5684,7 @@ function applySettingsState(nextSettings) {
   const requestedColor = sanitiseColorSetting(nextSettings.colorSetting);
   colorSetting = isColorwayOwned(requestedColor) ? requestedColor : colorSetting;
   rackSize = nextSettings.rackSize;
-  leaderboardPlayerName = (nextSettings.leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME).trim().slice(0, 24) || DEFAULT_LEADERBOARD_NAME;
+  leaderboardPlayerName = sanitiseLeaderboardPlayerName(nextSettings.leaderboardPlayerName);
   if (!leaderboardPlayerId) leaderboardPlayerId = createPseudoId();
   configureWeeklyLeaderboardAdapter();
 
@@ -5565,33 +5734,26 @@ document.getElementById('btn-quick-settings-save').addEventListener('click', () 
   hideOverlay('ov-quick-settings');
 });
 
-document.getElementById('btn-dashboard-continue').addEventListener('click', () => {
+document.getElementById('btn-dashboard-continue')?.addEventListener('click', () => {
   if (!restoreSavedGame()) return;
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-new').addEventListener('click', () => {
+document.getElementById('btn-dashboard-play')?.addEventListener('click', () => {
   startNewGame({ resetPromptChain: true });
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-weekly-page').addEventListener('click', () => {
+document.getElementById('btn-dashboard-weekly-page')?.addEventListener('click', () => {
   navigateTo('weekly');
 });
-document.getElementById('btn-dashboard-quests-page').addEventListener('click', () => {
-  navigateTo('quests');
-});
-document.getElementById('btn-dashboard-missions-page').addEventListener('click', () => {
-  navigateTo('missions');
-});
-document.getElementById('btn-dashboard-album-page').addEventListener('click', () => {
+document.getElementById('btn-dashboard-unlock-page')?.addEventListener('click', () => {
   navigateTo('shop');
 });
-document.getElementById('btn-dashboard-daily-play').addEventListener('click', () => {
+document.getElementById('btn-dashboard-daily-play')?.addEventListener('click', () => {
   startNewGame({ sessionType: 'daily', resetPromptChain: true });
   navigateTo('game');
 });
-document.getElementById('btn-dashboard-daily-info').addEventListener('click', () => {
-  const challenge = ensureDailyChallengeForToday();
-  alert(`Today’s daily challenge is shared worldwide for ${challenge.date}. Reach ${challenge.targetScore} points to keep your streak and earn a coin bonus.`);
+document.getElementById('btn-dashboard-share')?.addEventListener('click', () => {
+  shareBurohameApp();
 });
 document.querySelectorAll('[data-back-page]').forEach(button => {
   button.addEventListener('click', () => {
@@ -5657,15 +5819,18 @@ function handleShopAction(event) {
 
 document.getElementById('collection-list').addEventListener('click', handleShopAction);
 document.getElementById('colorway-list').addEventListener('click', handleShopAction);
+document.getElementById('page-input-weekly-name').addEventListener('input', () => {
+  updateLeaderboardNameAvailabilityIndicator();
+});
 
 async function resolveLeaderboardNameForSave(requestedName) {
   const normalisedRequestedName = normaliseRequestedLeaderboardName(requestedName);
   if (!hasHostedWeeklyLeaderboardConfig()) {
-    return sanitiseLocalLeaderboardName(normalisedRequestedName);
+    return sanitiseLeaderboardPlayerName(sanitiseLocalLeaderboardName(normalisedRequestedName));
   }
 
   if (!normalisedRequestedName) {
-    return leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME;
+    return sanitiseLeaderboardPlayerName(leaderboardPlayerName);
   }
 
   const currentBaseName = hasClaimedLeaderboardHandle(leaderboardPlayerName)
@@ -5676,11 +5841,11 @@ async function resolveLeaderboardNameForSave(requestedName) {
   }
 
   const claimedHandle = await tryClaimLeaderboardHandle(normalisedRequestedName, { requireClaim: true });
-  return claimedHandle || sanitiseLocalLeaderboardName(normalisedRequestedName);
+  return claimedHandle || sanitiseLeaderboardPlayerName(sanitiseLocalLeaderboardName(normalisedRequestedName));
 }
 
 document.getElementById('btn-settings-save').addEventListener('click', async () => {
-  let resolvedLeaderboardName = leaderboardPlayerName || DEFAULT_LEADERBOARD_NAME;
+  let resolvedLeaderboardName = sanitiseLeaderboardPlayerName(leaderboardPlayerName);
   try {
     resolvedLeaderboardName = await resolveLeaderboardNameForSave(
       document.getElementById('page-input-weekly-name').value,
@@ -5699,6 +5864,12 @@ document.getElementById('btn-settings-save').addEventListener('click', async () 
     rackSize: parseInt(document.getElementById('page-sel-rack').value, 10),
     leaderboardPlayerName: resolvedLeaderboardName,
   });
+  try {
+    await publishWeeklyLeaderboardEntry();
+    await refreshWeeklyLeaderboard(getCurrentUTCWeekId(), { force: true });
+  } catch (_) {
+    // Keep settings save responsive even if leaderboard sync fails.
+  }
   navigateTo('dashboard');
 });
 
@@ -5711,7 +5882,6 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   localStorage.removeItem('bst-settings');
   localStorage.removeItem(PROGRESSION_STORAGE_KEY);
   localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
-  localStorage.removeItem(WEEKLY_LEADERBOARD_STORAGE_KEY);
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
     if (key && key.startsWith('bst-supabase-auth:')) {
@@ -5806,7 +5976,10 @@ function init() {
   applyEquippedCosmeticSkin();
   loadSettings();
   loadRuntimeConfig();
-  if (!weeklyLeaderboardAdapter) configureWeeklyLeaderboardAdapter();
+  if (!weeklyLeaderboardHostedAdapter) configureWeeklyLeaderboardAdapter();
+  ensureLeaderboardHandleClaimedOnJoin().catch(() => {
+    // Keep startup fast and resilient if hosted claims are unavailable.
+  });
   ensureSelectedColorway({ preserveLegacy: true });
   applyDarkMode(darkMode);
   applyColor(colorSetting);
@@ -5847,5 +6020,17 @@ function init() {
   renderDashboard();
   navigateTo('dashboard');
 }
+
+window.addEventListener('online', () => {
+  if (currentPage !== 'weekly') return;
+  renderWeeklyGlobalLeaderboard();
+  refreshWeeklyLeaderboard(getCurrentUTCWeekId(), { force: true });
+  startWeeklyLeaderboardPolling();
+});
+
+window.addEventListener('offline', () => {
+  stopWeeklyLeaderboardPolling();
+  renderWeeklyGlobalLeaderboard();
+});
 
 init();
