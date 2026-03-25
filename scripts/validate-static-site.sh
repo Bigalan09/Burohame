@@ -91,6 +91,10 @@ check_not_contains app.js 'Hosted multiplayer is configured' \
   "app.js must not show hosted backend jargon in the player UI."
 check_not_contains app.js 'local practice table' \
   "app.js must not show the old local practice wording in the player UI."
+check_not_contains app.js "if (hasClaimedLeaderboardHandle(leaderboardPlayerName) && currentBaseName === normalisedRequestedName) {" \
+  "app.js must not trust a claimed-looking stored handle without re-claiming it for the current hosted session."
+check_contains app.js "No claimed leaderboard handle" \
+  "app.js must surface and recover from hosted leaderboard handle/session mismatches."
 check_contains app.js "function getCurrentUTCWeekId" \
   "app.js must expose getCurrentUTCWeekId for weekly leaderboard rendering."
 check_contains app.js "addListener(" \
