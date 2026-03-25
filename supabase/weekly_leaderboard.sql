@@ -171,6 +171,25 @@ alter table public.weekly_leaderboard_entries
 alter table public.weekly_leaderboard_entries
   drop constraint if exists weekly_leaderboard_entries_runs_len;
 
+do $$
+begin
+  if exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.weekly_leaderboard_entries'::regclass
+      and conname = 'weekly_leaderboard_entries_pkey'
+  ) and not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.weekly_leaderboard_entries'::regclass
+      and conname = 'weekly_leaderboard_entries_pk'
+  ) then
+    alter table public.weekly_leaderboard_entries
+      rename constraint weekly_leaderboard_entries_pkey to weekly_leaderboard_entries_pk;
+  end if;
+end;
+$$;
+
 create index if not exists weekly_leaderboard_entries_week_score_idx
   on public.weekly_leaderboard_entries (week_id, total_score desc, created_at asc, player_id asc);
 
@@ -183,15 +202,7 @@ create or replace function public.upsert_weekly_best_leaderboard_entry(
   p_league_id text,
   p_submitted_score integer
 )
-returns table(
-  week_id text,
-  player_id text,
-  player_name text,
-  league_id text,
-  total_score integer,
-  updated_at timestamptz,
-  created_at timestamptz
-)
+returns setof public.weekly_leaderboard_entries
 language plpgsql
 security definer
 set search_path = public
@@ -223,14 +234,7 @@ begin
       end;
 
   return query
-  select
-    entries.week_id,
-    entries.player_id,
-    entries.player_name,
-    entries.league_id,
-    entries.total_score,
-    entries.updated_at,
-    entries.created_at
+  select entries.*
   from public.weekly_leaderboard_entries as entries
   where entries.week_id = p_week_id
     and entries.player_id = p_player_id;
