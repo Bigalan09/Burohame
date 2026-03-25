@@ -1302,6 +1302,12 @@ function renderWeeklyGlobalLeaderboard() {
 
   const shouldHide = weeklyLeaderboardViewState.hidden || !canShowHostedWeeklyLeaderboard() || !!weeklyLeaderboardViewState.error;
   cardEl.hidden = shouldHide;
+  const currentPlayerEntry = weeklyLeaderboardViewState.entries.find((entry) => entry.playerId === leaderboardPlayerId) || null;
+  setTextIfPresent('weekly-page-score', String(currentPlayerEntry?.totalScore || 0));
+  setTextIfPresent(
+    'weekly-page-rank',
+    weeklyLeaderboardViewState.currentPlayerRank > 0 ? formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank) : 'Unranked',
+  );
   if (shouldHide) {
     listEl.innerHTML = '';
     statusEl.textContent = '';
@@ -4384,110 +4390,24 @@ function renderSessionModeBadge() {
 
 
 function renderWeeklyLadder() {
-  const status = getWeeklyLadderStatus();
-  const { league, weekly, totalScore, rankLabel, rankBand, zoneLabel, countdown: timeRemaining, countedRuns, rewardPreview, promotionGap, safetyGap, projectedOutcome } = status;
-  const pageIds = {
-    title: 'weekly-page-title',
-    countdown: 'weekly-page-countdown',
-    copy: 'weekly-page-copy',
-    league: 'weekly-page-league',
-    score: 'weekly-page-score',
-    rank: 'weekly-page-rank',
-    band: 'weekly-page-band',
-    zone: 'weekly-page-zone',
-    runs: 'weekly-page-runs',
-    nextStep: 'weekly-page-next-step',
-    reward: 'weekly-page-reward',
-    bestRuns: 'weekly-page-best-runs',
-    resultBanner: 'weekly-page-result-banner',
-    resultTitle: 'weekly-page-result-title',
-    resultCopy: 'weekly-page-result-copy',
-  };
+  const weekId = getCurrentUTCWeekId();
+  const weekly = ensureWeeklyLadderForCurrentWeek();
+  const localBestScore = sanitiseWeeklyBestRuns(weekly.bestRuns)[0] || 0;
+  const liveRank = weeklyLeaderboardViewState.currentPlayerRank > 0
+    ? formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)
+    : 'Unranked';
 
-  let copyText = '';
-  let nextStepText = '';
-  if (!countedRuns.length) {
-    copyText = 'Set a strong weekly best to enter the live table for this UTC week.';
-    nextStepText = 'Log a first run to join the weekly table.';
-  } else if (status.zone === 'promotion' && weekly.leagueId !== 'diamond') {
-    copyText = 'You are pacing for promotion if the week ended now.';
-    nextStepText = 'Stay in the top four to climb next Monday.';
-  } else if (status.zone === 'relegation' && weekly.leagueId !== 'bronze') {
-    copyText = `The table is still recoverable. ${safetyGap} more points would lift you back towards safety.`;
-    nextStepText = 'A cleaner run or two should be enough to settle the week.';
-  } else if (promotionGap > 0 && weekly.leagueId !== 'diamond') {
-    copyText = `${promotionGap} more points would move you into the promotion places.`;
-    nextStepText = 'Your weekly best score sets your live leaderboard rank.';
-  } else {
-    copyText = 'The ladder favours calm consistency. Keep nudging your best score upwards.';
-    nextStepText = 'One good run can still redraw the standings before the reset.';
-  }
-
-  const rewardLine = projectedOutcome === 'promoted'
-    ? `Weekly reward preview · ${rewardPreview.coins} coins plus a bonus unlock if available`
-    : `Weekly reward preview · ${rewardPreview.coins} coins`;
-
-  setTextIfPresent(pageIds.title, `${league.badge} ${league.name} week`);
-  setTextIfPresent(pageIds.countdown, timeRemaining);
-  setTextIfPresent(pageIds.copy, copyText);
-  setTextIfPresent(pageIds.league, `${league.badge} ${league.name}`);
-  setTextIfPresent(pageIds.score, String(totalScore));
-  setTextIfPresent(pageIds.rank, rankLabel);
-  setTextIfPresent(pageIds.band, rankBand);
-  setTextIfPresent(pageIds.zone, zoneLabel);
-  setTextIfPresent(pageIds.runs, `${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} counted`);
-  setTextIfPresent(pageIds.nextStep, nextStepText);
-  setTextIfPresent(pageIds.reward, rewardLine);
-
-  const compactWeeklyTitle = 'This week';
-  const compactWeeklyCopy = countedRuns.length
-    ? 'One more strong run could lift your place.'
-    : 'Set your first weekly score.';
-  const compactWeeklyProgress = countedRuns.length
-    ? `${rankLabel} · ${countedRuns.length}/${WEEKLY_LADDER_COUNTED_RUNS} runs counted`
-    : 'Complete your first run';
-
-  setTextIfPresent('dashboard-weekly-card-title', compactWeeklyTitle);
-  setTextIfPresent('dashboard-weekly-card-copy', compactWeeklyCopy);
-  setTextIfPresent('dashboard-weekly-card-progress', compactWeeklyProgress);
-
-  const bestRunsEl = document.getElementById(pageIds.bestRuns);
-  if (bestRunsEl) {
-    bestRunsEl.innerHTML = '';
-    const runsToShow = [...countedRuns];
-    while (runsToShow.length < WEEKLY_LADDER_COUNTED_RUNS) runsToShow.push(null);
-    runsToShow.forEach((value, index) => {
-      const chip = document.createElement('span');
-      chip.className = `dashboard-weekly__best-run${value ? '' : ' dashboard-weekly__best-run--empty'}`;
-      chip.textContent = value ? `Run ${index + 1} · ${value}` : `Run ${index + 1} open`;
-      bestRunsEl.appendChild(chip);
-    });
-  }
+  setTextIfPresent('weekly-page-title', 'Current UTC week');
+  setTextIfPresent('weekly-page-countdown', getUTCWeekCountdown());
+  setTextIfPresent('weekly-page-copy', 'Live standings update this week as players post better single-run scores.');
+  setTextIfPresent('weekly-page-score', String(localBestScore));
+  setTextIfPresent('weekly-page-rank', liveRank);
+  setTextIfPresent('dashboard-weekly-card-title', 'This week');
+  setTextIfPresent('dashboard-weekly-card-copy', 'Live global leaderboard');
+  setTextIfPresent('dashboard-weekly-card-progress', localBestScore > 0 ? `${liveRank} · best ${localBestScore}` : 'Set your first weekly score');
 
   renderWeeklyGlobalLeaderboard();
-  refreshWeeklyLeaderboard(weekly.currentWeekId);
-
-  const resultBanner = document.getElementById(pageIds.resultBanner);
-  const resultTitle = document.getElementById(pageIds.resultTitle);
-  const resultCopy = document.getElementById(pageIds.resultCopy);
-  if (resultBanner && resultTitle && resultCopy) {
-    if (weekly.pendingResult?.weekId) {
-      resultBanner.hidden = false;
-      const pendingLeague = getLeagueById(weekly.pendingResult.leagueId);
-      resultTitle.textContent = weekly.pendingResult.outcome === 'promoted'
-        ? `${pendingLeague.badge} Promoted last week`
-        : weekly.pendingResult.outcome === 'relegated'
-          ? `${pendingLeague.badge} Relegated last week`
-          : `${pendingLeague.badge} Held last week`;
-      let summary = describeWeeklyResult(weekly.pendingResult);
-      if (weekly.pendingResult.unlockName) {
-        summary += ` ${weekly.pendingResult.unlockName} joined your collection.`;
-      }
-      resultCopy.textContent = summary;
-    } else {
-      resultBanner.hidden = true;
-    }
-  }
+  refreshWeeklyLeaderboard(weekId);
 }
 
 function renderCollectionAlbumTeaser() {

@@ -18,7 +18,7 @@ Burohame is a mobile-first 9×9 block puzzle game built as a plain static web ap
 - Coins as the soft currency, with tuned rewards and scaled shop prices.
 - Daily challenge runs with streak tracking and daily coin rewards.
 - Daily missions that auto-pay rewards when completed.
-- Weekly ladder leagues with a hosted live leaderboard that ranks each player by their best single run in the current UTC week.
+- Hosted weekly competition that ranks each player by their best single run in the current UTC week.
 - Quest chains with sequential steps and final rewards.
 - Post-run rewards summary and contextual one-more-run prompts.
 - Mastery progression and permanent unlocks.
