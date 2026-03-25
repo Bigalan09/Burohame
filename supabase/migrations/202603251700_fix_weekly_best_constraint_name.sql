@@ -1,25 +1,6 @@
--- Move weekly leaderboard scoring to one best score per player per UTC week.
--- Tie-breaks use created_at ascending so the first player to set a score
--- keeps the advantage when scores are equal.
-
-alter table public.weekly_leaderboard_entries
-  drop column if exists counted_runs;
-
-alter table public.weekly_leaderboard_entries
-  drop constraint if exists weekly_leaderboard_entries_runs_len;
-
-alter table public.weekly_leaderboard_entries
-  add column if not exists created_at timestamptz;
-
-update public.weekly_leaderboard_entries
-set created_at = coalesce(created_at, updated_at, now())
-where created_at is null;
-
-alter table public.weekly_leaderboard_entries
-  alter column created_at set default now();
-
-alter table public.weekly_leaderboard_entries
-  alter column created_at set not null;
+-- Normalise the weekly leaderboard primary-key constraint name on older
+-- hosted databases, then recreate the weekly best-score upsert function to
+-- target that stable constraint name.
 
 do $$
 begin
@@ -39,13 +20,6 @@ begin
   end if;
 end;
 $$;
-
-drop index if exists public.weekly_leaderboard_entries_week_score_idx;
-
-create index if not exists weekly_leaderboard_entries_week_score_idx
-  on public.weekly_leaderboard_entries (week_id, total_score desc, created_at asc, player_id asc);
-
-drop function if exists public.upsert_weekly_best_leaderboard_entry(text, text, text, text, integer);
 
 create or replace function public.upsert_weekly_best_leaderboard_entry(
   p_week_id text,
