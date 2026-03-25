@@ -1134,7 +1134,12 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
           total_score: entry.totalScore,
         }),
       });
-      if (!response.ok) throw new Error(`Supabase write failed (${response.status})`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload?.error === 'string' && payload.error
+          ? payload.error
+          : `Supabase write failed (${response.status})`);
+      }
     },
   };
 }
@@ -1182,6 +1187,10 @@ function getRequestedLeaderboardBaseName(value = leaderboardPlayerName) {
     return extractLeaderboardNameBase(value);
   }
   return normaliseRequestedLeaderboardName(value);
+}
+
+function isMissingClaimedLeaderboardHandleMessage(message) {
+  return typeof message === 'string' && message.startsWith('No claimed leaderboard handle');
 }
 
 async function tryClaimLeaderboardHandle(requestedName, options = {}) {
@@ -1232,8 +1241,23 @@ async function publishWeeklyLeaderboardEntry() {
 
   try {
     await weeklyLeaderboardHostedAdapter.upsertPlayerWeekEntry(payload);
-  } catch (_) {
-    // Keep the game running even if hosted leaderboard writes fail.
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (!isMissingClaimedLeaderboardHandleMessage(message)) {
+      return;
+    }
+
+    const claimedHandle = await tryClaimLeaderboardHandle(getRequestedLeaderboardBaseName(), { requireClaim: false });
+    if (!claimedHandle) {
+      return;
+    }
+    persistClaimedLeaderboardHandle(claimedHandle);
+
+    try {
+      await weeklyLeaderboardHostedAdapter.upsertPlayerWeekEntry(payload);
+    } catch (_) {
+      // Keep the game running even if hosted leaderboard writes fail.
+    }
   }
 }
 
@@ -4564,7 +4588,7 @@ function updateLeaderboardNameAvailabilityIndicator() {
     const currentBaseName = extractLeaderboardNameBase(leaderboardPlayerName);
     const requestedName = normaliseRequestedLeaderboardName(inputEl?.value);
     if (!requestedName || requestedName === currentBaseName) {
-      backendStatus.textContent = `Current handle: ${leaderboardPlayerName} · available`;
+      backendStatus.textContent = `Saved handle: ${leaderboardPlayerName}`;
       return;
     }
   }
@@ -5835,13 +5859,6 @@ async function resolveLeaderboardNameForSave(requestedName) {
 
   if (!normalisedRequestedName) {
     return sanitiseLeaderboardPlayerName(leaderboardPlayerName);
-  }
-
-  const currentBaseName = hasClaimedLeaderboardHandle(leaderboardPlayerName)
-    ? extractLeaderboardNameBase(leaderboardPlayerName)
-    : normaliseRequestedLeaderboardName(leaderboardPlayerName);
-  if (hasClaimedLeaderboardHandle(leaderboardPlayerName) && currentBaseName === normalisedRequestedName) {
-    return leaderboardPlayerName;
   }
 
   const claimedHandle = await tryClaimLeaderboardHandle(normalisedRequestedName, { requireClaim: true });
