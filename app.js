@@ -3980,25 +3980,65 @@ function randomPiece() {
   return PIECE_DEFS[Math.floor(randomValue() * PIECE_DEFS.length)];
 }
 
+function getPieceDifficultyProfile() {
+  const roundsCompleted = runSummary?.stats?.racksCompleted || 0;
+  const randomMixChance = roundsCompleted >= 20 ? 0.10 : 0;
+
+  // Focus the first 150 score on forgiving shapes only.
+  if (score <= 150) {
+    return {
+      maxCells: 3,
+      minSmallPieces: 2,
+      fillCap: 0.12,
+      randomMixChance,
+    };
+  }
+
+  // Ramp difficulty roughly every 100–150 points (125-point bands).
+  const rampStage = Math.min(6, Math.floor((score - 151) / 125) + 1);
+  const stagedProfiles = [
+    { maxCells: 4, minSmallPieces: 1, fillCap: 0.45 },
+    { maxCells: 5, minSmallPieces: 1, fillCap: 0.75 },
+    { maxCells: 5, minSmallPieces: 0, fillCap: 1.00 },
+    { maxCells: 5, minSmallPieces: 0, fillCap: 1.20 },
+    { maxCells: 5, minSmallPieces: 0, fillCap: 1.35 },
+    { maxCells: 5, minSmallPieces: 0, fillCap: 1.50 },
+  ];
+
+  return {
+    ...stagedProfiles[rampStage - 1],
+    randomMixChance,
+  };
+}
+
 // ── Difficulty-weighted piece selection ────────────────────
 // As score grows, larger/harder pieces become progressively more likely.
-function weightedRandomPiece() {
+function weightedRandomPiece(options = {}) {
+  const {
+    targetScore = score,
+    pool = PIECE_DEFS,
+    fillCapOverride,
+  } = options;
+
+  if (!Array.isArray(pool) || pool.length === 0) return randomPiece();
+
   // fill: 0 at score 0, 1 at score 200, reaches 1.5 at score 300
-  const fill = Math.min(1.5, score / 200);
-  // Each piece gets a weight = 1 + fill × (cellCount - 1) × 0.5
-  // At fill=0 all weights are equal; at fill=1.5 a 5-cell piece is 4× as likely as a 1-cell piece.
+  const rawFill = Math.min(1.5, targetScore / 200);
+  const fill = typeof fillCapOverride === 'number' ? Math.min(rawFill, fillCapOverride) : rawFill;
+
   let totalWeight = 0;
-  const weights = PIECE_DEFS.map(p => {
-    const w = 1 + fill * (p.length - 1) * 0.5;
-    totalWeight += w;
-    return w;
+  const weights = pool.map(piece => {
+    const weight = 1 + fill * (piece.length - 1) * 0.5;
+    totalWeight += weight;
+    return weight;
   });
+
   let rand = randomValue() * totalWeight;
-  for (let i = 0; i < PIECE_DEFS.length; i++) {
+  for (let i = 0; i < pool.length; i++) {
     rand -= weights[i];
-    if (rand <= 0) return PIECE_DEFS[i];
+    if (rand <= 0) return pool[i];
   }
-  return PIECE_DEFS[PIECE_DEFS.length - 1];
+  return pool[pool.length - 1];
 }
 
 // ── Smart piece selection ──────────────────────────────────
@@ -4028,12 +4068,20 @@ function canCauseClearOnBoard(cells, b) {
   return false;
 }
 
-// Piece well-suited to an early game (sparse board, score < 200).
-// Prefers 3–4 cell pieces for meaningful scoring on an open board.
-function earlyPiece() {
-  const pool = PIECE_DEFS.filter(p => p.length >= 3 && p.length <= 4);
-  if (pool.length === 0) return weightedRandomPiece();
-  return pool[Math.floor(randomValue() * pool.length)];
+function pickPieceForProfile(profile, options = {}) {
+  const { forceSmall = false } = options;
+  const randomInMix = profile.randomMixChance > 0 && randomValue() < profile.randomMixChance;
+  if (randomInMix) return randomPiece();
+
+  const constrainedPool = PIECE_DEFS.filter(piece => piece.length <= profile.maxCells);
+  const smallPool = constrainedPool.filter(piece => piece.length <= 3);
+
+  if (forceSmall && smallPool.length) {
+    return weightedRandomPiece({ pool: smallPool, fillCapOverride: profile.fillCap });
+  }
+
+  if (!constrainedPool.length) return weightedRandomPiece();
+  return weightedRandomPiece({ pool: constrainedPool, fillCapOverride: profile.fillCap });
 }
 
 // Verify the next `rounds` future rounds will still have clearing opportunities.
@@ -4100,12 +4148,18 @@ function ensureLookahead(p, rounds) {
 function smartPieces() {
   const filled = board.reduce((s, r) => s + r.reduce((t, c) => t + c, 0), 0);
   const density = filled / (N * N);
-  const earlyGame = density < 0.10 && score < 200;
+  const profile = getPieceDifficultyProfile();
 
-  // Generate candidate rack based on difficulty
-  const p = Array.from({ length: rackSize }, () =>
-    earlyGame ? earlyPiece() : weightedRandomPiece()
-  );
+  const p = [];
+  let requiredSmallPieces = Math.min(rackSize, profile.minSmallPieces);
+  for (let i = 0; i < rackSize; i++) {
+    const slotsRemaining = rackSize - i;
+    const mustForceSmall = requiredSmallPieces >= slotsRemaining;
+    const shouldPreferSmall = requiredSmallPieces > 0 && !mustForceSmall && randomValue() < 0.72;
+    const nextPiece = pickPieceForProfile(profile, { forceSmall: mustForceSmall || shouldPreferSmall });
+    p.push(nextPiece);
+    if (nextPiece.length <= 3 && requiredSmallPieces > 0) requiredSmallPieces--;
+  }
 
   if (density >= 0.25 || score >= 120) {
     ensureSmallRecoveryPieceInRack(p, board);
