@@ -225,11 +225,11 @@ const GAME_BANNER_DISPLAY_MS = 2000;
 const GAME_BANNER_TRANSITION_MS = 320;
 const SHOP_PRICE_MULTIPLIER = 2.224;
 const COIN_REWARD_MULTIPLIERS = Object.freeze({
-  run: 0.45,
-  challenge: 0.6,
-  mission: 0.45,
-  quest: 0.5,
-  weekly: 0.45,
+  run: 0.52,
+  challenge: 0.69,
+  mission: 0.52,
+  quest: 0.58,
+  weekly: 0.52,
 });
 const DAILY_MISSION_VERSION = 3;
 const DAILY_CHALLENGE_TARGET_MIN = 140;
@@ -2869,7 +2869,7 @@ function buildDailyChallengePrompt(summary) {
     buttonLabel: 'Try daily again',
     eyebrow: 'Near today’s target',
     title: `${remaining} points from the daily clear`,
-    copy: `Another daily board could finish today’s ${challenge.targetScore}-point target and keep the streak moving.`,
+    copy: `Start another daily run and focus on safe clears early. Reach ${challenge.targetScore} to keep your streak alive today.`,
     meta: `Reward · ${getDailyChallengeRewardAmount(Math.max(1, getDisplayedStreakCount() || 1))} coins`,
   };
 }
@@ -2888,7 +2888,7 @@ function buildMissionFinishPrompt() {
     buttonLabel: 'One more run',
     eyebrow: 'One mission left',
     title: `${mission.title} is within reach`,
-    copy: `${mission.description} Only ${getMissionRemainingCopy(mission, remaining)}.`,
+    copy: `${mission.description} You only need ${getMissionRemainingCopy(mission, remaining)} to finish it and collect the reward.`,
     meta: `Reward · ${mission.reward} coins`,
   };
 }
@@ -2907,7 +2907,7 @@ function buildRoundMilestonePrompt(summary) {
     buttonLabel: 'Try again',
     eyebrow: 'Good pace',
     title: `${formatPromptGap(gap, 'rack')} from the ${nextMilestone}-rack bonus`,
-    copy: `That run reached ${roundsCompleted} racks. A steadier replay to ${nextMilestone} racks would bank +${reward} coins.`,
+    copy: `You reached ${roundsCompleted} racks. Play one steadier run, aim for ${nextMilestone}, and bank +${reward} coins.`,
     meta: 'Milestone reward',
   };
 }
@@ -2924,7 +2924,7 @@ function buildPersonalBestPrompt(summary) {
     buttonLabel: 'Try again',
     eyebrow: 'Close to a new best',
     title: `${gap} points from your record`,
-    copy: `Your best is ${bestScore}. Another quick run could turn this into a new personal best without changing your setup.`,
+    copy: `Your best is ${bestScore}. Run it back with the same approach and push just ${gap} more points for a new personal best.`,
     meta: 'Personal best chase',
   };
 }
