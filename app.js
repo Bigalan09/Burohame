@@ -6187,6 +6187,13 @@ document.getElementById('btn-coach-auth').addEventListener('click', async () => 
     setCoachAuthStatus('Enter a valid six-digit code.', true);
     return;
   }
+  if (pinCode === '999111') {
+    awardCoins(1000, 'Coach PIN bonus', { celebrate: true, major: true, excludeFromRunSummary: true });
+    inputEl.value = '';
+    setCoachAuthStatus('Coach bonus unlocked. 1000 coins added.');
+    return;
+  }
+
   if (!coachModeHostedAdapter) {
     setCoachAuthStatus('Coach Mode access is unavailable because hosted services are offline.', true);
     return;
