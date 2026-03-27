@@ -1396,6 +1396,16 @@ a.icon-btn { text-decoration: none; }
   outline-offset: -1px;
 }
 
+.cell.filled.cell-locked::after {
+  content: '';
+  position: absolute;
+  inset: 18%;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: calc(var(--block-radius) * 0.7);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.16);
+  pointer-events: none;
+}
+
 .cell.preview-ok  { background: var(--preview-ok) !important; border-radius: 0; }
 .cell.preview-bad { background: var(--preview-bad) !important; border-radius: 0; }
 .cell.preview-clr { background: var(--preview-clr) !important; border-radius: 0; }
