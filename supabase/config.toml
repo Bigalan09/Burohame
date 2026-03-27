@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.upsert-leaderboard-entry]
 verify_jwt = false
+
+[functions.coach-mode-auth]
+verify_jwt = false

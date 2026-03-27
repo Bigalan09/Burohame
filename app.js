@@ -196,6 +196,11 @@ let leaderboardPlayerName = '';
 let leaderboardPlayerId = '';
 let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
 let weeklyLeaderboardHostedAdapter = null;
+let coachModeHostedAdapter = null;
+let coachModeAccessState = {
+  authorised: false,
+  expiresAt: 0,
+};
 let weeklyLeaderboardPollTimer = 0;
 let weeklyLeaderboardViewState = {
   weekId: '',
@@ -236,6 +241,8 @@ const WEEKLY_PROMOTION_SLOTS = 4;
 const WEEKLY_RELEGATION_SLOTS = 4;
 const WEEKLY_LEADERBOARD_PULL_INTERVAL_MS = 60 * 1000;
 const WEEKLY_LEADERBOARD_MAX_ROWS = 20;
+const COACH_AUTH_SESSION_STORAGE_KEY = 'bst-coach-auth-session';
+const COACH_MODE_AUTH_SESSION_MS = 8 * 60 * 60 * 1000;
 const QUEST_BOARD_CHAIN_LIMIT = 3;
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
@@ -265,6 +272,7 @@ const LEADERBOARD_HANDLE_VALIDATION_PREFIXES = Object.freeze([
   'That leaderboard name is not allowed',
   'That leaderboard name is full',
 ]);
+const SIX_DIGIT_PIN_PATTERN = /^\d{6}$/;
 
 const leaderboardHandleHelpers = globalThis.LeaderboardHandles || {};
 const extractLeaderboardNameBase =
@@ -990,6 +998,141 @@ function createSupabaseHeaders(apiKey) {
   return headers;
 }
 
+function loadCoachModeAccessStateFromSession() {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(COACH_AUTH_SESSION_STORAGE_KEY) || 'null');
+    if (!raw || typeof raw !== 'object') return;
+    const expiresAt = Number(raw.expiresAt || 0);
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return;
+    coachModeAccessState = {
+      authorised: !!raw.authorised,
+      expiresAt,
+    };
+  } catch (_) {
+    // Ignore malformed state.
+  }
+}
+
+function persistCoachModeAccessState() {
+  sessionStorage.setItem(COACH_AUTH_SESSION_STORAGE_KEY, JSON.stringify(coachModeAccessState));
+}
+
+function clearCoachModeAccessState() {
+  coachModeAccessState = { authorised: false, expiresAt: 0 };
+  sessionStorage.removeItem(COACH_AUTH_SESSION_STORAGE_KEY);
+}
+
+function createSupabaseCoachModeAdapter(url, apiKey) {
+  const baseUrl = url.replace(/\/$/, '');
+  const headers = createSupabaseHeaders(apiKey);
+  const authStorageKey = `bst-supabase-auth:${baseUrl}`;
+  let cachedSession = null;
+
+  function parseAuthPayload(payload) {
+    const accessToken = payload?.access_token || payload?.session?.access_token || '';
+    const refreshToken = payload?.refresh_token || payload?.session?.refresh_token || '';
+    const expiresIn = Number(payload?.expires_in || payload?.session?.expires_in || 0);
+    const userId = payload?.user?.id || payload?.session?.user?.id || '';
+    if (!accessToken || !refreshToken || !userId || !Number.isFinite(expiresIn) || expiresIn <= 0) return null;
+    return {
+      accessToken,
+      refreshToken,
+      userId,
+      expiresAt: Date.now() + (expiresIn * 1000),
+    };
+  }
+
+  function saveSession(session) {
+    cachedSession = session;
+    localStorage.setItem(authStorageKey, JSON.stringify(session));
+  }
+
+  function loadSession() {
+    if (cachedSession) return cachedSession;
+    try {
+      const raw = JSON.parse(localStorage.getItem(authStorageKey) || 'null');
+      if (raw && typeof raw === 'object') {
+        cachedSession = raw;
+        return raw;
+      }
+    } catch (_) {
+      // Ignore and refresh the session.
+    }
+    return null;
+  }
+
+  async function requestSession(urlPath, body) {
+    const response = await fetch(`${baseUrl}${urlPath}`, {
+      method: 'POST',
+      headers: {
+        apikey: apiKey,
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase auth failed (${response.status})`);
+    }
+
+    const payload = await response.json();
+    const session = parseAuthPayload(payload);
+    if (!session) {
+      throw new Error('Supabase auth response did not include a valid session');
+    }
+    saveSession(session);
+    return session;
+  }
+
+  async function ensureAuthSession() {
+    const current = loadSession();
+    if (current && typeof current.expiresAt === 'number' && current.expiresAt > Date.now() + 30_000) {
+      return current;
+    }
+    if (current?.refreshToken) {
+      try {
+        return await requestSession('/auth/v1/token?grant_type=refresh_token', { refresh_token: current.refreshToken });
+      } catch (_) {
+        // Fall through to a fresh anonymous session.
+      }
+    }
+    return requestSession('/auth/v1/signup', { data: {} });
+  }
+
+  async function callCoachModeFunction(payload = {}) {
+    const session = await ensureAuthSession();
+    const response = await fetch(`${baseUrl}/functions/v1/coach-mode-auth`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        Authorization: `Bearer ${session.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(typeof body?.error === 'string' && body.error
+        ? body.error
+        : `Coach Mode authorisation failed (${response.status})`);
+    }
+    return {
+      authorised: !!body?.authorised,
+      expiresAt: typeof body?.expires_at === 'string' ? Date.parse(body.expires_at) : 0,
+    };
+  }
+
+  return {
+    async checkSession() {
+      return callCoachModeFunction();
+    },
+    async verifyPin(pinCode) {
+      return callCoachModeFunction({ pin_code: pinCode });
+    },
+  };
+}
+
 function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
   const baseUrl = url.replace(/\/$/, '');
   const headers = createSupabaseHeaders(apiKey);
@@ -1168,6 +1311,12 @@ function configureWeeklyLeaderboardAdapter() {
 
   weeklyLeaderboardHostedAdapter = hasHostedWeeklyLeaderboardConfig()
     ? createSupabaseWeeklyLeaderboardAdapter(
+        weeklyLeaderboardRuntimeConfig.supabaseUrl,
+        weeklyLeaderboardRuntimeConfig.supabasePublishableKey,
+      )
+    : null;
+  coachModeHostedAdapter = hasHostedWeeklyLeaderboardConfig()
+    ? createSupabaseCoachModeAdapter(
         weeklyLeaderboardRuntimeConfig.supabaseUrl,
         weeklyLeaderboardRuntimeConfig.supabasePublishableKey,
       )
@@ -4428,6 +4577,8 @@ function restoreSavedGame() {
   renderRack();
   updateRackPlayability();
   updateTrainingPanel();
+  if (trainingMode) showHint();
+  else clearHint();
   updateScoreUI();
   renderDashboard();
   return true;
@@ -4590,8 +4741,72 @@ function getCompletedRunCount() {
   return progressionState?.onboarding?.completedRuns || 0;
 }
 
+function setCoachToggleVisibility(authorised) {
+  const toggleRow = document.getElementById('page-coach-toggle-row');
+  const coachToggle = document.getElementById('page-chk-coach');
+  if (!toggleRow || !coachToggle) return;
+  toggleRow.hidden = !authorised;
+  coachToggle.disabled = !authorised;
+  if (!authorised) coachToggle.checked = false;
+}
+
+function setCoachAuthStatus(message, isError = false) {
+  const statusEl = document.getElementById('page-coach-auth-status');
+  if (!statusEl) return;
+  statusEl.textContent = message;
+  statusEl.style.color = isError ? '#b00020' : '';
+}
+
+function getCoachModeAccessSummary() {
+  if (!coachModeAccessState.authorised) return 'Coach Mode is locked for this session.';
+  const expiry = new Date(coachModeAccessState.expiresAt);
+  if (Number.isNaN(expiry.getTime())) return 'Coach Mode is unlocked for this session.';
+  return `Coach Mode unlocked until ${expiry.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+}
+
+function applyCoachModeGate(authorised) {
+  setCoachToggleVisibility(authorised);
+  if (!authorised && trainingMode) {
+    trainingMode = false;
+    document.getElementById('coach-panel').hidden = true;
+    clearHint();
+    document.getElementById('move-eval').textContent = '';
+    document.getElementById('strategy-note').textContent = '';
+    saveSettings();
+  }
+}
+
+async function checkCoachModeSession() {
+  if (!coachModeHostedAdapter) {
+    clearCoachModeAccessState();
+    applyCoachModeGate(false);
+    setCoachAuthStatus('Coach Mode access is unavailable because hosted services are offline.');
+    return false;
+  }
+
+  try {
+    const result = await coachModeHostedAdapter.checkSession();
+    coachModeAccessState = {
+      authorised: !!result.authorised,
+      expiresAt: Number.isFinite(result.expiresAt) ? result.expiresAt : 0,
+    };
+    if (!coachModeAccessState.authorised) {
+      clearCoachModeAccessState();
+    } else {
+      persistCoachModeAccessState();
+    }
+    applyCoachModeGate(coachModeAccessState.authorised);
+    setCoachAuthStatus(getCoachModeAccessSummary());
+    return coachModeAccessState.authorised;
+  } catch (error) {
+    clearCoachModeAccessState();
+    applyCoachModeGate(false);
+    setCoachAuthStatus(error instanceof Error ? error.message : 'Could not verify Coach Mode access right now.', true);
+    return false;
+  }
+}
+
 function populateQuickSettings() {
-  document.getElementById('quick-chk-coach').checked = trainingMode;
   document.getElementById('quick-chk-dark').checked = darkMode;
 }
 
@@ -4636,7 +4851,7 @@ async function ensureLeaderboardHandleClaimedOnJoin() {
 }
 
 function populateSettingsPage() {
-  document.getElementById('page-chk-coach').checked = trainingMode;
+  document.getElementById('page-chk-coach').checked = trainingMode && coachModeAccessState.authorised;
   document.getElementById('page-chk-extended').checked = extendedPieces;
   document.getElementById('page-chk-dark').checked = darkMode;
 
@@ -4652,6 +4867,10 @@ function populateSettingsPage() {
   colorSelect.value = isColorwayOwned(colorSetting) ? colorSetting : 'orange';
   document.getElementById('page-sel-rack').value = String(rackSize);
   document.getElementById('page-input-weekly-name').value = extractLeaderboardNameBase(leaderboardPlayerName);
+  document.getElementById('page-input-coach-code').value = '';
+  setCoachToggleVisibility(false);
+  setCoachAuthStatus('Checking Coach Mode access...');
+  checkCoachModeSession();
   updateLeaderboardNameAvailabilityIndicator();
   updateCosmeticLabel();
 }
@@ -4964,6 +5183,8 @@ function endDrag(cx, cy) {
 
   if (canPlace(cells, snapR, snapC)) {
     doPlace(slotIdx, snapR, snapC);
+  } else if (trainingMode) {
+    showHint();
   }
 }
 
@@ -4973,6 +5194,7 @@ function cancelDrag() {
   drag.ghost.remove();
   document.getElementById(`slot-${drag.slotIdx}`).classList.remove('dragging');
   drag = null;
+  if (trainingMode) showHint();
 }
 
 // ── Game actions ───────────────────────────────────────────
@@ -5027,6 +5249,7 @@ function doPlace(slotIdx, row, col) {
 function afterPlace() {
   updateRackPlayability();
   updateTrainingPanel();
+  if (trainingMode) showHint();
   if (used.every(Boolean)) {
     // All pieces placed → new round
     setTimeout(newRound, 80);
@@ -5312,6 +5535,7 @@ function newRound() {
   if (colorSetting === 'random') applyColor('random');
   renderRack();
   updateRackPlayability();
+  if (trainingMode) showHint();
   saveCurrentGame();
   if (isGameOver()) {
     setTimeout(triggerGameOver, 150);
@@ -5349,7 +5573,8 @@ function startNewGame(options = {}) {
   renderBoard();
   renderRack();
   updateRackPlayability();
-  clearHint();
+  if (trainingMode) showHint();
+  else clearHint();
   updateTrainingPanel();
   saveCurrentGame();
   renderDashboard();
@@ -5571,6 +5796,20 @@ function showHint() {
   hintActive = true;
 }
 
+function getBestNextMove() {
+  const sequence = findBestSequence();
+  if (!sequence || sequence.length === 0) return null;
+  return sequence[0];
+}
+
+function autoPlaceBestMove() {
+  if (!trainingMode || gameOver || drag) return;
+  const bestMove = getBestNextMove();
+  if (!bestMove) return;
+  if (!canPlace(bestMove.cells, bestMove.r, bestMove.c)) return;
+  doPlace(bestMove.slotIdx, bestMove.r, bestMove.c);
+}
+
 function clearHint() {
   document.querySelectorAll('.hint-cell, .hint-cell-2, .hint-cell-3')
     .forEach(el => el.classList.remove('hint-cell', 'hint-cell-2', 'hint-cell-3'));
@@ -5732,10 +5971,10 @@ async function shareBurohameApp() {
 
 // ── Settings / overlays ────────────────────────────────────
 function applySettingsState(nextSettings) {
-  const prevTraining = trainingMode;
   const prevRackSize = rackSize;
+  const nextTrainingMode = coachModeAccessState.authorised && !!nextSettings.trainingMode;
 
-  trainingMode = nextSettings.trainingMode;
+  trainingMode = nextTrainingMode;
   extendedPieces = nextSettings.extendedPieces;
   darkMode = nextSettings.darkMode;
   const requestedColor = sanitiseColorSetting(nextSettings.colorSetting);
@@ -5753,7 +5992,10 @@ function applySettingsState(nextSettings) {
   document.getElementById('coach-panel').hidden = !trainingMode;
   renderRack();
   updateRackPlayability();
-  if (trainingMode && !prevTraining) updateTrainingPanel();
+  if (trainingMode) {
+    updateTrainingPanel();
+    showHint();
+  }
   if (!trainingMode) {
     clearHint();
     document.getElementById('move-eval').textContent = '';
@@ -5781,7 +6023,7 @@ document.getElementById('btn-quick-settings-close').addEventListener('click', ()
 });
 document.getElementById('btn-quick-settings-save').addEventListener('click', () => {
   applySettingsState({
-    trainingMode: document.getElementById('quick-chk-coach').checked,
+    trainingMode,
     extendedPieces,
     darkMode: document.getElementById('quick-chk-dark').checked,
     colorSetting,
@@ -5879,6 +6121,51 @@ document.getElementById('colorway-list').addEventListener('click', handleShopAct
 document.getElementById('page-input-weekly-name').addEventListener('input', () => {
   updateLeaderboardNameAvailabilityIndicator();
 });
+document.getElementById('page-input-coach-code').addEventListener('input', (event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  input.value = input.value.replace(/\D/g, '').slice(0, 6);
+});
+
+document.getElementById('btn-coach-auth').addEventListener('click', async () => {
+  const inputEl = document.getElementById('page-input-coach-code');
+  const unlockButton = document.getElementById('btn-coach-auth');
+  if (!(inputEl instanceof HTMLInputElement) || !(unlockButton instanceof HTMLButtonElement)) return;
+  const pinCode = inputEl.value.trim();
+  if (!SIX_DIGIT_PIN_PATTERN.test(pinCode)) {
+    setCoachAuthStatus('Enter a valid six-digit code.', true);
+    return;
+  }
+  if (!coachModeHostedAdapter) {
+    setCoachAuthStatus('Coach Mode access is unavailable because hosted services are offline.', true);
+    return;
+  }
+
+  unlockButton.disabled = true;
+  setCoachAuthStatus('Checking code...');
+  try {
+    const result = await coachModeHostedAdapter.verifyPin(pinCode);
+    coachModeAccessState = {
+      authorised: !!result.authorised,
+      expiresAt: Number.isFinite(result.expiresAt) ? result.expiresAt : Date.now() + COACH_MODE_AUTH_SESSION_MS,
+    };
+    if (!coachModeAccessState.authorised) {
+      clearCoachModeAccessState();
+      applyCoachModeGate(false);
+      setCoachAuthStatus('That code is not valid.', true);
+      return;
+    }
+    persistCoachModeAccessState();
+    applyCoachModeGate(true);
+    document.getElementById('page-chk-coach').checked = trainingMode;
+    inputEl.value = '';
+    setCoachAuthStatus(getCoachModeAccessSummary());
+  } catch (error) {
+    setCoachAuthStatus(error instanceof Error ? error.message : 'Could not verify code right now.', true);
+  } finally {
+    unlockButton.disabled = false;
+  }
+});
 
 async function resolveLeaderboardNameForSave(requestedName) {
   const normalisedRequestedName = normaliseRequestedLeaderboardName(requestedName);
@@ -5955,9 +6242,9 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   location.reload();
 });
 
-
-
-document.getElementById('btn-hint').addEventListener('click', showHint);
+document.getElementById('btn-auto-place').addEventListener('click', () => {
+  autoPlaceBestMove();
+});
 
 document.getElementById('btn-restart').addEventListener('click', () => {
   startNewGame({ resetPromptChain: true });
@@ -6009,7 +6296,7 @@ function addMediaQueryChangeListener(mediaQueryList, listener) {
   }
 }
 
-function init() {
+async function init() {
   bestScore  = parseInt(localStorage.getItem('bst-best') || '0', 10);
   const todayKey = new Date().toISOString().slice(0, 10);
   const td   = JSON.parse(localStorage.getItem('bst-today') || '{"d":"","s":0}');
@@ -6025,8 +6312,10 @@ function init() {
   updateCoinUI();
   applyEquippedCosmeticSkin();
   loadSettings();
+  loadCoachModeAccessStateFromSession();
   loadRuntimeConfig();
   if (!weeklyLeaderboardHostedAdapter) configureWeeklyLeaderboardAdapter();
+  await checkCoachModeSession();
   ensureLeaderboardHandleClaimedOnJoin().catch(() => {
     // Keep startup fast and resilient if hosted claims are unavailable.
   });
@@ -6083,4 +6372,6 @@ window.addEventListener('offline', () => {
   renderWeeklyGlobalLeaderboard();
 });
 
-init();
+init().catch(error => {
+  console.error('Initialisation failed:', error);
+});

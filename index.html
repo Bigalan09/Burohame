@@ -243,7 +243,7 @@
           <div id="strategy-note"></div>
           <div id="move-eval"></div>
           <div id="train-btns">
-            <button class="pill-btn" id="btn-hint">💡 Hint</button>
+            <button class="pill-btn" id="btn-auto-place">🤖 Auto place</button>
             <button class="pill-btn" id="btn-restart">↺ Restart</button>
           </div>
         </div>
@@ -314,13 +314,21 @@
         </header>
 
         <div class="page-panel settings-page-panel">
-          <label class="tog-row">
+          <label class="tog-row" id="page-coach-toggle-row" hidden>
             <span>Coach Mode</span>
             <span class="tog-wrap">
               <input type="checkbox" id="page-chk-coach">
               <span class="tog-track"><span class="tog-thumb"></span></span>
             </span>
           </label>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Coach Mode access code</span>
+              <small id="page-coach-auth-status">Enter a six-digit code to unlock Coach Mode for this session.</small>
+            </div>
+            <input id="page-input-coach-code" type="text" maxlength="6" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" placeholder="Enter six-digit code">
+            <button class="pill-btn pill-btn--secondary" id="btn-coach-auth" type="button">Unlock Coach Mode</button>
+          </div>
           <label class="tog-row">
             <span>Extended Pieces</span>
             <span class="tog-wrap">
@@ -412,13 +420,6 @@
       <div class="ov-card ov-card--quick-settings">
         <h2>Quick settings</h2>
         <p>Fast adjustments while you are in a run.</p>
-        <label class="tog-row">
-          <span>Coach Mode</span>
-          <span class="tog-wrap">
-            <input type="checkbox" id="quick-chk-coach">
-            <span class="tog-track"><span class="tog-thumb"></span></span>
-          </span>
-        </label>
         <label class="tog-row">
           <span>Dark Mode</span>
           <span class="tog-wrap">
