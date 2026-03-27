@@ -201,6 +201,7 @@ let coachModeAccessState = {
   authorised: false,
   expiresAt: 0,
 };
+let coachModeAccessExpiryTimer = 0;
 let weeklyLeaderboardPollTimer = 0;
 let weeklyLeaderboardViewState = {
   weekId: '',
@@ -1002,22 +1003,62 @@ function loadCoachModeAccessStateFromSession() {
   try {
     const raw = JSON.parse(sessionStorage.getItem(COACH_AUTH_SESSION_STORAGE_KEY) || 'null');
     if (!raw || typeof raw !== 'object') return;
+    if (!raw.authorised) {
+      clearCoachModeAccessState();
+      return;
+    }
     const expiresAt = Number(raw.expiresAt || 0);
-    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return;
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      clearCoachModeAccessState();
+      return;
+    }
     coachModeAccessState = {
-      authorised: !!raw.authorised,
+      authorised: true,
       expiresAt,
     };
+    syncCoachModeAccessExpiry();
   } catch (_) {
     // Ignore malformed state.
   }
 }
 
+function stopCoachModeAccessExpiryTimer() {
+  if (coachModeAccessExpiryTimer) {
+    clearTimeout(coachModeAccessExpiryTimer);
+    coachModeAccessExpiryTimer = 0;
+  }
+}
+
+function handleCoachModeAccessExpiry() {
+  if (!coachModeAccessState.authorised) return;
+  clearCoachModeAccessState();
+  applyCoachModeGate(false);
+  setCoachAuthStatus('Coach Mode access expired. Enter the code to unlock it again.');
+}
+
+function syncCoachModeAccessExpiry() {
+  stopCoachModeAccessExpiryTimer();
+  if (!coachModeAccessState.authorised) return;
+
+  const delay = coachModeAccessState.expiresAt - Date.now();
+  if (!Number.isFinite(delay) || delay <= 0) {
+    handleCoachModeAccessExpiry();
+    return;
+  }
+
+  coachModeAccessExpiryTimer = window.setTimeout(() => {
+    coachModeAccessExpiryTimer = 0;
+    handleCoachModeAccessExpiry();
+  }, delay);
+}
+
 function persistCoachModeAccessState() {
   sessionStorage.setItem(COACH_AUTH_SESSION_STORAGE_KEY, JSON.stringify(coachModeAccessState));
+  syncCoachModeAccessExpiry();
 }
 
 function clearCoachModeAccessState() {
+  stopCoachModeAccessExpiryTimer();
   coachModeAccessState = { authorised: false, expiresAt: 0 };
   sessionStorage.removeItem(COACH_AUTH_SESSION_STORAGE_KEY);
 }
@@ -4744,10 +4785,16 @@ function getCompletedRunCount() {
 function setCoachToggleVisibility(authorised) {
   const toggleRow = document.getElementById('page-coach-toggle-row');
   const coachToggle = document.getElementById('page-chk-coach');
-  if (!toggleRow || !coachToggle) return;
+  const authTitle = document.getElementById('page-coach-auth-title');
+  const authInput = document.getElementById('page-input-coach-code');
+  const unlockButton = document.getElementById('btn-coach-auth');
+  if (!toggleRow || !coachToggle || !authTitle || !authInput || !unlockButton) return;
   toggleRow.hidden = !authorised;
   coachToggle.disabled = !authorised;
   if (!authorised) coachToggle.checked = false;
+  authTitle.textContent = authorised ? 'Coach Mode access' : 'Coach Mode access code';
+  authInput.hidden = authorised;
+  unlockButton.hidden = authorised;
 }
 
 function setCoachAuthStatus(message, isError = false) {
@@ -4868,8 +4915,12 @@ function populateSettingsPage() {
   document.getElementById('page-sel-rack').value = String(rackSize);
   document.getElementById('page-input-weekly-name').value = extractLeaderboardNameBase(leaderboardPlayerName);
   document.getElementById('page-input-coach-code').value = '';
-  setCoachToggleVisibility(false);
-  setCoachAuthStatus('Checking Coach Mode access...');
+  setCoachToggleVisibility(coachModeAccessState.authorised);
+  setCoachAuthStatus(
+    coachModeAccessState.authorised
+      ? getCoachModeAccessSummary()
+      : 'Checking Coach Mode access...',
+  );
   checkCoachModeSession();
   updateLeaderboardNameAvailabilityIndicator();
   updateCosmeticLabel();
@@ -6269,6 +6320,11 @@ document.getElementById('btn-gameover-dashboard').addEventListener('click', () =
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  if (coachModeAccessState.authorised && coachModeAccessState.expiresAt <= Date.now()) {
+    handleCoachModeAccessExpiry();
+  } else {
+    syncCoachModeAccessExpiry();
+  }
   renderDailyMissions();
   ensureDailyChallengeForToday();
   ensureQuestBoardForCurrentCycle();
