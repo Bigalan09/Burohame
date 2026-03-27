@@ -217,7 +217,7 @@ const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
 const GAME_BANNER_DISPLAY_MS = 2000;
 const GAME_BANNER_TRANSITION_MS = 320;
-const SHOP_PRICE_MULTIPLIER = 2.78;
+const SHOP_PRICE_MULTIPLIER = 2.224;
 const COIN_REWARD_MULTIPLIERS = Object.freeze({
   run: 0.45,
   challenge: 0.6,
@@ -3940,24 +3940,35 @@ function ensureSmallRecoveryPieceInRack(rack, targetBoard) {
   rack[Math.floor(randomValue() * rack.length)] = recoveryPiece;
 }
 
-// Try placing each piece (in the given slot order) at its first available
-// position and return whether all can be placed.
-function canFitAllInOrder(order) {
-  let b = board.map(r => [...r]);
-  for (const i of order) {
-    let placed = false;
-    outer: for (let r = 0; r < N; r++) {
-      for (let c = 0; c < N; c++) {
-        if (!canPlaceOnBoard(pieces[i], r, c, b)) continue;
-        for (const [dr, dc] of pieces[i]) b[r + dr][c + dc] = 1;
-        b = applyClears(b, getClearsOnBoard(b));
-        placed = true;
-        break outer;
-      }
+function getPlacementsOnBoard(piece, targetBoard) {
+  const placements = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (canPlaceOnBoard(piece, r, c, targetBoard)) placements.push([r, c]);
     }
-    if (!placed) return false;
   }
-  return true;
+  return placements;
+}
+
+function placePieceOnBoard(piece, row, col, targetBoard) {
+  const nextBoard = targetBoard.map(r => [...r]);
+  for (const [dr, dc] of piece) nextBoard[row + dr][col + dc] = 1;
+  return applyClears(nextBoard, getClearsOnBoard(nextBoard));
+}
+
+// Returns true when an order has at least one complete placement path.
+function canFitAllInOrder(order, targetBoard, depth = 0) {
+  if (depth >= order.length) return true;
+  const slotIndex = order[depth];
+  const placements = getPlacementsOnBoard(pieces[slotIndex], targetBoard);
+  if (!placements.length) return false;
+
+  for (const [row, col] of placements) {
+    const nextBoard = placePieceOnBoard(pieces[slotIndex], row, col, targetBoard);
+    if (canFitAllInOrder(order, nextBoard, depth + 1)) return true;
+  }
+
+  return false;
 }
 
 // Returns true when only some orderings allow all pieces to be placed –
@@ -3967,17 +3978,13 @@ function orderMatters() {
   const unplaced = Array.from({ length: rackSize }, (_, i) => i).filter(i => !used[i]);
   if (unplaced.length <= 1) return false;
 
-  // Skip the check on nearly-empty boards – not tight enough to matter.
-  const fillCount = board.reduce((sum, row) => sum + row.reduce((total, cell) => total + cell, 0), 0);
-  if (fillCount < 28) return false;
-
   const perms = getPermutations(unplaced);
-  let worksCount = 0;
+  let solvableOrders = 0;
   for (const order of perms) {
-    if (canFitAllInOrder(order)) worksCount++;
+    if (canFitAllInOrder(order, board)) solvableOrders++;
   }
   // True only if at least one ordering works but not all do.
-  return worksCount > 0 && worksCount < perms.length;
+  return solvableOrders > 0 && solvableOrders < perms.length;
 }
 
 function randomPiece() {
