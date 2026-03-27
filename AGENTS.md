@@ -11,12 +11,13 @@ Burohame is a mobile-first 9×9 block puzzle game built as a plain static web ap
 - Chain clears to build combo bonuses.
 - Support both the standard piece set and the extended piece set.
 - Offer Coach Mode guidance with move hints, board-health feedback, and quality callouts.
+- Daily challenge boards now include reinforced locked blocks that must be cleared twice.
 
 ### Progression and retention systems currently in the game
 
 - Persistent local progression state saved in browser storage.
 - Coins as the soft currency, with tuned rewards and scaled shop prices.
-- Daily challenge runs with streak tracking and daily coin rewards.
+- Daily challenge runs with streak tracking, daily coin rewards, and reinforced locked blocks that require a double clear.
 - Daily missions that auto-pay rewards when completed.
 - Hosted weekly competition that ranks each player by their best single run in the current UTC week.
 - Quest chains with sequential steps and final rewards.

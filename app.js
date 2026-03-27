@@ -191,7 +191,9 @@ let dailyChallengeState = {
   seed: 0,
   targetScore: 0,
   randomState: 0,
+  lockedCells: [],
 };
+let dailyLockedCellKeys = new Set();
 let leaderboardPlayerName = '';
 let leaderboardPlayerId = '';
 let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
@@ -223,7 +225,8 @@ const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
 const GAME_BANNER_DISPLAY_MS = 2000;
 const GAME_BANNER_TRANSITION_MS = 320;
-const SHOP_PRICE_MULTIPLIER = 2.224;
+const SHOP_PRICE_MULTIPLIER = 1.946;
+const COIN_EARNING_BOOST_MULTIPLIER = 1.125;
 const COIN_REWARD_MULTIPLIERS = Object.freeze({
   run: 0.52,
   challenge: 0.69,
@@ -232,8 +235,9 @@ const COIN_REWARD_MULTIPLIERS = Object.freeze({
   weekly: 0.52,
 });
 const DAILY_MISSION_VERSION = 3;
-const DAILY_CHALLENGE_TARGET_MIN = 140;
-const DAILY_CHALLENGE_TARGET_RANGE = 51;
+const DAILY_CHALLENGE_TARGET_MIN = 350;
+const DAILY_CHALLENGE_TARGET_RANGE = 61;
+const DAILY_CHALLENGE_LOCKED_CELL_COUNT = 6;
 const ONE_MORE_RUN_RAPID_RETRY_WINDOW_MS = 4 * 60 * 1000;
 const ONE_MORE_RUN_RAPID_RETRY_LIMIT = 2;
 const WEEKLY_LADDER_COUNTED_RUNS = 4;
@@ -301,7 +305,7 @@ function scaleShopPrice(amount) {
 function scaleCoinReward(amount, source = 'run') {
   if (!amount) return 0;
   const multiplier = COIN_REWARD_MULTIPLIERS[source] ?? COIN_REWARD_MULTIPLIERS.run;
-  return Math.max(1, Math.round(amount * multiplier));
+  return Math.max(1, Math.round(amount * multiplier * COIN_EARNING_BOOST_MULTIPLIER));
 }
 
 const DAILY_MISSION_TEMPLATES = Object.freeze([
@@ -2167,6 +2171,56 @@ function isDailyChallengeSession() {
   return currentSessionType === 'daily';
 }
 
+function toBoardKey(r, c) {
+  return `${r},${c}`;
+}
+
+function normaliseLockedCells(value) {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set();
+  const cells = [];
+  value.forEach(cell => {
+    if (!Array.isArray(cell) || cell.length !== 2) return;
+    const r = Math.max(0, Math.min(N - 1, Math.floor(cell[0])));
+    const c = Math.max(0, Math.min(N - 1, Math.floor(cell[1])));
+    const key = toBoardKey(r, c);
+    if (unique.has(key)) return;
+    unique.add(key);
+    cells.push([r, c]);
+  });
+  return cells;
+}
+
+function buildDailyLockedCells(seed, count = DAILY_CHALLENGE_LOCKED_CELL_COUNT) {
+  const available = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      available.push([r, c]);
+    }
+  }
+  let state = (seed || 1) >>> 0;
+  const selected = [];
+  const picks = Math.max(0, Math.min(available.length, count));
+  for (let i = 0; i < picks; i++) {
+    state = (Math.imul(state || 1, 1664525) + 1013904223) >>> 0;
+    const idx = state % available.length;
+    selected.push(available[idx]);
+    available.splice(idx, 1);
+  }
+  return selected;
+}
+
+function syncDailyLockedCellSet() {
+  if (!isDailyChallengeSession()) {
+    dailyLockedCellKeys = new Set();
+    return;
+  }
+  dailyLockedCellKeys = new Set(
+    (dailyChallengeState.lockedCells || [])
+      .map(([r, c]) => toBoardKey(r, c))
+  );
+}
+
 function randomValue() {
   if (!isDailyChallengeSession()) return Math.random();
   const currentState = dailyChallengeState.randomState || dailyChallengeState.seed || 1;
@@ -2181,17 +2235,24 @@ function resetStandardSessionState() {
     seed: 0,
     targetScore: 0,
     randomState: 0,
+    lockedCells: [],
   };
+  syncDailyLockedCellSet();
 }
 
 function configureDailyChallengeSession(dailyState, options = {}) {
+  const lockedCells = normaliseLockedCells(options.lockedCells?.length
+    ? options.lockedCells
+    : buildDailyLockedCells(dailyState.seed));
   currentSessionType = 'daily';
   dailyChallengeState = {
     date: dailyState.date,
     seed: dailyState.seed,
     targetScore: dailyState.targetScore,
     randomState: clampWholeNumber(options.randomState, dailyState.seed || 1) || (dailyState.seed || 1),
+    lockedCells,
   };
+  syncDailyLockedCellSet();
 }
 
 function createDailyMissionEntry(template, dateKey) {
@@ -3039,11 +3100,16 @@ function renderGameOverSummary() {
     const extraCount = Math.max(0, summary.recentUpdates.length - 1);
     if (latestUpdate) {
       summaryNote.hidden = false;
-      summaryNote.textContent = extraCount
-        ? `${latestUpdate.title}. ${extraCount} more update${extraCount === 1 ? '' : 's'} this run.`
-        : latestUpdate.detail
+      if (extraCount) {
+        const otherMilestones = `${extraCount} other milestone${extraCount === 1 ? '' : 's'} this run`;
+        summaryNote.textContent = latestUpdate.detail
+          ? `${latestUpdate.title}. ${latestUpdate.detail} There ${extraCount === 1 ? 'was' : 'were'} ${otherMilestones}.`
+          : `${latestUpdate.title}. Plus ${otherMilestones}.`;
+      } else {
+        summaryNote.textContent = latestUpdate.detail
           ? `${latestUpdate.title}. ${latestUpdate.detail}.`
           : latestUpdate.title;
+      }
     } else if (summary.questHighlightIds.length) {
       summaryNote.hidden = false;
       summaryNote.textContent = `${summary.questHighlightIds.length} quest chain${summary.questHighlightIds.length === 1 ? '' : 's'} moved on this run.`;
@@ -3677,12 +3743,12 @@ function renderDailyChallengePanels() {
   const isFirstRunExperience = getCompletedRunCount() === 0;
   const title = 'Today';
   const copy = challengeStatus.complete
-    ? 'Target cleared. A fresh board lands tomorrow.'
+    ? 'Target cleared. A fresh reinforced board lands tomorrow.'
     : challengeStatus.remaining
-      ? `${challengeStatus.remaining} points left to clear today.`
+      ? `${challengeStatus.remaining} points left. Locked blocks need two clears today.`
       : isFirstRunExperience
-        ? 'Set your first score today.'
-        : 'Play today’s board.';
+        ? 'Set your first score on today’s reinforced board.'
+        : 'Play today’s reinforced board.';
   const progressLabel = challengeStatus.complete
     ? `Reward claimed: ${challengeStatus.reward} coins`
     : `Reward: ${challengeStatus.reward} coins`;
@@ -4489,6 +4555,7 @@ function createGameSessionSnapshot() {
           seed: dailyChallengeState.seed,
           targetScore: dailyChallengeState.targetScore,
           randomState: dailyChallengeState.randomState,
+          lockedCells: dailyChallengeState.lockedCells.map(([r, c]) => [r, c]),
         }
       : null,
     runSummary: ensureRunSummary(),
@@ -4554,6 +4621,7 @@ function getSavedGameSession() {
             seed: clampWholeNumber(raw.dailyChallenge.seed, 0),
             targetScore: clampWholeNumber(raw.dailyChallenge.targetScore, 0),
             randomState: clampWholeNumber(raw.dailyChallenge.randomState, 0),
+            lockedCells: normaliseLockedCells(raw.dailyChallenge.lockedCells),
           }
         : null,
       runSummary: raw.runSummary && typeof raw.runSummary === 'object'
@@ -4598,7 +4666,10 @@ function restoreSavedGame() {
       clearSavedGame();
       return false;
     }
-    configureDailyChallengeSession(todayChallenge, { randomState: saved.dailyChallenge.randomState });
+    configureDailyChallengeSession(todayChallenge, {
+      randomState: saved.dailyChallenge.randomState,
+      lockedCells: saved.dailyChallenge.lockedCells,
+    });
   } else {
     resetStandardSessionState();
   }
@@ -5016,7 +5087,9 @@ function renderBoard() {
       const el = cellEl(r, c);
       if (el) {
         el.classList.remove('clearing');
-        el.classList.toggle('filled', !!board[r][c]);
+        const isFilled = !!board[r][c];
+        el.classList.toggle('filled', isFilled);
+        el.classList.toggle('cell-locked', isFilled && dailyLockedCellKeys.has(toBoardKey(r, c)));
       }
     }
   }
@@ -5391,9 +5464,28 @@ function doClears() {
     });
   }
 
+  let unlockedCells = 0;
   for (const key of cleared) {
     const [r, c] = key.split(',').map(Number);
+    if (dailyLockedCellKeys.has(key)) {
+      dailyLockedCellKeys.delete(key);
+      dailyChallengeState.lockedCells = (dailyChallengeState.lockedCells || [])
+        .filter(([lr, lc]) => toBoardKey(lr, lc) !== key);
+      unlockedCells += 1;
+      continue;
+    }
     board[r][c] = 0;
+  }
+
+  if (unlockedCells > 0) {
+    recordRunUpdate({
+      title: `${unlockedCells} locked block${unlockedCells === 1 ? '' : 's'} unlocked`,
+      detail: 'Clear those blocks again to remove them.',
+    });
+    enqueueGameBanner({
+      kicker: 'Daily challenge',
+      title: `${unlockedCells} locked block${unlockedCells === 1 ? '' : 's'} unlocked`,
+    });
   }
 
   updateScoreUI();
@@ -5616,6 +5708,12 @@ function startNewGame(options = {}) {
   gameOver = false;
   clearGameBannerQueue();
   runSummary = createDefaultRunSummary();
+  if (isDailyChallengeSession()) {
+    recordRunUpdate({
+      title: 'Daily modifier active',
+      detail: 'Locked blocks stay on the board after one clear and must be cleared again.',
+    });
+  }
   used     = Array(rackSize).fill(false);
   pieces   = smartPieces();
 
