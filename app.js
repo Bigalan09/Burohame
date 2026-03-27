@@ -924,6 +924,13 @@ function sanitiseWeeklyLeaderboardState(value) {
   };
 }
 
+function syncLeaderboardPlayerId(nextPlayerId) {
+  const sanitisedPlayerId = typeof nextPlayerId === 'string' ? nextPlayerId.trim().slice(0, 64) : '';
+  if (!sanitisedPlayerId || leaderboardPlayerId === sanitisedPlayerId) return;
+  leaderboardPlayerId = sanitisedPlayerId;
+  saveSettings();
+}
+
 function createDefaultWeeklyLeaderboardRuntimeConfig() {
   return {
     backend: 'local',
@@ -1159,14 +1166,19 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
   function saveSession(session) {
     cachedSession = session;
     localStorage.setItem(authStorageKey, JSON.stringify(session));
+    syncLeaderboardPlayerId(session.userId);
   }
 
   function loadSession() {
-    if (cachedSession) return cachedSession;
+    if (cachedSession) {
+      syncLeaderboardPlayerId(cachedSession.userId);
+      return cachedSession;
+    }
     try {
       const raw = JSON.parse(localStorage.getItem(authStorageKey) || 'null');
       if (raw && typeof raw === 'object') {
         cachedSession = raw;
+        syncLeaderboardPlayerId(raw.userId);
         return raw;
       }
     } catch (_) {
@@ -1215,6 +1227,8 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
 
     return requestSession('/auth/v1/signup', { data: {} });
   }
+
+  loadSession();
 
   return {
     id: 'supabase',
@@ -1469,6 +1483,14 @@ async function refreshWeeklyLeaderboard(weekId, options = {}) {
     };
   }
   renderWeeklyGlobalLeaderboard();
+  const localBestScore = sanitiseWeeklyBestRuns(ensureWeeklyLadderForCurrentWeek().bestRuns)[0] || 0;
+  const liveRank = weeklyLeaderboardViewState.currentPlayerRank > 0
+    ? formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)
+    : 'Unranked';
+  setTextIfPresent(
+    'dashboard-weekly-card-progress',
+    localBestScore > 0 ? `${liveRank} · best ${localBestScore}` : 'Set your first weekly score',
+  );
 }
 
 function renderWeeklyGlobalLeaderboard() {
