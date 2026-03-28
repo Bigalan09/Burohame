@@ -40,6 +40,12 @@
 [data-color="red"]    { --accent: #ff3b30; --accent-dk: #d4264a; --accent-hi: #ff6b60; }
 [data-color="teal"]   { --accent: #5ac8fa; --accent-dk: #3aabd6; --accent-hi: #8bdbff; }
 [data-color="pink"]   { --accent: #ff2d55; --accent-dk: #d4264a; --accent-hi: #ff6b88; }
+[data-color="gold"]   { --accent: #f4c430; --accent-dk: #b8860b; --accent-hi: #ffe078; }
+[data-color="indigo"] { --accent: #5c6ac4; --accent-dk: #2f3a8f; --accent-hi: #a8b1ff; }
+[data-color="mint"]   { --accent: #47d7ac; --accent-dk: #1e9a79; --accent-hi: #9af2d6; }
+[data-color="coral"]  { --accent: #ff7f50; --accent-dk: #d4552d; --accent-hi: #ffb39c; }
+[data-color="slate"]  { --accent: #7082a8; --accent-dk: #41506c; --accent-hi: #b9c5de; }
+[data-color="violet"] { --accent: #a855f7; --accent-dk: #6d28d9; --accent-hi: #d9a0ff; }
 
 /* ===== Cosmetics ===== */
 [data-cosmetic="satin"] {
@@ -93,6 +99,67 @@
   --block-ghost-shadow: inset 0 1px 4px rgba(255,255,255,0.56),
                         inset 0 -1px 3px rgba(65,37,0,0.26),
                         0 8px 18px rgba(72,44,0,0.28);
+}
+
+[data-cosmetic="obsidian"] {
+  --block-radius: 4px;
+  --block-border: color-mix(in srgb, var(--accent-hi) 26%, rgba(255,255,255,0.14));
+  --block-board-fill: linear-gradient(165deg, color-mix(in srgb, var(--accent-hi) 24%, #252734) 0%, #1a1c26 44%, #090a11 100%);
+  --block-piece-fill: linear-gradient(165deg, color-mix(in srgb, var(--accent-hi) 30%, #2f3142) 0%, #1d2030 48%, #090a11 100%);
+  --block-board-shadow: inset 0 1px 0 rgba(255,255,255,0.1),
+                        inset 0 -1px 0 rgba(0,0,0,0.5);
+  --block-piece-shadow: inset 0 1px 0 rgba(255,255,255,0.12),
+                        inset 0 -1px 0 rgba(0,0,0,0.58),
+                        0 5px 14px rgba(0,0,0,0.36);
+  --block-ghost-shadow: inset 0 1px 1px rgba(255,255,255,0.14),
+                        inset 0 -1px 0 rgba(0,0,0,0.6),
+                        0 8px 16px rgba(0,0,0,0.4);
+}
+
+[data-cosmetic="opal"] {
+  --block-radius: 9px;
+  --block-border: color-mix(in srgb, var(--accent-hi) 58%, rgba(255,255,255,0.42));
+  --block-board-fill: linear-gradient(145deg, color-mix(in srgb, var(--accent-hi) 90%, #ffffff) 0%, color-mix(in srgb, var(--accent) 62%, #f7f3ff) 42%, color-mix(in srgb, var(--accent-dk) 58%, #d4c8ff) 100%);
+  --block-piece-fill: linear-gradient(145deg, color-mix(in srgb, var(--accent-hi) 94%, #ffffff) 0%, color-mix(in srgb, var(--accent) 70%, #faf7ff) 45%, color-mix(in srgb, var(--accent-dk) 62%, #c3b4ff) 100%);
+  --block-board-shadow: inset 0 1px 3px rgba(255,255,255,0.64),
+                        inset 0 -1px 2px rgba(74,58,112,0.18);
+  --block-piece-shadow: inset 0 1px 4px rgba(255,255,255,0.66),
+                        inset 0 -1px 2px rgba(72,53,114,0.2),
+                        0 5px 12px rgba(60,44,95,0.2);
+  --block-ghost-shadow: inset 0 1px 4px rgba(255,255,255,0.68),
+                        inset 0 -1px 2px rgba(72,53,114,0.24),
+                        0 8px 16px rgba(60,44,95,0.26);
+}
+
+[data-cosmetic="neon"] {
+  --block-radius: 5px;
+  --block-border: color-mix(in srgb, var(--accent-hi) 72%, rgba(255,255,255,0.58));
+  --block-board-fill: linear-gradient(180deg, color-mix(in srgb, var(--accent-hi) 92%, #ffffff) 0%, color-mix(in srgb, var(--accent) 82%, #f2f7ff) 38%, color-mix(in srgb, var(--accent-dk) 80%, #110f2f) 100%);
+  --block-piece-fill: linear-gradient(180deg, color-mix(in srgb, var(--accent-hi) 96%, #ffffff) 0%, color-mix(in srgb, var(--accent) 88%, #f4f8ff) 42%, color-mix(in srgb, var(--accent-dk) 82%, #0d0c2a) 100%);
+  --block-board-shadow: inset 0 1px 3px rgba(255,255,255,0.68),
+                        inset 0 -1px 2px rgba(9,8,36,0.26),
+                        0 0 0 1px color-mix(in srgb, var(--accent-hi) 30%, transparent);
+  --block-piece-shadow: inset 0 1px 4px rgba(255,255,255,0.72),
+                        inset 0 -1px 2px rgba(9,8,36,0.32),
+                        0 0 12px color-mix(in srgb, var(--accent) 26%, transparent);
+  --block-ghost-shadow: inset 0 1px 4px rgba(255,255,255,0.74),
+                        inset 0 -1px 2px rgba(9,8,36,0.34),
+                        0 0 16px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+[data-cosmetic="linen"] {
+  --block-radius: 6px;
+  --block-border: color-mix(in srgb, var(--accent-dk) 18%, rgba(0,0,0,0.24));
+  --block-board-fill: linear-gradient(170deg, color-mix(in srgb, var(--accent-hi) 42%, #f7f1e7) 0%, color-mix(in srgb, var(--accent) 34%, #ece2d4) 50%, color-mix(in srgb, var(--accent-dk) 24%, #d2c2ab) 100%);
+  --block-piece-fill: linear-gradient(170deg, color-mix(in srgb, var(--accent-hi) 48%, #faf4ea) 0%, color-mix(in srgb, var(--accent) 36%, #f1e7d8) 52%, color-mix(in srgb, var(--accent-dk) 26%, #d8c6ad) 100%);
+  --block-board-shadow: inset 0 1px 2px rgba(255,255,255,0.46),
+                        inset 0 -1px 2px rgba(89,68,42,0.16);
+  --block-piece-shadow: inset 0 1px 3px rgba(255,255,255,0.52),
+                        inset 0 -1px 2px rgba(89,68,42,0.2),
+                        0 3px 8px rgba(89,68,42,0.16);
+  --block-ghost-shadow: inset 0 1px 3px rgba(255,255,255,0.54),
+                        inset 0 -1px 2px rgba(89,68,42,0.24),
+                        0 7px 14px rgba(89,68,42,0.2);
 }
 
 /* ===== Dark mode ===== */
