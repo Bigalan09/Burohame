@@ -60,14 +60,19 @@
         </section>
 
         <section class="dashboard-focus" aria-label="Today at a glance">
-          <button class="focus-card" id="btn-dashboard-daily-play" type="button" aria-label="Play daily challenge">
+          <article class="focus-card focus-card--daily" aria-label="Daily challenge options">
             <span class="focus-card__title" id="dashboard-daily-title">Today</span>
             <p class="focus-card__line" id="dashboard-daily-copy">Play today’s board.</p>
             <div class="focus-card__meta">
               <span id="dashboard-daily-progress">Reward: 12 coins</span>
-              <span class="focus-card__action">Play</span>
+              <span class="focus-card__action" id="dashboard-daily-window">Today</span>
             </div>
-          </button>
+            <div class="focus-card__controls">
+              <label class="sr-only" for="dashboard-daily-date">Choose a daily challenge date</label>
+              <select id="dashboard-daily-date" class="focus-card__select" aria-label="Choose a daily challenge date"></select>
+              <button class="pill-btn" id="btn-dashboard-daily-play" type="button" aria-label="Play selected daily challenge">Play</button>
+            </div>
+          </article>
 
           <button class="focus-card" id="btn-dashboard-weekly-page" type="button" aria-label="Open weekly progress">
             <span class="focus-card__title" id="dashboard-weekly-card-title">This week</span>
@@ -468,7 +473,7 @@
             <h3>Daily challenge</h3>
             <span id="go-daily-status">In progress</span>
           </div>
-          <p id="go-daily-copy">Today’s target is still waiting for you.</p>
+          <p id="go-daily-copy">Today’s board is still waiting for you.</p>
         </section>
         <button class="pill-btn wide summary-primary-btn" id="btn-new" type="button">Play again</button>
       </div>

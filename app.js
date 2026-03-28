@@ -192,8 +192,11 @@ let dailyChallengeState = {
   targetScore: 0,
   randomState: 0,
   lockedCells: [],
+  isHistorical: false,
 };
 let dailyLockedCellKeys = new Set();
+let selectedDailyChallengeDateKey = '';
+let lastGameOverReason = 'blocked';
 let leaderboardPlayerName = '';
 let leaderboardPlayerId = '';
 let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
@@ -219,7 +222,7 @@ let weeklyLeaderboardViewState = {
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 8;
+const PROGRESSION_STATE_VERSION = 9;
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
@@ -238,6 +241,8 @@ const DAILY_MISSION_VERSION = 3;
 const DAILY_CHALLENGE_TARGET_MIN = 350;
 const DAILY_CHALLENGE_TARGET_RANGE = 61;
 const DAILY_CHALLENGE_LOCKED_CELL_COUNT = 6;
+const DAILY_CHALLENGE_ARCHIVE_DAYS = 7;
+const DAILY_CHALLENGE_PAST_REWARD_MULTIPLIER = 0.25;
 const ONE_MORE_RUN_RAPID_RETRY_WINDOW_MS = 4 * 60 * 1000;
 const ONE_MORE_RUN_RAPID_RETRY_LIMIT = 2;
 const WEEKLY_LADDER_COUNTED_RUNS = 4;
@@ -864,6 +869,37 @@ function getPreviousDateKey(dateKey) {
   const date = new Date(`${dateKey}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() - 1);
   return getUTCDateKey(date);
+}
+
+function isValidDateKey(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function getRecentDailyChallengeDateKeys(limit = DAILY_CHALLENGE_ARCHIVE_DAYS) {
+  const count = Math.max(0, clampWholeNumber(limit, DAILY_CHALLENGE_ARCHIVE_DAYS));
+  const dates = [];
+  let cursor = getUTCDateKey();
+  for (let i = 0; i <= count; i++) {
+    dates.push(cursor);
+    cursor = getPreviousDateKey(cursor);
+  }
+  return dates;
+}
+
+function isHistoricalDailyChallengeDate(dateKey) {
+  return isValidDateKey(dateKey) && dateKey !== getUTCDateKey();
+}
+
+function isPlayableDailyChallengeDate(dateKey) {
+  if (!isValidDateKey(dateKey)) return false;
+  return getRecentDailyChallengeDateKeys().includes(dateKey);
+}
+
+function getDailyChallengeLabel(dateKey) {
+  const todayKey = getUTCDateKey();
+  if (dateKey === todayKey) return 'Today';
+  if (dateKey === getPreviousDateKey(todayKey)) return 'Yesterday';
+  return dateKey;
 }
 
 
@@ -2236,6 +2272,7 @@ function resetStandardSessionState() {
     targetScore: 0,
     randomState: 0,
     lockedCells: [],
+    isHistorical: false,
   };
   syncDailyLockedCellSet();
 }
@@ -2251,6 +2288,7 @@ function configureDailyChallengeSession(dailyState, options = {}) {
     targetScore: dailyState.targetScore,
     randomState: clampWholeNumber(options.randomState, dailyState.seed || 1) || (dailyState.seed || 1),
     lockedCells,
+    isHistorical: !!options.isHistorical,
   };
   syncDailyLockedCellSet();
 }
@@ -2463,6 +2501,7 @@ function createDefaultProgressionState() {
       attempts: 0,
       rewardClaimedDate: '',
     },
+    dailyChallengeArchive: {},
     streak: {
       current: 0,
       best: 0,
@@ -2544,6 +2583,22 @@ function sanitiseDailyChallengeState(value) {
   };
 }
 
+function sanitiseDailyChallengeArchive(value) {
+  const src = value && typeof value === 'object' ? value : {};
+  const archive = {};
+  Object.entries(src).forEach(([dateKey, record]) => {
+    if (!isValidDateKey(dateKey)) return;
+    const clean = sanitiseDailyChallengeState({
+      ...record,
+      date: dateKey,
+      seed: getDailyChallengeSeed(dateKey),
+      targetScore: getDailyChallengeTarget(getDailyChallengeSeed(dateKey)),
+    });
+    archive[dateKey] = clean;
+  });
+  return archive;
+}
+
 function sanitiseProgressionState(rawState) {
   const defaults = createDefaultProgressionState();
   const src = rawState && typeof rawState === 'object' ? rawState : {};
@@ -2592,6 +2647,7 @@ function sanitiseProgressionState(rawState) {
     },
     dailyMissions: sanitiseMissionState(src.dailyMissions),
     dailyChallenge: sanitiseDailyChallengeState(src.dailyChallenge),
+    dailyChallengeArchive: sanitiseDailyChallengeArchive(src.dailyChallengeArchive),
     streak: {
       current: clampWholeNumber(streak.current, defaults.streak.current),
       best: clampWholeNumber(streak.best, defaults.streak.best),
@@ -2918,21 +2974,8 @@ function getMissionRemainingCopy(mission, remaining) {
 }
 
 function buildDailyChallengePrompt(summary) {
-  const challenge = ensureDailyChallengeForToday();
-  if (!isDailyChallengeSession() || challenge.completedAt === challenge.date) return null;
-  const remaining = Math.max(0, challenge.targetScore - summary.finalScore);
-  const threshold = Math.max(18, Math.ceil(challenge.targetScore * 0.12));
-  if (!remaining || remaining > threshold) return null;
-  return {
-    id: 'daily-challenge',
-    rank: 110,
-    sessionType: 'daily',
-    buttonLabel: 'Try daily again',
-    eyebrow: 'Near today’s target',
-    title: `${remaining} points from the daily clear`,
-    copy: `Start another daily run and focus on safe clears early. Reach ${challenge.targetScore} to keep your streak alive today.`,
-    meta: `Reward · ${getDailyChallengeRewardAmount(Math.max(1, getDisplayedStreakCount() || 1))} coins`,
-  };
+  void summary;
+  return null;
 }
 
 function buildMissionFinishPrompt() {
@@ -3089,7 +3132,9 @@ function renderGameOverSummary() {
   document.getElementById('go-coin-total').textContent = String(getCoinBalance());
   if (intro) {
     intro.textContent = isDailyChallengeSession()
-      ? 'Today’s score is locked in.'
+      ? (lastGameOverReason === 'daily-complete'
+          ? 'Board cleared. Challenge complete.'
+          : 'Challenge run ended.')
       : 'Ready for another go?';
   }
   if (dashboardButton) {
@@ -3133,23 +3178,26 @@ function renderGameOverSummary() {
       nextRunButton.dataset.sessionType = prompt.sessionType || currentSessionType;
       nextRunButton.dataset.promptType = prompt.id || '';
       nextRunButton.dataset.prompted = 'true';
+      nextRunButton.dataset.dailyDate = isDailyChallengeSession() ? (dailyChallengeState.date || getUTCDateKey()) : '';
     } else {
       nextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Play again';
       nextRunButton.dataset.sessionType = currentSessionType;
       nextRunButton.dataset.promptType = '';
       nextRunButton.dataset.prompted = 'false';
+      nextRunButton.dataset.dailyDate = isDailyChallengeSession() ? (dailyChallengeState.date || getUTCDateKey()) : '';
     }
   }
 
   if (dailySummary && dailyStatus && dailyCopy) {
     if (isDailyChallengeSession()) {
-      const challenge = ensureDailyChallengeForToday();
+      const challenge = ensureDailyChallengeForDate(dailyChallengeState.date || getUTCDateKey());
+      const label = getDailyChallengeLabel(challenge.date);
       const complete = challenge.completedAt === challenge.date;
       dailySummary.hidden = false;
-      dailyStatus.textContent = complete ? 'Completed' : 'Missed';
+      dailyStatus.textContent = complete ? 'Completed' : 'Unfinished';
       dailyCopy.textContent = complete
-        ? `Target ${challenge.targetScore} reached. Best score ${Math.max(challenge.bestScore, summary.finalScore)}.`
-        : `Target ${challenge.targetScore}. Best score ${Math.max(challenge.bestScore, summary.finalScore)}.`;
+        ? `${label} board cleared. Final score ${summary.finalScore}.`
+        : `${label} board not fully cleared. Best score ${Math.max(challenge.bestScore, summary.finalScore)}.`;
     } else {
       dailySummary.hidden = true;
     }
@@ -3577,31 +3625,69 @@ function syncDisplayedStreak() {
 
 function ensureDailyChallengeForToday() {
   const todayKey = getUTCDateKey();
-  const challengeSeed = getDailyChallengeSeed(todayKey);
+  return ensureDailyChallengeForDate(todayKey);
+}
+
+function ensureDailyChallengeForDate(dateKey = getUTCDateKey()) {
+  const targetDateKey = isPlayableDailyChallengeDate(dateKey) ? dateKey : getUTCDateKey();
+  const challengeSeed = getDailyChallengeSeed(targetDateKey);
   const targetScore = getDailyChallengeTarget(challengeSeed);
+  const todayKey = getUTCDateKey();
 
-  syncDisplayedStreak();
+  if (targetDateKey === todayKey) {
+    syncDisplayedStreak();
+    const existing = progressionState?.dailyChallenge;
+    if (existing?.date === todayKey && existing.seed === challengeSeed && existing.targetScore === targetScore) {
+      return existing;
+    }
 
-  const existing = progressionState?.dailyChallenge;
-  if (existing?.date === todayKey && existing.seed === challengeSeed && existing.targetScore === targetScore) {
-    return existing;
+    const nextState = updateProgressionState(state => {
+      const previous = sanitiseDailyChallengeState(state.dailyChallenge);
+      state.dailyChallenge = {
+        date: todayKey,
+        seed: challengeSeed,
+        targetScore,
+        bestScore: previous.date === todayKey ? previous.bestScore : 0,
+        completedAt: previous.date === todayKey ? previous.completedAt : '',
+        attempts: previous.date === todayKey ? previous.attempts : 0,
+        rewardClaimedDate: previous.date === todayKey ? previous.rewardClaimedDate : '',
+      };
+      return state;
+    });
+    return nextState.dailyChallenge;
   }
 
-  const nextState = updateProgressionState(state => {
-    const previous = sanitiseDailyChallengeState(state.dailyChallenge);
-    state.dailyChallenge = {
-      date: todayKey,
-      seed: challengeSeed,
-      targetScore,
-      bestScore: previous.date === todayKey ? previous.bestScore : 0,
-      completedAt: previous.date === todayKey ? previous.completedAt : '',
-      attempts: previous.date === todayKey ? previous.attempts : 0,
-      rewardClaimedDate: previous.date === todayKey ? previous.rewardClaimedDate : '',
+  const archived = progressionState?.dailyChallengeArchive?.[targetDateKey];
+  if (archived && archived.date === targetDateKey) return archived;
+
+  return {
+    date: targetDateKey,
+    seed: challengeSeed,
+    targetScore,
+    bestScore: 0,
+    completedAt: '',
+    attempts: 0,
+    rewardClaimedDate: '',
+  };
+}
+
+function updateArchivedDailyChallenge(dateKey, updater) {
+  if (!isHistoricalDailyChallengeDate(dateKey)) return;
+  updateProgressionState(state => {
+    const existing = sanitiseDailyChallengeState(
+      state.dailyChallengeArchive?.[dateKey] || ensureDailyChallengeForDate(dateKey)
+    );
+    const updated = sanitiseDailyChallengeState(updater(existing) || existing);
+    const archive = sanitiseDailyChallengeArchive(state.dailyChallengeArchive);
+    archive[dateKey] = {
+      ...updated,
+      date: dateKey,
+      seed: getDailyChallengeSeed(dateKey),
+      targetScore: getDailyChallengeTarget(getDailyChallengeSeed(dateKey)),
     };
+    state.dailyChallengeArchive = archive;
     return state;
   });
-
-  return nextState.dailyChallenge;
 }
 
 function getDisplayedStreakCount() {
@@ -3621,16 +3707,23 @@ function getDailyChallengeRewardAmount(streakCount) {
   return scaleCoinReward(baseReward, 'challenge');
 }
 
-function getDailyChallengeStatus(challenge = ensureDailyChallengeForToday()) {
+function getHistoricalDailyChallengeRewardAmount() {
+  const baseline = getDailyChallengeRewardAmount(1);
+  return Math.max(1, Math.floor(baseline * DAILY_CHALLENGE_PAST_REWARD_MULTIPLIER));
+}
+
+function getDailyChallengeStatus(challenge = ensureDailyChallengeForDate(selectedDailyChallengeDateKey || getUTCDateKey())) {
   const displayedStreak = getDisplayedStreakCount();
+  const isHistorical = isHistoricalDailyChallengeDate(challenge.date);
   const complete = challenge.completedAt === challenge.date;
-  const remaining = Math.max(0, challenge.targetScore - challenge.bestScore);
-  const reward = getDailyChallengeRewardAmount(complete ? displayedStreak : Math.max(1, displayedStreak || 1));
+  const reward = isHistorical
+    ? getHistoricalDailyChallengeRewardAmount()
+    : getDailyChallengeRewardAmount(complete ? displayedStreak : Math.max(1, displayedStreak || 1));
   return {
     complete,
-    remaining,
     reward,
     streak: displayedStreak,
+    isHistorical,
   };
 }
 
@@ -3641,11 +3734,16 @@ function getDailyChallengeBestLabel(challenge) {
 
 function markDailyChallengeAttempt() {
   if (!isDailyChallengeSession()) return;
-  const todayChallenge = ensureDailyChallengeForToday();
+  const challenge = ensureDailyChallengeForDate(dailyChallengeState.date || selectedDailyChallengeDateKey || getUTCDateKey());
+  if (isHistoricalDailyChallengeDate(challenge.date)) {
+    updateArchivedDailyChallenge(challenge.date, record => ({
+      ...record,
+      attempts: record.attempts + 1,
+    }));
+    return;
+  }
   updateProgressionState(state => {
-    if (state.dailyChallenge.date === todayChallenge.date) {
-      state.dailyChallenge.attempts += 1;
-    }
+    if (state.dailyChallenge.date === challenge.date) state.dailyChallenge.attempts += 1;
     return state;
   });
 }
@@ -3653,12 +3751,38 @@ function markDailyChallengeAttempt() {
 function maybeCompleteDailyChallenge() {
   if (!isDailyChallengeSession()) return;
 
-  const challenge = ensureDailyChallengeForToday();
-  if (challenge.completedAt === challenge.date || score < challenge.targetScore) return;
+  const challenge = ensureDailyChallengeForDate(dailyChallengeState.date || getUTCDateKey());
+  if (challenge.completedAt === challenge.date) return;
 
   const todayKey = challenge.date;
   const yesterdayKey = getPreviousDateKey(todayKey);
   let streakCount = 1;
+  const isHistorical = isHistoricalDailyChallengeDate(challenge.date);
+
+  if (isHistorical) {
+    updateArchivedDailyChallenge(challenge.date, record => ({
+      ...record,
+      bestScore: Math.max(record.bestScore, score),
+      completedAt: challenge.date,
+      rewardClaimedDate: challenge.date,
+    }));
+    const rewardAmount = getHistoricalDailyChallengeRewardAmount();
+    awardCoins(rewardAmount, `${getDailyChallengeLabel(challenge.date)} challenge`, {
+      silent: true,
+      celebrate: true,
+      major: false,
+    });
+    showMilestoneMoment({
+      eyebrow: 'Daily archive',
+      title: `${getDailyChallengeLabel(challenge.date)} board cleared`,
+      detail: `+${rewardAmount} coins`,
+      major: false,
+      anchor: '#score-wrap',
+      announce: `${getDailyChallengeLabel(challenge.date)} challenge complete. ${rewardAmount} coins awarded.`,
+    });
+    renderDashboard();
+    return;
+  }
 
   updateProgressionState(state => {
     state.dailyChallenge.bestScore = Math.max(state.dailyChallenge.bestScore, score);
@@ -3692,7 +3816,7 @@ function maybeCompleteDailyChallenge() {
   });
   showMilestoneMoment({
     eyebrow: 'Daily challenge',
-    title: `Target ${challenge.targetScore} reached`,
+    title: 'Board cleared',
     detail: `Streak ${streakCount} · +${rewardAmount} coins`,
     major: streakCount >= 3,
     anchor: '#score-wrap',
@@ -3703,8 +3827,16 @@ function maybeCompleteDailyChallenge() {
 
 function syncDailyChallengeScoreProgress() {
   if (!isDailyChallengeSession()) return;
-  const challenge = ensureDailyChallengeForToday();
+  const challenge = ensureDailyChallengeForDate(dailyChallengeState.date || getUTCDateKey());
   if (score <= challenge.bestScore) return;
+
+  if (isHistoricalDailyChallengeDate(challenge.date)) {
+    updateArchivedDailyChallenge(challenge.date, record => ({
+      ...record,
+      bestScore: Math.max(record.bestScore, score),
+    }));
+    return;
+  }
 
   updateProgressionState(state => {
     if (state.dailyChallenge.date === challenge.date) {
@@ -3738,27 +3870,45 @@ function setTextIfPresent(id, value) {
 }
 
 function renderDailyChallengePanels() {
-  const challenge = ensureDailyChallengeForToday();
+  const todayKey = getUTCDateKey();
+  if (!isPlayableDailyChallengeDate(selectedDailyChallengeDateKey)) {
+    selectedDailyChallengeDateKey = todayKey;
+  }
+  const challenge = ensureDailyChallengeForDate(selectedDailyChallengeDateKey);
   const challengeStatus = getDailyChallengeStatus(challenge);
   const isFirstRunExperience = getCompletedRunCount() === 0;
-  const title = 'Today';
+  const title = getDailyChallengeLabel(challenge.date);
   const copy = challengeStatus.complete
-    ? 'Target cleared. A fresh reinforced board lands tomorrow.'
-    : challengeStatus.remaining
-      ? `${challengeStatus.remaining} points left. Locked blocks need two clears today.`
+    ? 'Board cleared. Pick another day or replay this one for practice.'
+    : challengeStatus.isHistorical
+      ? 'Clear every locked block twice to finish this archived board.'
       : isFirstRunExperience
-        ? 'Set your first score on today’s reinforced board.'
-        : 'Play today’s reinforced board.';
+        ? 'Set your first score on today’s reinforced board by clearing every locked block.'
+        : 'Clear every locked block twice to complete today’s board.';
   const progressLabel = challengeStatus.complete
     ? `Reward claimed: ${challengeStatus.reward} coins`
     : `Reward: ${challengeStatus.reward} coins`;
+  const windowLabel = challengeStatus.isHistorical ? 'Past 7 days' : 'Today';
 
   setTextIfPresent('dashboard-daily-title', title);
   setTextIfPresent('dashboard-daily-copy', copy);
   setTextIfPresent('dashboard-daily-progress', progressLabel);
+  setTextIfPresent('dashboard-daily-window', windowLabel);
+
+  const dateSelect = document.getElementById('dashboard-daily-date');
+  if (dateSelect) {
+    const dates = getRecentDailyChallengeDateKeys();
+    const currentMarkup = dates
+      .map(dateKey => `<option value="${dateKey}">${getDailyChallengeLabel(dateKey)}</option>`)
+      .join('');
+    if (dateSelect.innerHTML !== currentMarkup) dateSelect.innerHTML = currentMarkup;
+    if (dateSelect.value !== challenge.date) dateSelect.value = challenge.date;
+  }
 
   const playButton = document.getElementById('btn-dashboard-daily-play');
-  if (playButton) playButton.setAttribute('aria-label', challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge');
+  if (playButton) {
+    playButton.setAttribute('aria-label', challengeStatus.complete ? 'Replay selected daily challenge' : 'Play selected daily challenge');
+  }
 }
 
 function renderDailyMissions() {
@@ -4556,6 +4706,7 @@ function createGameSessionSnapshot() {
           targetScore: dailyChallengeState.targetScore,
           randomState: dailyChallengeState.randomState,
           lockedCells: dailyChallengeState.lockedCells.map(([r, c]) => [r, c]),
+          isHistorical: dailyChallengeState.isHistorical,
         }
       : null,
     runSummary: ensureRunSummary(),
@@ -4622,6 +4773,7 @@ function getSavedGameSession() {
             targetScore: clampWholeNumber(raw.dailyChallenge.targetScore, 0),
             randomState: clampWholeNumber(raw.dailyChallenge.randomState, 0),
             lockedCells: normaliseLockedCells(raw.dailyChallenge.lockedCells),
+            isHistorical: !!raw.dailyChallenge.isHistorical,
           }
         : null,
       runSummary: raw.runSummary && typeof raw.runSummary === 'object'
@@ -4661,15 +4813,22 @@ function restoreSavedGame() {
   const saved = getSavedGameSession();
   if (!saved) return false;
   if (saved.sessionType === 'daily') {
-    const todayChallenge = ensureDailyChallengeForToday();
-    if (!saved.dailyChallenge || saved.dailyChallenge.date !== todayChallenge.date) {
+    const savedDate = saved.dailyChallenge?.date;
+    if (!saved.dailyChallenge || !isPlayableDailyChallengeDate(savedDate)) {
       clearSavedGame();
       return false;
     }
-    configureDailyChallengeSession(todayChallenge, {
+    const savedChallenge = ensureDailyChallengeForDate(savedDate);
+    if (saved.dailyChallenge.seed !== savedChallenge.seed || saved.dailyChallenge.targetScore !== savedChallenge.targetScore) {
+      clearSavedGame();
+      return false;
+    }
+    configureDailyChallengeSession(savedChallenge, {
       randomState: saved.dailyChallenge.randomState,
       lockedCells: saved.dailyChallenge.lockedCells,
+      isHistorical: saved.dailyChallenge.isHistorical || isHistoricalDailyChallengeDate(savedDate),
     });
+    selectedDailyChallengeDateKey = savedDate;
   } else {
     resetStandardSessionState();
   }
@@ -4702,7 +4861,7 @@ function renderSessionModeBadge() {
 
   if (isDailyChallengeSession()) {
     badge.hidden = false;
-    badge.textContent = `Daily · target ${dailyChallengeState.targetScore}`;
+    badge.textContent = `Daily · ${getDailyChallengeLabel(dailyChallengeState.date || getUTCDateKey())}`;
   } else {
     badge.hidden = true;
   }
@@ -5374,6 +5533,11 @@ function afterPlace() {
   updateRackPlayability();
   updateTrainingPanel();
   if (trainingMode) showHint();
+  if (isDailyChallengeSession() && dailyLockedCellKeys.size === 0 && (dailyChallengeState.lockedCells || []).length === 0) {
+    saveCurrentGame();
+    setTimeout(() => triggerGameOver('daily-complete'), 120);
+    return;
+  }
   if (used.every(Boolean)) {
     // All pieces placed → new round
     setTimeout(newRound, 80);
@@ -5563,6 +5727,9 @@ function simClears(cells, row, col) {
 // (Individual pieces that can't fit are just greyed out; the game continues
 //  as long as at least one piece can still be placed.)
 function isGameOver() {
+  if (isDailyChallengeSession() && dailyLockedCellKeys.size === 0 && (dailyChallengeState.lockedCells || []).length === 0) {
+    return true;
+  }
   for (let i = 0; i < rackSize; i++) {
     if (used[i]) continue;
     if (canPlaceAnywhere(pieces[i])) return false;
@@ -5570,9 +5737,10 @@ function isGameOver() {
   return true;
 }
 
-function triggerGameOver() {
+function triggerGameOver(reason = 'blocked') {
   if (gameOver) return;
   gameOver = true;
+  lastGameOverReason = reason;
   clearSavedGame();
   markOneMoreRunEnded();
 
@@ -5609,6 +5777,13 @@ function triggerGameOver() {
   updateDailyMissionProgress('runs', 1);
   ensureRunSummary().questHighlightIds = applyQuestChainProgress(ensureRunSummary()).changedChainIds;
   ensureRunSummary().continuePrompt = chooseOneMoreRunPrompt(ensureRunSummary());
+
+  if (reason === 'daily-complete') {
+    clearGameBannerQueue();
+    renderGameOverSummary();
+    showOverlay('ov-gameover');
+    return;
+  }
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
@@ -5695,8 +5870,14 @@ function startNewGame(options = {}) {
   }
 
   if (options.sessionType === 'daily') {
-    const challenge = ensureDailyChallengeForToday();
-    configureDailyChallengeSession(challenge, { randomState: challenge.seed });
+    const requestedDate = isPlayableDailyChallengeDate(options.dailyDate)
+      ? options.dailyDate
+      : (isPlayableDailyChallengeDate(selectedDailyChallengeDateKey) ? selectedDailyChallengeDateKey : getUTCDateKey());
+    const challenge = ensureDailyChallengeForDate(requestedDate);
+    configureDailyChallengeSession(challenge, {
+      randomState: challenge.seed,
+      isHistorical: isHistoricalDailyChallengeDate(challenge.date),
+    });
     markDailyChallengeAttempt();
   } else {
     resetStandardSessionState();
@@ -5711,7 +5892,7 @@ function startNewGame(options = {}) {
   if (isDailyChallengeSession()) {
     recordRunUpdate({
       title: 'Daily modifier active',
-      detail: 'Locked blocks stay on the board after one clear and must be cleared again.',
+      detail: 'Locked blocks stay on the board after one clear and must be cleared again to complete the board.',
     });
   }
   used     = Array(rackSize).fill(false);
@@ -6197,8 +6378,18 @@ document.getElementById('btn-dashboard-unlock-page')?.addEventListener('click', 
   navigateTo('shop');
 });
 document.getElementById('btn-dashboard-daily-play')?.addEventListener('click', () => {
-  startNewGame({ sessionType: 'daily', resetPromptChain: true });
+  startNewGame({
+    sessionType: 'daily',
+    resetPromptChain: true,
+    dailyDate: selectedDailyChallengeDateKey || getUTCDateKey(),
+  });
   navigateTo('game');
+});
+document.getElementById('dashboard-daily-date')?.addEventListener('change', event => {
+  const nextDate = event.target?.value;
+  if (!isPlayableDailyChallengeDate(nextDate)) return;
+  selectedDailyChallengeDateKey = nextDate;
+  renderDashboard();
 });
 document.getElementById('btn-dashboard-share')?.addEventListener('click', () => {
   shareBurohameApp();
@@ -6412,6 +6603,7 @@ document.getElementById('btn-new').addEventListener('click', () => {
     sessionType: button.dataset.sessionType === 'daily' ? 'daily' : 'standard',
     trigger: button.dataset.prompted === 'true' ? 'prompt' : 'manual',
     promptType: button.dataset.promptType || '',
+    dailyDate: button.dataset.dailyDate || selectedDailyChallengeDateKey || getUTCDateKey(),
   });
   navigateTo('game');
 });
@@ -6467,6 +6659,7 @@ async function init() {
   evaluateCollectionAlbumRewards();
   ensureDailyMissionsForToday();
   ensureDailyChallengeForToday();
+  selectedDailyChallengeDateKey = getUTCDateKey();
   ensureQuestBoardForCurrentCycle();
   ensureWeeklyLadderForCurrentWeek();
   resetStandardSessionState();
