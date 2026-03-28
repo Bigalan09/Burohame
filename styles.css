@@ -162,6 +162,38 @@
                         0 7px 14px rgba(89,68,42,0.2);
 }
 
+[data-cosmetic="holo"] {
+  --block-radius: 8px;
+  --block-border: color-mix(in srgb, var(--accent-hi) 70%, rgba(255,255,255,0.5));
+  --block-board-fill: linear-gradient(130deg, #eaffff 0%, #bdf8ff 22%, #b6d5ff 42%, #d3c4ff 62%, #b9f8df 82%, #eaffff 100%);
+  --block-piece-fill: linear-gradient(130deg, #f4feff 0%, #cbffff 20%, #c3e0ff 42%, #dfd2ff 62%, #c8ffe8 82%, #f4feff 100%);
+  --block-board-shadow: inset 0 1px 3px rgba(255,255,255,0.72),
+                        inset 0 -1px 2px rgba(34,74,96,0.2),
+                        0 0 0 1px color-mix(in srgb, var(--accent-hi) 28%, transparent);
+  --block-piece-shadow: inset 0 1px 4px rgba(255,255,255,0.75),
+                        inset 0 -1px 2px rgba(34,74,96,0.24),
+                        0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
+  --block-ghost-shadow: inset 0 1px 4px rgba(255,255,255,0.76),
+                        inset 0 -1px 2px rgba(34,74,96,0.28),
+                        0 0 18px color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+[data-cosmetic="plasma"] {
+  --block-radius: 6px;
+  --block-border: color-mix(in srgb, var(--accent-hi) 74%, rgba(255,255,255,0.56));
+  --block-board-fill: linear-gradient(145deg, #fff2ff 0%, #ff92eb 24%, #ff5a9c 42%, #a448ff 64%, #4d56ff 84%, #8bf0ff 100%);
+  --block-piece-fill: linear-gradient(145deg, #fff8ff 0%, #ffb8f2 20%, #ff729d 40%, #bf61ff 62%, #656aff 82%, #a7ffff 100%);
+  --block-board-shadow: inset 0 1px 3px rgba(255,255,255,0.58),
+                        inset 0 -1px 3px rgba(34,10,54,0.34),
+                        0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  --block-piece-shadow: inset 0 1px 4px rgba(255,255,255,0.62),
+                        inset 0 -1px 3px rgba(34,10,54,0.42),
+                        0 0 16px color-mix(in srgb, var(--accent-hi) 38%, transparent);
+  --block-ghost-shadow: inset 0 1px 4px rgba(255,255,255,0.64),
+                        inset 0 -1px 3px rgba(34,10,54,0.46),
+                        0 0 20px color-mix(in srgb, var(--accent-hi) 42%, transparent);
+}
+
 /* ===== Dark mode ===== */
 [data-theme="dark"] {
   --bg:        #1c1c1e;
@@ -1517,6 +1549,16 @@ a.icon-btn { text-decoration: none; }
   animation: starlight-twinkle 3.6s ease-in-out infinite;
 }
 
+[data-cosmetic="holo"] .cell.filled {
+  background-size: 220% 220%;
+  animation: holo-shift 6.2s linear infinite;
+}
+
+[data-cosmetic="plasma"] .cell.filled {
+  background-size: 230% 230%;
+  animation: plasma-surge 3.2s ease-in-out infinite;
+}
+
 .cell.filled.cell-locked::after {
   content: '';
   position: absolute;
@@ -2692,6 +2734,28 @@ a.icon-btn { text-decoration: none; }
   animation: starlight-twinkle 3.6s ease-in-out infinite;
 }
 
+.cosmetic-card[data-cosmetic="holo"] .cosmetic-card__preview {
+  --preview-fill: linear-gradient(130deg, #eaffff 0%, #bdf8ff 22%, #b6d5ff 42%, #d3c4ff 62%, #b9f8df 82%, #eaffff 100%);
+  --preview-shadow: inset 0 1px 3px rgba(255,255,255,0.68),
+                    inset 0 -1px 2px rgba(34,74,96,0.2),
+                    0 3px 8px rgba(34,74,96,0.2);
+  --preview-radius: 9px;
+  --preview-border: color-mix(in srgb, #dcffff 68%, rgba(255,255,255,0.44));
+  animation: holo-shift 6.2s linear infinite;
+  background-size: 220% 220%;
+}
+
+.cosmetic-card[data-cosmetic="plasma"] .cosmetic-card__preview {
+  --preview-fill: linear-gradient(145deg, #fff4ff 0%, #ff92eb 22%, #ff5a9c 42%, #a448ff 64%, #4d56ff 84%, #8bf0ff 100%);
+  --preview-shadow: inset 0 1px 3px rgba(255,255,255,0.56),
+                    inset 0 -1px 3px rgba(34,10,54,0.34),
+                    0 3px 9px rgba(38,13,72,0.26);
+  --preview-radius: 7px;
+  --preview-border: color-mix(in srgb, #ffe0ff 58%, rgba(255,255,255,0.28));
+  animation: plasma-surge 3.2s ease-in-out infinite;
+  background-size: 230% 230%;
+}
+
 .cosmetic-card__tile {
   aspect-ratio: 1;
   border-radius: var(--preview-radius);
@@ -2911,6 +2975,17 @@ a.icon-btn { text-decoration: none; }
 @keyframes starlight-twinkle {
   0%, 100% { filter: brightness(1); transform: translateY(0); }
   50% { filter: brightness(1.15); transform: translateY(-1px); }
+}
+
+@keyframes holo-shift {
+  0% { filter: hue-rotate(0deg) saturate(1); background-position: 0% 50%; }
+  50% { filter: hue-rotate(26deg) saturate(1.2); background-position: 100% 50%; }
+  100% { filter: hue-rotate(0deg) saturate(1); background-position: 0% 50%; }
+}
+
+@keyframes plasma-surge {
+  0%, 100% { filter: saturate(1) brightness(1); transform: scale(1); background-position: 0% 50%; }
+  50% { filter: saturate(1.22) brightness(1.14); transform: scale(1.025); background-position: 100% 50%; }
 }
 
 @keyframes golden-badge-glow {
