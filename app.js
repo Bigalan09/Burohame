@@ -5302,11 +5302,12 @@ function renderBoard() {
         const key = toBoardKey(r, c);
         const lockHitsRemaining = dailyLockedCellsByKey.get(key) || 0;
         const lockRings = Math.max(0, lockHitsRemaining - 1);
+        const showLockRings = lockRings > 0;
         el.classList.toggle('filled', isFilled);
-        el.classList.toggle('cell-locked', isFilled && lockHitsRemaining > 0);
+        el.classList.toggle('cell-locked', isFilled && showLockRings);
         el.classList.toggle('cell-locked-tier-1', isFilled && lockRings === 1);
         el.classList.toggle('cell-locked-tier-2', isFilled && lockRings >= 2);
-        if (isFilled && lockHitsRemaining > 0) {
+        if (isFilled && showLockRings) {
           el.dataset.lockRings = String(lockRings);
         } else {
           delete el.dataset.lockRings;
