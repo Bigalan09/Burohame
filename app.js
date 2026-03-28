@@ -814,6 +814,20 @@ const COSMETIC_CATALOGUE = Object.freeze({
       price: scaleShopPrice(350),
       unlockSource: 'shop',
     },
+    {
+      id: 'holo',
+      name: 'Holo',
+      description: 'Animated iridescent sheen with gallery-level shimmer.',
+      price: scaleShopPrice(540),
+      unlockSource: 'shop',
+    },
+    {
+      id: 'plasma',
+      name: 'Plasma',
+      description: 'Animated electric ribbons for peak-session drama.',
+      price: scaleShopPrice(680),
+      unlockSource: 'shop',
+    },
   ],
 });
 const BLOCK_SKIN_LOOKUP = Object.freeze(
@@ -4901,7 +4915,9 @@ function renderCosmeticsCollection() {
     if (equipped) card.classList.add('cosmetic-card--equipped');
     if (!owned) card.classList.add('cosmetic-card--locked');
 
-    const swatches = colorway.swatches.map(swatch => `<span class="cosmetic-card__tile" style="--swatch:${swatch}"></span>`).join('');
+    const swatches = (Array.isArray(colorway.swatches) ? colorway.swatches : [colorway.primary || '#888888'])
+      .map(swatch => `<span class="cosmetic-card__tile" style="--swatch:${swatch};background:${swatch};"></span>`)
+      .join('');
     const label = `${colorway.icon} ${colorway.name}`;
     card.innerHTML = `
       <div class="cosmetic-card__preview" aria-hidden="true">${swatches}</div>
