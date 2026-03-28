@@ -194,7 +194,7 @@ let dailyChallengeState = {
   lockedCells: [],
   isHistorical: false,
 };
-let dailyLockedCellKeys = new Set();
+let dailyLockedCellsByKey = new Map();
 let selectedDailyChallengeDateKey = '';
 let lastGameOverReason = 'blocked';
 let leaderboardPlayerName = '';
@@ -240,7 +240,8 @@ const COIN_REWARD_MULTIPLIERS = Object.freeze({
 const DAILY_MISSION_VERSION = 3;
 const DAILY_CHALLENGE_TARGET_MIN = 350;
 const DAILY_CHALLENGE_TARGET_RANGE = 61;
-const DAILY_CHALLENGE_LOCKED_CELL_COUNT = 6;
+const DAILY_CHALLENGE_LOCKED_BLOCK_COUNT_MIN = 4;
+const DAILY_CHALLENGE_LOCKED_BLOCK_COUNT_RANGE = 6;
 const DAILY_CHALLENGE_ARCHIVE_DAYS = 7;
 const DAILY_CHALLENGE_PAST_REWARD_MULTIPLIER = 0.25;
 const ONE_MORE_RUN_RAPID_RETRY_WINDOW_MS = 4 * 60 * 1000;
@@ -2211,49 +2212,89 @@ function toBoardKey(r, c) {
   return `${r},${c}`;
 }
 
+function createSeededDailyRng(seed) {
+  let state = (seed || 1) >>> 0;
+  return () => {
+    state = (Math.imul(state || 1, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
 function normaliseLockedCells(value) {
   if (!Array.isArray(value)) return [];
-  const unique = new Set();
+  const unique = new Map();
   const cells = [];
   value.forEach(cell => {
-    if (!Array.isArray(cell) || cell.length !== 2) return;
-    const r = Math.max(0, Math.min(N - 1, Math.floor(cell[0])));
-    const c = Math.max(0, Math.min(N - 1, Math.floor(cell[1])));
+    const source = Array.isArray(cell)
+      ? { r: cell[0], c: cell[1], hitsRemaining: 2 }
+      : (cell && typeof cell === 'object' ? cell : null);
+    if (!source) return;
+    const r = Math.max(0, Math.min(N - 1, Math.floor(source.r)));
+    const c = Math.max(0, Math.min(N - 1, Math.floor(source.c)));
+    const hitsRemaining = Math.max(1, Math.min(3, Math.floor(source.hitsRemaining || source.hits || source.durability || 2)));
     const key = toBoardKey(r, c);
-    if (unique.has(key)) return;
-    unique.add(key);
-    cells.push([r, c]);
+    const existing = unique.get(key);
+    if (existing) {
+      existing.hitsRemaining = Math.max(existing.hitsRemaining, hitsRemaining);
+      return;
+    }
+    const entry = { r, c, hitsRemaining };
+    unique.set(key, entry);
+    cells.push(entry);
   });
   return cells;
 }
 
-function buildDailyLockedCells(seed, count = DAILY_CHALLENGE_LOCKED_CELL_COUNT) {
-  const available = [];
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
-      available.push([r, c]);
+function buildDailyLockedCells(seed) {
+  const random = createSeededDailyRng(seed);
+  const occupied = new Set();
+  const lockedCells = [];
+  const blockCount = DAILY_CHALLENGE_LOCKED_BLOCK_COUNT_MIN
+    + Math.floor(random() * DAILY_CHALLENGE_LOCKED_BLOCK_COUNT_RANGE);
+  const maxAttempts = blockCount * 12;
+  let attempts = 0;
+
+  while (lockedCells.length < N * N && attempts < maxAttempts && lockedCells.length < blockCount * 2) {
+    attempts += 1;
+    const row = Math.floor(random() * N);
+    const col = Math.floor(random() * N);
+    const originKey = toBoardKey(row, col);
+    if (occupied.has(originKey)) continue;
+
+    const useDomino = random() < 0.45;
+    const rings = random() < 0.35 ? 2 : 1;
+    const hitsRemaining = rings + 1;
+
+    const blockCells = [{ r: row, c: col, hitsRemaining }];
+    if (useDomino) {
+      const horizontal = random() < 0.5;
+      const nr = horizontal ? row : row + (random() < 0.5 ? -1 : 1);
+      const nc = horizontal ? col + (random() < 0.5 ? -1 : 1) : col;
+      const inBounds = nr >= 0 && nr < N && nc >= 0 && nc < N;
+      const neighbourKey = inBounds ? toBoardKey(nr, nc) : '';
+      if (inBounds && !occupied.has(neighbourKey)) {
+        blockCells.push({ r: nr, c: nc, hitsRemaining });
+      }
     }
+
+    blockCells.forEach(cell => {
+      occupied.add(toBoardKey(cell.r, cell.c));
+      lockedCells.push(cell);
+    });
+    if (occupied.size >= blockCount * 2) break;
   }
-  let state = (seed || 1) >>> 0;
-  const selected = [];
-  const picks = Math.max(0, Math.min(available.length, count));
-  for (let i = 0; i < picks; i++) {
-    state = (Math.imul(state || 1, 1664525) + 1013904223) >>> 0;
-    const idx = state % available.length;
-    selected.push(available[idx]);
-    available.splice(idx, 1);
-  }
-  return selected;
+
+  return normaliseLockedCells(lockedCells);
 }
 
 function syncDailyLockedCellSet() {
   if (!isDailyChallengeSession()) {
-    dailyLockedCellKeys = new Set();
+    dailyLockedCellsByKey = new Map();
     return;
   }
-  dailyLockedCellKeys = new Set(
+  dailyLockedCellsByKey = new Map(
     (dailyChallengeState.lockedCells || [])
-      .map(([r, c]) => toBoardKey(r, c))
+      .map(cell => [toBoardKey(cell.r, cell.c), cell.hitsRemaining])
   );
 }
 
@@ -3881,10 +3922,10 @@ function renderDailyChallengePanels() {
   const copy = challengeStatus.complete
     ? 'Board cleared. Pick another day or replay this one for practice.'
     : challengeStatus.isHistorical
-      ? 'Clear every locked block twice to finish this archived board.'
+      ? 'Clear every locked block until every ring is gone to finish this archived board.'
       : isFirstRunExperience
         ? 'Set your first score on today’s reinforced board by clearing every locked block.'
-        : 'Clear every locked block twice to complete today’s board.';
+        : 'Clear every locked block until every ring is gone to complete today’s board.';
   const progressLabel = challengeStatus.complete
     ? `Reward claimed: ${challengeStatus.reward} coins`
     : `Reward: ${challengeStatus.reward} coins`;
@@ -4705,7 +4746,11 @@ function createGameSessionSnapshot() {
           seed: dailyChallengeState.seed,
           targetScore: dailyChallengeState.targetScore,
           randomState: dailyChallengeState.randomState,
-          lockedCells: dailyChallengeState.lockedCells.map(([r, c]) => [r, c]),
+          lockedCells: dailyChallengeState.lockedCells.map(cell => ({
+            r: cell.r,
+            c: cell.c,
+            hitsRemaining: cell.hitsRemaining,
+          })),
           isHistorical: dailyChallengeState.isHistorical,
         }
       : null,
@@ -5247,8 +5292,18 @@ function renderBoard() {
       if (el) {
         el.classList.remove('clearing');
         const isFilled = !!board[r][c];
+        const key = toBoardKey(r, c);
+        const lockHitsRemaining = dailyLockedCellsByKey.get(key) || 0;
+        const lockRings = Math.max(0, lockHitsRemaining - 1);
         el.classList.toggle('filled', isFilled);
-        el.classList.toggle('cell-locked', isFilled && dailyLockedCellKeys.has(toBoardKey(r, c)));
+        el.classList.toggle('cell-locked', isFilled && lockHitsRemaining > 0);
+        el.classList.toggle('cell-locked-tier-1', isFilled && lockRings === 1);
+        el.classList.toggle('cell-locked-tier-2', isFilled && lockRings >= 2);
+        if (isFilled && lockHitsRemaining > 0) {
+          el.dataset.lockRings = String(lockRings);
+        } else {
+          delete el.dataset.lockRings;
+        }
       }
     }
   }
@@ -5533,7 +5588,7 @@ function afterPlace() {
   updateRackPlayability();
   updateTrainingPanel();
   if (trainingMode) showHint();
-  if (isDailyChallengeSession() && dailyLockedCellKeys.size === 0 && (dailyChallengeState.lockedCells || []).length === 0) {
+  if (isDailyChallengeSession() && dailyLockedCellsByKey.size === 0) {
     saveCurrentGame();
     setTimeout(() => triggerGameOver('daily-complete'), 120);
     return;
@@ -5629,26 +5684,49 @@ function doClears() {
   }
 
   let unlockedCells = 0;
+  let softenedCells = 0;
   for (const key of cleared) {
     const [r, c] = key.split(',').map(Number);
-    if (dailyLockedCellKeys.has(key)) {
-      dailyLockedCellKeys.delete(key);
-      dailyChallengeState.lockedCells = (dailyChallengeState.lockedCells || [])
-        .filter(([lr, lc]) => toBoardKey(lr, lc) !== key);
-      unlockedCells += 1;
+    if (dailyLockedCellsByKey.has(key)) {
+      const nextHitsRemaining = Math.max(0, (dailyLockedCellsByKey.get(key) || 0) - 1);
+      if (nextHitsRemaining > 0) {
+        dailyLockedCellsByKey.set(key, nextHitsRemaining);
+        dailyChallengeState.lockedCells = (dailyChallengeState.lockedCells || []).map(cell => {
+          if (cell.r === r && cell.c === c) return { ...cell, hitsRemaining: nextHitsRemaining };
+          return cell;
+        });
+        softenedCells += 1;
+      } else {
+        dailyLockedCellsByKey.delete(key);
+        dailyChallengeState.lockedCells = (dailyChallengeState.lockedCells || [])
+          .filter(cell => toBoardKey(cell.r, cell.c) !== key);
+        board[r][c] = 0;
+        unlockedCells += 1;
+      }
       continue;
     }
     board[r][c] = 0;
   }
 
-  if (unlockedCells > 0) {
+  if (softenedCells > 0) {
     recordRunUpdate({
-      title: `${unlockedCells} locked block${unlockedCells === 1 ? '' : 's'} unlocked`,
-      detail: 'Clear those blocks again to remove them.',
+      title: `${softenedCells} locked block${softenedCells === 1 ? '' : 's'} weakened`,
+      detail: 'Ringed blocks stay in place until all rings are removed.',
     });
     enqueueGameBanner({
       kicker: 'Daily challenge',
-      title: `${unlockedCells} locked block${unlockedCells === 1 ? '' : 's'} unlocked`,
+      title: `${softenedCells} locked block${softenedCells === 1 ? '' : 's'} weakened`,
+    });
+  }
+
+  if (unlockedCells > 0) {
+    recordRunUpdate({
+      title: `${unlockedCells} locked block${unlockedCells === 1 ? '' : 's'} removed`,
+      detail: 'Those blocks are now fully cleared.',
+    });
+    enqueueGameBanner({
+      kicker: 'Daily challenge',
+      title: `${unlockedCells} locked block${unlockedCells === 1 ? '' : 's'} removed`,
     });
   }
 
@@ -5727,7 +5805,7 @@ function simClears(cells, row, col) {
 // (Individual pieces that can't fit are just greyed out; the game continues
 //  as long as at least one piece can still be placed.)
 function isGameOver() {
-  if (isDailyChallengeSession() && dailyLockedCellKeys.size === 0 && (dailyChallengeState.lockedCells || []).length === 0) {
+  if (isDailyChallengeSession() && dailyLockedCellsByKey.size === 0) {
     return true;
   }
   for (let i = 0; i < rackSize; i++) {
@@ -5890,9 +5968,12 @@ function startNewGame(options = {}) {
   clearGameBannerQueue();
   runSummary = createDefaultRunSummary();
   if (isDailyChallengeSession()) {
+    (dailyChallengeState.lockedCells || []).forEach(cell => {
+      board[cell.r][cell.c] = 1;
+    });
     recordRunUpdate({
       title: 'Daily modifier active',
-      detail: 'Locked blocks stay on the board after one clear and must be cleared again to complete the board.',
+      detail: 'Locked blocks start on the board. Ringed blocks need multiple clears based on their ring count.',
     });
   }
   used     = Array(rackSize).fill(false);
