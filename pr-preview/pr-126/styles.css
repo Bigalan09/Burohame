@@ -184,6 +184,11 @@ html, body {
   margin-left: auto;
 }
 
+.shop-balance {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .page-kicker {
   font-size: 11px;
   font-weight: 800;
@@ -2595,14 +2600,53 @@ a.icon-btn { text-decoration: none; }
 }
 
 .cosmetic-card--colorway .cosmetic-card__tile {
+  background: var(--swatch);
   background: linear-gradient(180deg, color-mix(in srgb, var(--swatch) 82%, white) 0%, var(--swatch) 100%);
   box-shadow: inset 0 1px 1px rgba(255,255,255,0.42),
               0 2px 4px rgba(0,0,0,0.12);
+  outline: 1px solid rgba(255,255,255,0.26);
   outline: 1px solid color-mix(in srgb, var(--swatch) 72%, rgba(255,255,255,0.26));
 }
 
 .cosmetic-card--colorway[data-colorway="random"] .cosmetic-card__preview {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
   background: linear-gradient(135deg, rgba(255,255,255,0.55) 0%, color-mix(in srgb, var(--accent) 10%, var(--bg-card)) 100%);
+}
+
+.orientation-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: clamp(20px, 6vw, 36px);
+  background: color-mix(in srgb, var(--bg) 76%, rgba(0,0,0,0.78));
+  backdrop-filter: blur(6px);
+}
+
+.orientation-lock.hidden {
+  display: none;
+}
+
+.orientation-lock__card {
+  width: min(440px, 100%);
+  padding: 20px 18px;
+  border-radius: 18px;
+  text-align: center;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  box-shadow: 0 16px 36px rgba(0,0,0,0.22);
+}
+
+.orientation-lock__card h2 {
+  font-size: 22px;
+}
+
+.orientation-lock__card p {
+  margin-top: 8px;
+  color: var(--text-2);
+  line-height: 1.4;
 }
 
 .cosmetic-card__body {
