@@ -3237,10 +3237,15 @@ function getCoinBalance() {
 }
 
 function updateCoinUI() {
+  const coinBalance = getCoinBalance();
   const coinEl = document.getElementById('coin-balance');
-  if (coinEl) coinEl.textContent = getCoinBalance();
+  if (coinEl) coinEl.textContent = coinBalance;
   const dashboardCoinEl = document.getElementById('dashboard-coins');
-  if (dashboardCoinEl) dashboardCoinEl.textContent = String(getCoinBalance());
+  if (dashboardCoinEl) dashboardCoinEl.textContent = String(coinBalance);
+  const collectionBalanceEl = document.getElementById('collection-balance');
+  if (collectionBalanceEl) collectionBalanceEl.textContent = `🪙 ${coinBalance}`;
+  const shopBalanceEl = document.getElementById('shop-coin-balance');
+  if (shopBalanceEl) shopBalanceEl.textContent = `🪙 ${coinBalance}`;
 }
 
 function getOwnedBlockSkins() {
@@ -4092,6 +4097,7 @@ function renderCosmeticsCollection() {
   const finishList = document.getElementById('collection-list');
   const colorwayList = document.getElementById('colorway-list');
   const balance = document.getElementById('collection-balance');
+  const shopBalance = document.getElementById('shop-coin-balance');
   const finishSubtitle = document.getElementById('collection-subtitle');
   const colorwaySubtitle = document.getElementById('colorway-subtitle');
   if (!finishList || !colorwayList || !balance || !finishSubtitle || !colorwaySubtitle || !albumList || !albumCount || !albumSubtitle || !albumSpotlight || !albumGoalTitle || !albumGoalCopy) return;
@@ -4100,6 +4106,7 @@ function renderCosmeticsCollection() {
   const equippedSkin = getEquippedBlockSkin();
   const albumStatus = getCollectionAlbumStatus();
   balance.textContent = `🪙 ${coinBalance}`;
+  if (shopBalance) shopBalance.textContent = `🪙 ${coinBalance}`;
   finishSubtitle.textContent = getCollectionSubtitle();
   colorwaySubtitle.textContent = getColorwaySubtitle();
   albumCount.textContent = `${albumStatus.completedCount}/${albumStatus.totalSets} sets complete`;
@@ -6649,6 +6656,25 @@ function addMediaQueryChangeListener(mediaQueryList, listener) {
   }
 }
 
+function isPhoneLandscape() {
+  const landscape = window.matchMedia('(orientation: landscape)').matches;
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  const phoneSizedViewport = Math.min(window.innerWidth, window.innerHeight) <= 600;
+  return landscape && coarsePointer && phoneSizedViewport;
+}
+
+function updateOrientationLock() {
+  const lock = document.getElementById('orientation-lock');
+  if (!lock) return;
+  lock.classList.toggle('hidden', !isPhoneLandscape());
+}
+
+function preventLandscapeOnPhone() {
+  updateOrientationLock();
+  window.addEventListener('resize', updateOrientationLock);
+  window.addEventListener('orientationchange', updateOrientationLock);
+}
+
 async function init() {
   bestScore  = parseInt(localStorage.getItem('bst-best') || '0', 10);
   const todayKey = new Date().toISOString().slice(0, 10);
@@ -6712,6 +6738,7 @@ async function init() {
   populateSettingsPage();
   renderDashboard();
   navigateTo('dashboard');
+  preventLandscapeOnPhone();
 }
 
 window.addEventListener('online', () => {
