@@ -1444,6 +1444,16 @@ a.icon-btn { text-decoration: none; }
   pointer-events: none;
 }
 
+.cell.filled.cell-locked-tier-2::before {
+  content: '';
+  position: absolute;
+  inset: 31%;
+  border: 2px solid rgba(255, 255, 255, 0.82);
+  border-radius: calc(var(--block-radius) * 0.55);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+
 .cell.preview-ok  { background: var(--preview-ok) !important; border-radius: 0; }
 .cell.preview-bad { background: var(--preview-bad) !important; border-radius: 0; }
 .cell.preview-clr { background: var(--preview-clr) !important; border-radius: 0; }
