@@ -191,11 +191,23 @@ let dailyChallengeState = {
   seed: 0,
   targetScore: 0,
   randomState: 0,
+  lockedCells: [],
+  isHistorical: false,
 };
+let dailyLockedCellsByKey = new Map();
+let selectedDailyChallengeDateKey = '';
+let lastGameOverReason = 'blocked';
 let leaderboardPlayerName = '';
 let leaderboardPlayerId = '';
 let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
+let progressionResetDate = '';
 let weeklyLeaderboardHostedAdapter = null;
+let coachModeHostedAdapter = null;
+let coachModeAccessState = {
+  authorised: false,
+  expiresAt: 0,
+};
+let coachModeAccessExpiryTimer = 0;
 let weeklyLeaderboardPollTimer = 0;
 let weeklyLeaderboardViewState = {
   weekId: '',
@@ -208,26 +220,33 @@ let weeklyLeaderboardViewState = {
   hidden: true,
 };
 
-const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
+const COLOR_NAMES = ['orange', 'blue', 'green', 'purple', 'red', 'teal', 'pink', 'gold', 'indigo', 'mint', 'coral', 'slate', 'violet'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 8;
+const PROGRESSION_RESET_APPLIED_STORAGE_KEY = 'burohame-progression-reset-applied';
+const PROGRESSION_STATE_VERSION = 10;
+const PROGRESSION_RESET_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
 const GAME_BANNER_DISPLAY_MS = 2000;
 const GAME_BANNER_TRANSITION_MS = 320;
-const SHOP_PRICE_MULTIPLIER = 2.78;
+const SHOP_PRICE_MULTIPLIER = 1.946;
+const COIN_EARNING_BOOST_MULTIPLIER = 1.125;
 const COIN_REWARD_MULTIPLIERS = Object.freeze({
-  run: 0.45,
-  challenge: 0.6,
-  mission: 0.45,
-  quest: 0.5,
-  weekly: 0.45,
+  run: 0.52,
+  challenge: 0.69,
+  mission: 0.52,
+  quest: 0.58,
+  weekly: 0.52,
 });
 const DAILY_MISSION_VERSION = 3;
-const DAILY_CHALLENGE_TARGET_MIN = 140;
-const DAILY_CHALLENGE_TARGET_RANGE = 51;
+const DAILY_CHALLENGE_TARGET_MIN = 350;
+const DAILY_CHALLENGE_TARGET_RANGE = 61;
+const DAILY_CHALLENGE_LOCKED_BLOCK_COUNT_MIN = 4;
+const DAILY_CHALLENGE_LOCKED_BLOCK_COUNT_RANGE = 6;
+const DAILY_CHALLENGE_ARCHIVE_DAYS = 7;
+const DAILY_CHALLENGE_PAST_REWARD_MULTIPLIER = 0.25;
 const ONE_MORE_RUN_RAPID_RETRY_WINDOW_MS = 4 * 60 * 1000;
 const ONE_MORE_RUN_RAPID_RETRY_LIMIT = 2;
 const WEEKLY_LADDER_COUNTED_RUNS = 4;
@@ -236,6 +255,8 @@ const WEEKLY_PROMOTION_SLOTS = 4;
 const WEEKLY_RELEGATION_SLOTS = 4;
 const WEEKLY_LEADERBOARD_PULL_INTERVAL_MS = 60 * 1000;
 const WEEKLY_LEADERBOARD_MAX_ROWS = 20;
+const COACH_AUTH_SESSION_STORAGE_KEY = 'bst-coach-auth-session';
+const COACH_MODE_AUTH_SESSION_MS = 8 * 60 * 60 * 1000;
 const QUEST_BOARD_CHAIN_LIMIT = 3;
 const COIN_REWARDS = Object.freeze({
   clearRegion: 0,
@@ -265,6 +286,7 @@ const LEADERBOARD_HANDLE_VALIDATION_PREFIXES = Object.freeze([
   'That leaderboard name is not allowed',
   'That leaderboard name is full',
 ]);
+const SIX_DIGIT_PIN_PATTERN = /^\d{6}$/;
 
 const leaderboardHandleHelpers = globalThis.LeaderboardHandles || {};
 const extractLeaderboardNameBase =
@@ -292,7 +314,7 @@ function scaleShopPrice(amount) {
 function scaleCoinReward(amount, source = 'run') {
   if (!amount) return 0;
   const multiplier = COIN_REWARD_MULTIPLIERS[source] ?? COIN_REWARD_MULTIPLIERS.run;
-  return Math.max(1, Math.round(amount * multiplier));
+  return Math.max(1, Math.round(amount * multiplier * COIN_EARNING_BOOST_MULTIPLIER));
 }
 
 const DAILY_MISSION_TEMPLATES = Object.freeze([
@@ -633,9 +655,57 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'random',
     name: 'Shuffle Glow',
     description: 'Swap to a fresh unlocked colour every rack.',
-    price: scaleShopPrice(90),
+    price: 6000,
     icon: '🎲',
     swatches: ['#ffd08a', '#5ac8fa', '#af52de'],
+  },
+  {
+    id: 'gold',
+    name: 'Gold Gleam',
+    description: 'Sunlit tones with warm metallic contrast.',
+    price: scaleShopPrice(85),
+    icon: '🟡',
+    swatches: ['#fff0a8', '#f4c430', '#b8860b'],
+  },
+  {
+    id: 'indigo',
+    name: 'Indigo Night',
+    description: 'A dusk-led palette for focused late sessions.',
+    price: scaleShopPrice(95),
+    icon: '🌌',
+    swatches: ['#b7b6ff', '#5c6ac4', '#2f3a8f'],
+  },
+  {
+    id: 'mint',
+    name: 'Mint Breeze',
+    description: 'Cool spring colours with gentle highlights.',
+    price: scaleShopPrice(105),
+    icon: '🌿',
+    swatches: ['#c9ffe8', '#47d7ac', '#1e9a79'],
+  },
+  {
+    id: 'coral',
+    name: 'Coral Bloom',
+    description: 'Soft sunset warmth for brighter boards.',
+    price: scaleShopPrice(115),
+    icon: '🪸',
+    swatches: ['#ffc2b5', '#ff7f50', '#d4552d'],
+  },
+  {
+    id: 'slate',
+    name: 'Slate Flux',
+    description: 'Muted steel shades with cleaner contrast.',
+    price: scaleShopPrice(130),
+    icon: '🪨',
+    swatches: ['#c6d0e1', '#7082a8', '#41506c'],
+  },
+  {
+    id: 'violet',
+    name: 'Violet Arc',
+    description: 'Neon-violet accents for bolder runs.',
+    price: scaleShopPrice(145),
+    icon: '✨',
+    swatches: ['#e4b9ff', '#a855f7', '#6d28d9'],
   },
 ]);
 const COLORWAY_LOOKUP = Object.freeze(
@@ -702,6 +772,48 @@ const COSMETIC_CATALOGUE = Object.freeze({
       price: 0,
       unlockSource: 'album',
     },
+    {
+      id: 'aurora',
+      name: 'Aurora',
+      description: 'Animated colour ribbons that drift across each tile.',
+      price: 0,
+      unlockSource: 'collection',
+    },
+    {
+      id: 'starlight',
+      name: 'Starlight',
+      description: 'Animated starlit shimmer reserved for elite collectors.',
+      price: 0,
+      unlockSource: 'collection',
+    },
+    {
+      id: 'obsidian',
+      name: 'Obsidian',
+      description: 'Mirror-dark faces with crisp reflective edges.',
+      price: scaleShopPrice(260),
+      unlockSource: 'shop',
+    },
+    {
+      id: 'opal',
+      name: 'Opal',
+      description: 'Soft iridescent gradients that shift across each block.',
+      price: scaleShopPrice(290),
+      unlockSource: 'shop',
+    },
+    {
+      id: 'neon',
+      name: 'Neon',
+      description: 'High-energy glow with strong contrast for late pushes.',
+      price: scaleShopPrice(320),
+      unlockSource: 'shop',
+    },
+    {
+      id: 'linen',
+      name: 'Linen',
+      description: 'A matte woven texture with subdued highlights.',
+      price: scaleShopPrice(350),
+      unlockSource: 'shop',
+    },
   ],
 });
 const BLOCK_SKIN_LOOKUP = Object.freeze(
@@ -739,11 +851,17 @@ const COLLECTION_SET_CATALOGUE = Object.freeze([
       id: 'tidal-archive-badge',
       name: 'Tidal seal',
       detail: 'A polished seal marking every item in the Tidal Archive set as owned.',
+      unlock: {
+        type: 'finish',
+        id: 'aurora',
+        name: 'Aurora',
+        detail: 'Animated finish unlocked for completing the Tidal Archive set.',
+      },
     },
     items: [
       { type: 'colorway', id: 'blue' },
       { type: 'colorway', id: 'teal' },
-      { type: 'colorway', id: 'random' },
+      { type: 'colorway', id: 'mint' },
       { type: 'finish', id: 'frost' },
       { type: 'finish', id: 'prism' },
     ],
@@ -765,6 +883,31 @@ const COLLECTION_SET_CATALOGUE = Object.freeze([
       { type: 'colorway', id: 'red' },
       { type: 'finish', id: 'carbon' },
       { type: 'finish', id: 'ember' },
+    ],
+  },
+  {
+    id: 'luminous-vault',
+    season: 'Core album · Set 4',
+    title: 'Luminous Vault',
+    description: 'Rare accents and premium finishes assembled for long-term collectors.',
+    completionReward: {
+      type: 'badge',
+      id: 'luminous-vault-badge',
+      name: 'Vault insignia',
+      detail: 'A rare insignia awarded for completing the Luminous Vault set.',
+      unlock: {
+        type: 'finish',
+        id: 'starlight',
+        name: 'Starlight',
+        detail: 'Animated finish unlocked for completing the Luminous Vault set.',
+      },
+    },
+    items: [
+      { type: 'colorway', id: 'gold' },
+      { type: 'colorway', id: 'indigo' },
+      { type: 'colorway', id: 'violet' },
+      { type: 'finish', id: 'obsidian' },
+      { type: 'finish', id: 'opal' },
     ],
   },
 ]);
@@ -794,6 +937,294 @@ const COLLECTION_ALBUM_GOAL = Object.freeze({
     detail: 'Exclusive finish for completing every themed set in the album.',
   },
 });
+
+const BADGE_CATALOGUE = Object.freeze([
+  {
+    id: 'score-100',
+    name: 'Century starter',
+    icon: '💯',
+    description: 'Score 100 points in a run.',
+    unlockHint: 'Reach a best score of at least 100.',
+    source: 'score',
+    threshold: 100,
+  },
+  {
+    id: 'score-300',
+    name: 'Score striker',
+    icon: '🔥',
+    description: 'Score 300 points in a run.',
+    unlockHint: 'Reach a best score of at least 300.',
+    source: 'score',
+    threshold: 300,
+  },
+  {
+    id: 'score-600',
+    name: 'Board legend',
+    icon: '⚡',
+    description: 'Score 600 points in a run.',
+    unlockHint: 'Reach a best score of at least 600.',
+    source: 'score',
+    threshold: 600,
+  },
+  {
+    id: 'score-900',
+    name: 'Skybreaker',
+    icon: '🌠',
+    description: 'Score 900 points in a run.',
+    unlockHint: 'Reach a best score of at least 900.',
+    source: 'score',
+    threshold: 900,
+  },
+  {
+    id: 'score-1200',
+    name: 'Mythic tactician',
+    icon: '🏆',
+    description: 'Score 1200 points in a run.',
+    unlockHint: 'Reach a best score of at least 1200.',
+    source: 'score',
+    threshold: 1200,
+  },
+  {
+    id: 'quest-closer',
+    name: 'Route closer',
+    icon: '🧭',
+    description: 'Complete a full quest chain.',
+    unlockHint: 'Finish one quest chain in the current cycle.',
+    source: 'quest',
+  },
+  {
+    id: 'quest-vanguard',
+    name: 'Quest vanguard',
+    icon: '🛡️',
+    description: 'Complete two quest chains.',
+    unlockHint: 'Finish two quest chains in the current cycle.',
+    source: 'quest',
+    threshold: 2,
+  },
+  {
+    id: 'quest-grand-tour',
+    name: 'Grand tour',
+    icon: '🗺️',
+    description: 'Complete all active quest chains.',
+    unlockHint: 'Finish all active quest chains in the current cycle.',
+    source: 'quest',
+    threshold: 3,
+  },
+  {
+    id: 'collection-curator',
+    name: 'Collection curator',
+    icon: '🗂️',
+    description: 'Complete one themed collection set.',
+    unlockHint: 'Complete any themed set from the shop album.',
+    source: 'collection',
+  },
+  {
+    id: 'collection-builder',
+    name: 'Collection builder',
+    icon: '🧩',
+    description: 'Own five collection items across colourways and finishes.',
+    unlockHint: 'Unlock five collection items from the shop.',
+    source: 'collection-items',
+    threshold: 5,
+  },
+  {
+    id: 'collection-connoisseur',
+    name: 'Collection connoisseur',
+    icon: '🛍️',
+    description: 'Own ten collection items across colourways and finishes.',
+    unlockHint: 'Unlock ten collection items from the shop.',
+    source: 'collection-items',
+    threshold: 10,
+  },
+  {
+    id: 'palette-pioneer',
+    name: 'Palette pioneer',
+    icon: '🎨',
+    description: 'Unlock eight colourways.',
+    unlockHint: 'Own eight colourways.',
+    source: 'colorway-count',
+    threshold: 8,
+  },
+  {
+    id: 'palette-legend',
+    name: 'Palette legend',
+    icon: '🖌️',
+    description: 'Unlock all colourways.',
+    unlockHint: 'Own every colourway in the shop.',
+    source: 'colorway-count',
+    threshold: COLORWAY_CATALOGUE.length,
+  },
+  {
+    id: 'finish-fan',
+    name: 'Finish fan',
+    icon: '🪞',
+    description: 'Unlock six finishes.',
+    unlockHint: 'Own six finishes.',
+    source: 'finish-count',
+    threshold: 6,
+  },
+  {
+    id: 'finish-virtuoso',
+    name: 'Finish virtuoso',
+    icon: '💠',
+    description: 'Unlock every finish.',
+    unlockHint: 'Own every finish in the collection.',
+    source: 'finish-count',
+    threshold: COSMETIC_CATALOGUE.blockSkins.length,
+  },
+  {
+    id: 'set-trailblazer',
+    name: 'Set trailblazer',
+    icon: '📚',
+    description: 'Complete two themed collection sets.',
+    unlockHint: 'Finish two themed sets from the album.',
+    source: 'collection',
+    threshold: 2,
+  },
+  {
+    id: 'album-hero',
+    name: 'Album hero',
+    icon: '🏵️',
+    description: 'Complete every themed collection set.',
+    unlockHint: 'Finish all themed sets in the album.',
+    source: 'collection',
+    threshold: COLLECTION_SET_CATALOGUE.length,
+  },
+  {
+    id: 'sunrise-ribbon',
+    name: 'Sunrise ribbon',
+    icon: '🌅',
+    description: 'Earned for finishing the Sunrise Studio set.',
+    unlockHint: 'Complete the Sunrise Studio collection set.',
+    source: 'set-badge',
+    setBadgeId: 'sunrise-studio-badge',
+  },
+  {
+    id: 'tidal-seal',
+    name: 'Tidal seal',
+    icon: '🌊',
+    description: 'Earned for finishing the Tidal Archive set.',
+    unlockHint: 'Complete the Tidal Archive collection set.',
+    source: 'set-badge',
+    setBadgeId: 'tidal-archive-badge',
+  },
+  {
+    id: 'afterglow-crest',
+    name: 'Afterglow crest',
+    icon: '🌇',
+    description: 'Earned for finishing the Afterglow Arcade set.',
+    unlockHint: 'Complete the Afterglow Arcade collection set.',
+    source: 'set-badge',
+    setBadgeId: 'afterglow-arcade-badge',
+  },
+  {
+    id: 'luminous-insignia',
+    name: 'Luminous insignia',
+    icon: '🌟',
+    description: 'Earned for finishing the Luminous Vault set.',
+    unlockHint: 'Complete the Luminous Vault collection set.',
+    source: 'set-badge',
+    setBadgeId: 'luminous-vault-badge',
+  },
+  {
+    id: 'coin-keeper-500',
+    name: 'Coin keeper',
+    icon: '🪙',
+    description: 'Hold 500 coins at once.',
+    unlockHint: 'Save up to 500 coins.',
+    source: 'coin-balance',
+    threshold: 500,
+  },
+  {
+    id: 'coin-keeper-1000',
+    name: 'Coin warden',
+    icon: '💰',
+    description: 'Hold 1000 coins at once.',
+    unlockHint: 'Save up to 1000 coins.',
+    source: 'coin-balance',
+    threshold: 1000,
+  },
+  {
+    id: 'coin-keeper-2000',
+    name: 'Coin vault',
+    icon: '🏦',
+    description: 'Hold 2000 coins at once.',
+    unlockHint: 'Save up to 2000 coins.',
+    source: 'coin-balance',
+    threshold: 2000,
+  },
+  {
+    id: 'coin-keeper-5000',
+    name: 'Coin sovereign',
+    icon: '👑',
+    description: 'Hold 5000 coins at once.',
+    unlockHint: 'Save up to 5000 coins.',
+    source: 'coin-balance',
+    threshold: 5000,
+  },
+  {
+    id: 'golden-chaos',
+    name: 'Golden chaos',
+    icon: '✨',
+    description: 'Unlock the Shuffle Glow colourway after proving top-tier leaderboard skill.',
+    unlockHint: 'Finish in the weekly top 3 and unlock Shuffle Glow.',
+    source: 'random-colourway',
+    badgeVariant: 'golden-sparkle',
+  },
+  {
+    id: 'weekly-first',
+    name: 'Weekly champion',
+    icon: '🥇',
+    description: 'Hold 1st place on the weekly leaderboard.',
+    unlockHint: 'Reach 1st place in weekly standings.',
+    source: 'leaderboard',
+    rank: 1,
+  },
+  {
+    id: 'weekly-second',
+    name: 'Weekly silver',
+    icon: '🥈',
+    description: 'Hold 2nd place on the weekly leaderboard.',
+    unlockHint: 'Reach 2nd place in weekly standings.',
+    source: 'leaderboard',
+    rank: 2,
+  },
+  {
+    id: 'weekly-third',
+    name: 'Weekly bronze',
+    icon: '🥉',
+    description: 'Hold 3rd place on the weekly leaderboard.',
+    unlockHint: 'Reach 3rd place in weekly standings.',
+    source: 'leaderboard',
+    rank: 3,
+  },
+  {
+    id: 'weekly-top-10',
+    name: 'Top ten',
+    icon: '🎖️',
+    description: 'Reach the top ten on the weekly leaderboard.',
+    unlockHint: 'Reach 10th place or better in weekly standings.',
+    source: 'leaderboard-top',
+    threshold: 10,
+  },
+  {
+    id: 'weekly-top-5',
+    name: 'Top five',
+    icon: '👑',
+    description: 'Reach the top five on the weekly leaderboard.',
+    unlockHint: 'Reach 5th place or better in weekly standings.',
+    source: 'leaderboard-top',
+    threshold: 5,
+  },
+]);
+
+const BADGE_LOOKUP = Object.freeze(
+  BADGE_CATALOGUE.reduce((acc, badge) => {
+    acc[badge.id] = badge;
+    return acc;
+  }, {})
+);
+
 const RUN_OBJECTIVES = Object.freeze([
   {
     id: 'first-clear',
@@ -851,6 +1282,37 @@ function getPreviousDateKey(dateKey) {
   const date = new Date(`${dateKey}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() - 1);
   return getUTCDateKey(date);
+}
+
+function isValidDateKey(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function getRecentDailyChallengeDateKeys(limit = DAILY_CHALLENGE_ARCHIVE_DAYS) {
+  const count = Math.max(0, clampWholeNumber(limit, DAILY_CHALLENGE_ARCHIVE_DAYS));
+  const dates = [];
+  let cursor = getUTCDateKey();
+  for (let i = 0; i <= count; i++) {
+    dates.push(cursor);
+    cursor = getPreviousDateKey(cursor);
+  }
+  return dates;
+}
+
+function isHistoricalDailyChallengeDate(dateKey) {
+  return isValidDateKey(dateKey) && dateKey !== getUTCDateKey();
+}
+
+function isPlayableDailyChallengeDate(dateKey) {
+  if (!isValidDateKey(dateKey)) return false;
+  return getRecentDailyChallengeDateKeys().includes(dateKey);
+}
+
+function getDailyChallengeLabel(dateKey) {
+  const todayKey = getUTCDateKey();
+  if (dateKey === todayKey) return 'Today';
+  if (dateKey === getPreviousDateKey(todayKey)) return 'Yesterday';
+  return dateKey;
 }
 
 
@@ -916,6 +1378,13 @@ function sanitiseWeeklyLeaderboardState(value) {
   };
 }
 
+function syncLeaderboardPlayerId(nextPlayerId) {
+  const sanitisedPlayerId = typeof nextPlayerId === 'string' ? nextPlayerId.trim().slice(0, 64) : '';
+  if (!sanitisedPlayerId || leaderboardPlayerId === sanitisedPlayerId) return;
+  leaderboardPlayerId = sanitisedPlayerId;
+  saveSettings();
+}
+
 function createDefaultWeeklyLeaderboardRuntimeConfig() {
   return {
     backend: 'local',
@@ -943,11 +1412,17 @@ function sanitiseWeeklyLeaderboardRuntimeConfig(value) {
   return defaults;
 }
 
+function sanitiseProgressionResetDate(value) {
+  const resetDate = typeof value === 'string' ? value.trim() : '';
+  return PROGRESSION_RESET_DATE_PATTERN.test(resetDate) ? resetDate : '';
+}
+
 function loadRuntimeConfig() {
   const runtimeConfig = window.BUROHAME_RUNTIME_CONFIG && typeof window.BUROHAME_RUNTIME_CONFIG === 'object'
     ? window.BUROHAME_RUNTIME_CONFIG
     : {};
   weeklyLeaderboardRuntimeConfig = sanitiseWeeklyLeaderboardRuntimeConfig(runtimeConfig.weeklyLeaderboard);
+  progressionResetDate = sanitiseProgressionResetDate(runtimeConfig.progressionResetDate);
 }
 
 function hasHostedWeeklyLeaderboardConfig() {
@@ -983,21 +1458,75 @@ function createSupabaseHeaders(apiKey) {
   return headers;
 }
 
-function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
+function loadCoachModeAccessStateFromSession() {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(COACH_AUTH_SESSION_STORAGE_KEY) || 'null');
+    if (!raw || typeof raw !== 'object') return;
+    if (!raw.authorised) {
+      clearCoachModeAccessState();
+      return;
+    }
+    const expiresAt = Number(raw.expiresAt || 0);
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      clearCoachModeAccessState();
+      return;
+    }
+    coachModeAccessState = {
+      authorised: true,
+      expiresAt,
+    };
+    syncCoachModeAccessExpiry();
+  } catch (_) {
+    // Ignore malformed state.
+  }
+}
+
+function stopCoachModeAccessExpiryTimer() {
+  if (coachModeAccessExpiryTimer) {
+    clearTimeout(coachModeAccessExpiryTimer);
+    coachModeAccessExpiryTimer = 0;
+  }
+}
+
+function handleCoachModeAccessExpiry() {
+  if (!coachModeAccessState.authorised) return;
+  clearCoachModeAccessState();
+  applyCoachModeGate(false);
+  setCoachAuthStatus('Coach Mode access expired. Enter the code to unlock it again.');
+}
+
+function syncCoachModeAccessExpiry() {
+  stopCoachModeAccessExpiryTimer();
+  if (!coachModeAccessState.authorised) return;
+
+  const delay = coachModeAccessState.expiresAt - Date.now();
+  if (!Number.isFinite(delay) || delay <= 0) {
+    handleCoachModeAccessExpiry();
+    return;
+  }
+
+  coachModeAccessExpiryTimer = window.setTimeout(() => {
+    coachModeAccessExpiryTimer = 0;
+    handleCoachModeAccessExpiry();
+  }, delay);
+}
+
+function persistCoachModeAccessState() {
+  sessionStorage.setItem(COACH_AUTH_SESSION_STORAGE_KEY, JSON.stringify(coachModeAccessState));
+  syncCoachModeAccessExpiry();
+}
+
+function clearCoachModeAccessState() {
+  stopCoachModeAccessExpiryTimer();
+  coachModeAccessState = { authorised: false, expiresAt: 0 };
+  sessionStorage.removeItem(COACH_AUTH_SESSION_STORAGE_KEY);
+}
+
+function createSupabaseCoachModeAdapter(url, apiKey) {
   const baseUrl = url.replace(/\/$/, '');
   const headers = createSupabaseHeaders(apiKey);
   const authStorageKey = `bst-supabase-auth:${baseUrl}`;
   let cachedSession = null;
-
-  function buildQuery(weekId) {
-    const params = new URLSearchParams();
-    params.set('select', 'player_id,player_name,league_id,total_score,updated_at,created_at');
-    params.set('week_id', `eq.${weekId}`);
-    // Tie-break: earliest created_at wins when scores are level.
-    params.set('order', 'total_score.desc,created_at.asc,player_id.asc');
-    params.set('limit', String(WEEKLY_LEADERBOARD_MAX_ROWS));
-    return `${baseUrl}/rest/v1/weekly_leaderboard_entries?${params.toString()}`;
-  }
 
   function parseAuthPayload(payload) {
     const accessToken = payload?.access_token || payload?.session?.access_token || '';
@@ -1061,6 +1590,132 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
     if (current && typeof current.expiresAt === 'number' && current.expiresAt > Date.now() + 30_000) {
       return current;
     }
+    if (current?.refreshToken) {
+      try {
+        return await requestSession('/auth/v1/token?grant_type=refresh_token', { refresh_token: current.refreshToken });
+      } catch (_) {
+        // Fall through to a fresh anonymous session.
+      }
+    }
+    return requestSession('/auth/v1/signup', { data: {} });
+  }
+
+  async function callCoachModeFunction(payload = {}) {
+    const session = await ensureAuthSession();
+    const response = await fetch(`${baseUrl}/functions/v1/coach-mode-auth`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        Authorization: `Bearer ${session.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(typeof body?.error === 'string' && body.error
+        ? body.error
+        : `Coach Mode authorisation failed (${response.status})`);
+    }
+    return {
+      authorised: !!body?.authorised,
+      expiresAt: typeof body?.expires_at === 'string' ? Date.parse(body.expires_at) : 0,
+    };
+  }
+
+  return {
+    async checkSession() {
+      return callCoachModeFunction();
+    },
+    async verifyPin(pinCode) {
+      return callCoachModeFunction({ pin_code: pinCode });
+    },
+  };
+}
+
+function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
+  const baseUrl = url.replace(/\/$/, '');
+  const headers = createSupabaseHeaders(apiKey);
+  const authStorageKey = `bst-supabase-auth:${baseUrl}`;
+  let cachedSession = null;
+
+  function buildQuery(weekId) {
+    const params = new URLSearchParams();
+    params.set('select', 'player_id,player_name,league_id,total_score,updated_at,created_at');
+    params.set('week_id', `eq.${weekId}`);
+    // Tie-break: earliest created_at wins when scores are level.
+    params.set('order', 'total_score.desc,created_at.asc,player_id.asc');
+    params.set('limit', String(WEEKLY_LEADERBOARD_MAX_ROWS));
+    return `${baseUrl}/rest/v1/weekly_leaderboard_entries?${params.toString()}`;
+  }
+
+  function parseAuthPayload(payload) {
+    const accessToken = payload?.access_token || payload?.session?.access_token || '';
+    const refreshToken = payload?.refresh_token || payload?.session?.refresh_token || '';
+    const expiresIn = Number(payload?.expires_in || payload?.session?.expires_in || 0);
+    const userId = payload?.user?.id || payload?.session?.user?.id || '';
+    if (!accessToken || !refreshToken || !userId || !Number.isFinite(expiresIn) || expiresIn <= 0) return null;
+    return {
+      accessToken,
+      refreshToken,
+      userId,
+      expiresAt: Date.now() + (expiresIn * 1000),
+    };
+  }
+
+  function saveSession(session) {
+    cachedSession = session;
+    localStorage.setItem(authStorageKey, JSON.stringify(session));
+    syncLeaderboardPlayerId(session.userId);
+  }
+
+  function loadSession() {
+    if (cachedSession) {
+      syncLeaderboardPlayerId(cachedSession.userId);
+      return cachedSession;
+    }
+    try {
+      const raw = JSON.parse(localStorage.getItem(authStorageKey) || 'null');
+      if (raw && typeof raw === 'object') {
+        cachedSession = raw;
+        syncLeaderboardPlayerId(raw.userId);
+        return raw;
+      }
+    } catch (_) {
+      // Ignore and refresh the session.
+    }
+    return null;
+  }
+
+  async function requestSession(urlPath, body) {
+    const response = await fetch(`${baseUrl}${urlPath}`, {
+      method: 'POST',
+      headers: {
+        apikey: apiKey,
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase auth failed (${response.status})`);
+    }
+
+    const payload = await response.json();
+    const session = parseAuthPayload(payload);
+    if (!session) {
+      throw new Error('Supabase auth response did not include a valid session');
+    }
+    saveSession(session);
+    return session;
+  }
+
+  async function ensureAuthSession() {
+    const current = loadSession();
+    if (current && typeof current.expiresAt === 'number' && current.expiresAt > Date.now() + 30_000) {
+      return current;
+    }
 
     if (current?.refreshToken) {
       try {
@@ -1072,6 +1727,8 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
 
     return requestSession('/auth/v1/signup', { data: {} });
   }
+
+  loadSession();
 
   return {
     id: 'supabase',
@@ -1154,6 +1811,12 @@ function configureWeeklyLeaderboardAdapter() {
 
   weeklyLeaderboardHostedAdapter = hasHostedWeeklyLeaderboardConfig()
     ? createSupabaseWeeklyLeaderboardAdapter(
+        weeklyLeaderboardRuntimeConfig.supabaseUrl,
+        weeklyLeaderboardRuntimeConfig.supabasePublishableKey,
+      )
+    : null;
+  coachModeHostedAdapter = hasHostedWeeklyLeaderboardConfig()
+    ? createSupabaseCoachModeAdapter(
         weeklyLeaderboardRuntimeConfig.supabaseUrl,
         weeklyLeaderboardRuntimeConfig.supabasePublishableKey,
       )
@@ -1320,6 +1983,14 @@ async function refreshWeeklyLeaderboard(weekId, options = {}) {
     };
   }
   renderWeeklyGlobalLeaderboard();
+  const localBestScore = sanitiseWeeklyBestRuns(ensureWeeklyLadderForCurrentWeek().bestRuns)[0] || 0;
+  const liveRank = weeklyLeaderboardViewState.currentPlayerRank > 0
+    ? formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)
+    : 'Unranked';
+  setTextIfPresent(
+    'dashboard-weekly-card-progress',
+    localBestScore > 0 ? `${liveRank} · best ${localBestScore}` : 'Set your first weekly score',
+  );
 }
 
 function renderWeeklyGlobalLeaderboard() {
@@ -1364,12 +2035,25 @@ function renderWeeklyGlobalLeaderboard() {
     const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
     const nameEl = document.createElement('span');
     const league = getLeagueById(entry.leagueId);
-    nameEl.textContent = `${index + 1}. ${name} · ${league.badge} ${league.name}`;
+    const leaderboardBadge = (() => {
+      if (index === 0) return '🥇';
+      if (index === 1) return '🥈';
+      if (index === 2) return '🥉';
+      if (entry.playerId === leaderboardPlayerId) {
+        const equipped = getEquippedBadge();
+        return equipped ? equipped.icon : '';
+      }
+      return '';
+    })();
+    const badgePrefix = leaderboardBadge ? `${leaderboardBadge} ` : '';
+    nameEl.textContent = `${index + 1}. ${badgePrefix}${name} · ${league.badge} ${league.name}`;
     const scoreEl = document.createElement('strong');
     scoreEl.textContent = String(entry.totalScore);
     item.append(nameEl, scoreEl);
     listEl.appendChild(item);
   });
+
+  refreshBadgeMilestones();
 }
 
 function stopWeeklyLeaderboardPolling() {
@@ -1955,6 +2639,96 @@ function isDailyChallengeSession() {
   return currentSessionType === 'daily';
 }
 
+function toBoardKey(r, c) {
+  return `${r},${c}`;
+}
+
+function createSeededDailyRng(seed) {
+  let state = (seed || 1) >>> 0;
+  return () => {
+    state = (Math.imul(state || 1, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function normaliseLockedCells(value) {
+  if (!Array.isArray(value)) return [];
+  const unique = new Map();
+  const cells = [];
+  value.forEach(cell => {
+    const source = Array.isArray(cell)
+      ? { r: cell[0], c: cell[1], hitsRemaining: 2 }
+      : (cell && typeof cell === 'object' ? cell : null);
+    if (!source) return;
+    const r = Math.max(0, Math.min(N - 1, Math.floor(source.r)));
+    const c = Math.max(0, Math.min(N - 1, Math.floor(source.c)));
+    const hitsRemaining = Math.max(1, Math.min(3, Math.floor(source.hitsRemaining || source.hits || source.durability || 2)));
+    const key = toBoardKey(r, c);
+    const existing = unique.get(key);
+    if (existing) {
+      existing.hitsRemaining = Math.max(existing.hitsRemaining, hitsRemaining);
+      return;
+    }
+    const entry = { r, c, hitsRemaining };
+    unique.set(key, entry);
+    cells.push(entry);
+  });
+  return cells;
+}
+
+function buildDailyLockedCells(seed) {
+  const random = createSeededDailyRng(seed);
+  const occupied = new Set();
+  const lockedCells = [];
+  const blockCount = DAILY_CHALLENGE_LOCKED_BLOCK_COUNT_MIN
+    + Math.floor(random() * DAILY_CHALLENGE_LOCKED_BLOCK_COUNT_RANGE);
+  const maxAttempts = blockCount * 12;
+  let attempts = 0;
+
+  while (lockedCells.length < N * N && attempts < maxAttempts && lockedCells.length < blockCount * 2) {
+    attempts += 1;
+    const row = Math.floor(random() * N);
+    const col = Math.floor(random() * N);
+    const originKey = toBoardKey(row, col);
+    if (occupied.has(originKey)) continue;
+
+    const useDomino = random() < 0.45;
+    const rings = random() < 0.35 ? 2 : 1;
+    const hitsRemaining = rings + 1;
+
+    const blockCells = [{ r: row, c: col, hitsRemaining }];
+    if (useDomino) {
+      const horizontal = random() < 0.5;
+      const nr = horizontal ? row : row + (random() < 0.5 ? -1 : 1);
+      const nc = horizontal ? col + (random() < 0.5 ? -1 : 1) : col;
+      const inBounds = nr >= 0 && nr < N && nc >= 0 && nc < N;
+      const neighbourKey = inBounds ? toBoardKey(nr, nc) : '';
+      if (inBounds && !occupied.has(neighbourKey)) {
+        blockCells.push({ r: nr, c: nc, hitsRemaining });
+      }
+    }
+
+    blockCells.forEach(cell => {
+      occupied.add(toBoardKey(cell.r, cell.c));
+      lockedCells.push(cell);
+    });
+    if (occupied.size >= blockCount * 2) break;
+  }
+
+  return normaliseLockedCells(lockedCells);
+}
+
+function syncDailyLockedCellSet() {
+  if (!isDailyChallengeSession()) {
+    dailyLockedCellsByKey = new Map();
+    return;
+  }
+  dailyLockedCellsByKey = new Map(
+    (dailyChallengeState.lockedCells || [])
+      .map(cell => [toBoardKey(cell.r, cell.c), cell.hitsRemaining])
+  );
+}
+
 function randomValue() {
   if (!isDailyChallengeSession()) return Math.random();
   const currentState = dailyChallengeState.randomState || dailyChallengeState.seed || 1;
@@ -1969,17 +2743,26 @@ function resetStandardSessionState() {
     seed: 0,
     targetScore: 0,
     randomState: 0,
+    lockedCells: [],
+    isHistorical: false,
   };
+  syncDailyLockedCellSet();
 }
 
 function configureDailyChallengeSession(dailyState, options = {}) {
+  const lockedCells = normaliseLockedCells(options.lockedCells?.length
+    ? options.lockedCells
+    : buildDailyLockedCells(dailyState.seed));
   currentSessionType = 'daily';
   dailyChallengeState = {
     date: dailyState.date,
     seed: dailyState.seed,
     targetScore: dailyState.targetScore,
     randomState: clampWholeNumber(options.randomState, dailyState.seed || 1) || (dailyState.seed || 1),
+    lockedCells,
+    isHistorical: !!options.isHistorical,
   };
+  syncDailyLockedCellSet();
 }
 
 function createDailyMissionEntry(template, dateKey) {
@@ -2172,6 +2955,8 @@ function createDefaultProgressionState() {
       ownedBlockSkins: ['classic'],
       ownedColorways: ['orange'],
       earnedSetBadges: [],
+      unlockedBadges: [],
+      equippedBadgeId: '',
     },
     dailyMissions: {
       date: '',
@@ -2190,6 +2975,7 @@ function createDefaultProgressionState() {
       attempts: 0,
       rewardClaimedDate: '',
     },
+    dailyChallengeArchive: {},
     streak: {
       current: 0,
       best: 0,
@@ -2271,6 +3057,22 @@ function sanitiseDailyChallengeState(value) {
   };
 }
 
+function sanitiseDailyChallengeArchive(value) {
+  const src = value && typeof value === 'object' ? value : {};
+  const archive = {};
+  Object.entries(src).forEach(([dateKey, record]) => {
+    if (!isValidDateKey(dateKey)) return;
+    const clean = sanitiseDailyChallengeState({
+      ...record,
+      date: dateKey,
+      seed: getDailyChallengeSeed(dateKey),
+      targetScore: getDailyChallengeTarget(getDailyChallengeSeed(dateKey)),
+    });
+    archive[dateKey] = clean;
+  });
+  return archive;
+}
+
 function sanitiseProgressionState(rawState) {
   const defaults = createDefaultProgressionState();
   const src = rawState && typeof rawState === 'object' ? rawState : {};
@@ -2298,6 +3100,12 @@ function sanitiseProgressionState(rawState) {
     && ownedBlockSkins.includes(cosmetics.equippedBlockSkin)
     ? cosmetics.equippedBlockSkin
     : defaults.cosmetics.equippedBlockSkin;
+  const unlockedBadges = uniqueStringList(cosmetics.unlockedBadges, defaults.cosmetics.unlockedBadges)
+    .filter(id => BADGE_LOOKUP[id]);
+  const equippedBadgeId = typeof cosmetics.equippedBadgeId === 'string'
+    && unlockedBadges.includes(cosmetics.equippedBadgeId)
+    ? cosmetics.equippedBadgeId
+    : defaults.cosmetics.equippedBadgeId;
 
   return {
     version: PROGRESSION_STATE_VERSION,
@@ -2316,9 +3124,12 @@ function sanitiseProgressionState(rawState) {
       ownedBlockSkins,
       ownedColorways,
       earnedSetBadges: uniqueStringList(cosmetics.earnedSetBadges, defaults.cosmetics.earnedSetBadges),
+      unlockedBadges,
+      equippedBadgeId,
     },
     dailyMissions: sanitiseMissionState(src.dailyMissions),
     dailyChallenge: sanitiseDailyChallengeState(src.dailyChallenge),
+    dailyChallengeArchive: sanitiseDailyChallengeArchive(src.dailyChallengeArchive),
     streak: {
       current: clampWholeNumber(streak.current, defaults.streak.current),
       best: clampWholeNumber(streak.best, defaults.streak.best),
@@ -2645,21 +3456,8 @@ function getMissionRemainingCopy(mission, remaining) {
 }
 
 function buildDailyChallengePrompt(summary) {
-  const challenge = ensureDailyChallengeForToday();
-  if (!isDailyChallengeSession() || challenge.completedAt === challenge.date) return null;
-  const remaining = Math.max(0, challenge.targetScore - summary.finalScore);
-  const threshold = Math.max(18, Math.ceil(challenge.targetScore * 0.12));
-  if (!remaining || remaining > threshold) return null;
-  return {
-    id: 'daily-challenge',
-    rank: 110,
-    sessionType: 'daily',
-    buttonLabel: 'Try daily again',
-    eyebrow: 'Near today’s target',
-    title: `${remaining} points from the daily clear`,
-    copy: `Another daily board could finish today’s ${challenge.targetScore}-point target and keep the streak moving.`,
-    meta: `Reward · ${getDailyChallengeRewardAmount(Math.max(1, getDisplayedStreakCount() || 1))} coins`,
-  };
+  void summary;
+  return null;
 }
 
 function buildMissionFinishPrompt() {
@@ -2676,7 +3474,7 @@ function buildMissionFinishPrompt() {
     buttonLabel: 'One more run',
     eyebrow: 'One mission left',
     title: `${mission.title} is within reach`,
-    copy: `${mission.description} Only ${getMissionRemainingCopy(mission, remaining)}.`,
+    copy: `${mission.description} You only need ${getMissionRemainingCopy(mission, remaining)} to finish it and collect the reward.`,
     meta: `Reward · ${mission.reward} coins`,
   };
 }
@@ -2695,7 +3493,7 @@ function buildRoundMilestonePrompt(summary) {
     buttonLabel: 'Try again',
     eyebrow: 'Good pace',
     title: `${formatPromptGap(gap, 'rack')} from the ${nextMilestone}-rack bonus`,
-    copy: `That run reached ${roundsCompleted} racks. A steadier replay to ${nextMilestone} racks would bank +${reward} coins.`,
+    copy: `You reached ${roundsCompleted} racks. Play one steadier run, aim for ${nextMilestone}, and bank +${reward} coins.`,
     meta: 'Milestone reward',
   };
 }
@@ -2712,7 +3510,7 @@ function buildPersonalBestPrompt(summary) {
     buttonLabel: 'Try again',
     eyebrow: 'Close to a new best',
     title: `${gap} points from your record`,
-    copy: `Your best is ${bestScore}. Another quick run could turn this into a new personal best without changing your setup.`,
+    copy: `Your best is ${bestScore}. Run it back with the same approach and push just ${gap} more points for a new personal best.`,
     meta: 'Personal best chase',
   };
 }
@@ -2816,7 +3614,9 @@ function renderGameOverSummary() {
   document.getElementById('go-coin-total').textContent = String(getCoinBalance());
   if (intro) {
     intro.textContent = isDailyChallengeSession()
-      ? 'Today’s score is locked in.'
+      ? (lastGameOverReason === 'daily-complete'
+          ? 'Board cleared. Challenge complete.'
+          : 'Challenge run ended.')
       : 'Ready for another go?';
   }
   if (dashboardButton) {
@@ -2827,11 +3627,16 @@ function renderGameOverSummary() {
     const extraCount = Math.max(0, summary.recentUpdates.length - 1);
     if (latestUpdate) {
       summaryNote.hidden = false;
-      summaryNote.textContent = extraCount
-        ? `${latestUpdate.title}. ${extraCount} more update${extraCount === 1 ? '' : 's'} this run.`
-        : latestUpdate.detail
+      if (extraCount) {
+        const otherMilestones = `${extraCount} other milestone${extraCount === 1 ? '' : 's'} this run`;
+        summaryNote.textContent = latestUpdate.detail
+          ? `${latestUpdate.title}. ${latestUpdate.detail} There ${extraCount === 1 ? 'was' : 'were'} ${otherMilestones}.`
+          : `${latestUpdate.title}. Plus ${otherMilestones}.`;
+      } else {
+        summaryNote.textContent = latestUpdate.detail
           ? `${latestUpdate.title}. ${latestUpdate.detail}.`
           : latestUpdate.title;
+      }
     } else if (summary.questHighlightIds.length) {
       summaryNote.hidden = false;
       summaryNote.textContent = `${summary.questHighlightIds.length} quest chain${summary.questHighlightIds.length === 1 ? '' : 's'} moved on this run.`;
@@ -2855,23 +3660,26 @@ function renderGameOverSummary() {
       nextRunButton.dataset.sessionType = prompt.sessionType || currentSessionType;
       nextRunButton.dataset.promptType = prompt.id || '';
       nextRunButton.dataset.prompted = 'true';
+      nextRunButton.dataset.dailyDate = isDailyChallengeSession() ? (dailyChallengeState.date || getUTCDateKey()) : '';
     } else {
       nextRunButton.textContent = isDailyChallengeSession() ? 'Try daily again' : 'Play again';
       nextRunButton.dataset.sessionType = currentSessionType;
       nextRunButton.dataset.promptType = '';
       nextRunButton.dataset.prompted = 'false';
+      nextRunButton.dataset.dailyDate = isDailyChallengeSession() ? (dailyChallengeState.date || getUTCDateKey()) : '';
     }
   }
 
   if (dailySummary && dailyStatus && dailyCopy) {
     if (isDailyChallengeSession()) {
-      const challenge = ensureDailyChallengeForToday();
+      const challenge = ensureDailyChallengeForDate(dailyChallengeState.date || getUTCDateKey());
+      const label = getDailyChallengeLabel(challenge.date);
       const complete = challenge.completedAt === challenge.date;
       dailySummary.hidden = false;
-      dailyStatus.textContent = complete ? 'Completed' : 'Missed';
+      dailyStatus.textContent = complete ? 'Completed' : 'Unfinished';
       dailyCopy.textContent = complete
-        ? `Target ${challenge.targetScore} reached. Best score ${Math.max(challenge.bestScore, summary.finalScore)}.`
-        : `Target ${challenge.targetScore}. Best score ${Math.max(challenge.bestScore, summary.finalScore)}.`;
+        ? `${label} board cleared. Final score ${summary.finalScore}.`
+        : `${label} board not fully cleared. Best score ${Math.max(challenge.bestScore, summary.finalScore)}.`;
     } else {
       dailySummary.hidden = true;
     }
@@ -2906,15 +3714,53 @@ function resetProgressionState() {
   saveProgressionState();
 }
 
+function clearStoredProgressionData() {
+  localStorage.removeItem('bst-best');
+  localStorage.removeItem('bst-today');
+  localStorage.removeItem('bst-settings');
+  localStorage.removeItem(PROGRESSION_STORAGE_KEY);
+  localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('bst-supabase-auth:')) {
+      localStorage.removeItem(key);
+    }
+  }
+  clearCoachModeAccessState();
+  leaderboardPlayerId = '';
+  leaderboardPlayerName = '';
+  progressionState = createDefaultProgressionState();
+}
+
+function applyProgressionResetIfNeeded() {
+  if (!progressionResetDate) return false;
+
+  try {
+    const appliedResetDate = localStorage.getItem(PROGRESSION_RESET_APPLIED_STORAGE_KEY) || '';
+    if (appliedResetDate === progressionResetDate) return false;
+
+    clearStoredProgressionData();
+    localStorage.setItem(PROGRESSION_RESET_APPLIED_STORAGE_KEY, progressionResetDate);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function getCoinBalance() {
   return progressionState?.coins?.balance || 0;
 }
 
 function updateCoinUI() {
+  const coinBalance = getCoinBalance();
   const coinEl = document.getElementById('coin-balance');
-  if (coinEl) coinEl.textContent = getCoinBalance();
+  if (coinEl) coinEl.textContent = coinBalance;
   const dashboardCoinEl = document.getElementById('dashboard-coins');
-  if (dashboardCoinEl) dashboardCoinEl.textContent = String(getCoinBalance());
+  if (dashboardCoinEl) dashboardCoinEl.textContent = String(coinBalance);
+  const collectionBalanceEl = document.getElementById('collection-balance');
+  if (collectionBalanceEl) collectionBalanceEl.textContent = `🪙 ${coinBalance}`;
+  const shopBalanceEl = document.getElementById('shop-coin-balance');
+  if (shopBalanceEl) shopBalanceEl.textContent = `🪙 ${coinBalance}`;
 }
 
 function getOwnedBlockSkins() {
@@ -2927,6 +3773,33 @@ function getOwnedColorways() {
 
 function getEquippedBlockSkin() {
   return progressionState?.cosmetics?.equippedBlockSkin || 'classic';
+}
+
+function getUnlockedBadgeIds() {
+  return progressionState?.cosmetics?.unlockedBadges || [];
+}
+
+function getEquippedBadgeId() {
+  return progressionState?.cosmetics?.equippedBadgeId || '';
+}
+
+function getEquippedBadge() {
+  const badgeId = getEquippedBadgeId();
+  return badgeId ? BADGE_LOOKUP[badgeId] || null : null;
+}
+
+function isBadgeUnlocked(badgeId) {
+  return getUnlockedBadgeIds().includes(badgeId);
+}
+
+function equipBadge(badgeId) {
+  if (!badgeId || !isBadgeUnlocked(badgeId)) return false;
+  updateProgressionState(state => {
+    state.cosmetics.equippedBadgeId = badgeId;
+    return state;
+  });
+  updateCosmeticLabel();
+  return true;
 }
 
 function isBlockSkinOwned(skinId) {
@@ -3003,6 +3876,68 @@ function getCollectionAlbumStatus(sourceState = progressionState) {
   };
 }
 
+function unlockBadgeById(badgeId, { announce = true } = {}) {
+  const badge = BADGE_LOOKUP[badgeId];
+  if (!badge || isBadgeUnlocked(badgeId)) return false;
+  let didUnlock = false;
+  updateProgressionState(state => {
+    if (state.cosmetics.unlockedBadges.includes(badgeId)) return state;
+    state.cosmetics.unlockedBadges.push(badgeId);
+    if (!state.cosmetics.equippedBadgeId) state.cosmetics.equippedBadgeId = badgeId;
+    didUnlock = true;
+    return state;
+  });
+  if (didUnlock && announce) {
+    showMilestoneMoment({
+      eyebrow: 'Badge unlocked',
+      title: badge.name,
+      detail: `${badge.icon} ${badge.description}`,
+      major: false,
+      anchor: '.page--badges',
+      announce: `${badge.name} badge unlocked.`,
+    });
+  }
+  return didUnlock;
+}
+
+function getMilestoneBadgeUnlocks() {
+  const unlocks = [];
+  const collectionStatus = getCollectionAlbumStatus();
+  const completedSets = collectionStatus.completedCount;
+  const completedQuestChains = getQuestBoardStatus().completed;
+  const currentRank = weeklyLeaderboardViewState.currentPlayerRank || 0;
+  const ownedColorways = getOwnedColorways().length;
+  const ownedFinishes = getOwnedBlockSkins().length;
+  const ownedCollectionItems = ownedColorways + ownedFinishes;
+  const earnedSetBadges = new Set(progressionState?.cosmetics?.earnedSetBadges || []);
+  const currentCoinBalance = getCoinBalance();
+  const ownsRandomColourway = isColorwayOwned('random');
+
+  BADGE_CATALOGUE.forEach(badge => {
+    if (isBadgeUnlocked(badge.id)) return;
+    if (badge.source === 'score' && bestScore >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'collection' && completedSets >= (badge.threshold || 1)) unlocks.push(badge.id);
+    if (badge.source === 'quest' && completedQuestChains >= (badge.threshold || 1)) unlocks.push(badge.id);
+    if (badge.source === 'leaderboard' && currentRank > 0 && currentRank === badge.rank) unlocks.push(badge.id);
+    if (badge.source === 'leaderboard-top' && currentRank > 0 && currentRank <= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'colorway-count' && ownedColorways >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'finish-count' && ownedFinishes >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'collection-items' && ownedCollectionItems >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'set-badge' && badge.setBadgeId && earnedSetBadges.has(badge.setBadgeId)) unlocks.push(badge.id);
+    if (badge.source === 'coin-balance' && currentCoinBalance >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'random-colourway' && ownsRandomColourway) unlocks.push(badge.id);
+  });
+
+  return unlocks;
+}
+
+function refreshBadgeMilestones(options = {}) {
+  const unlocks = getMilestoneBadgeUnlocks();
+  if (!unlocks.length) return false;
+  unlocks.forEach(badgeId => unlockBadgeById(badgeId, options));
+  return true;
+}
+
 function evaluateCollectionAlbumRewards() {
   const status = getCollectionAlbumStatus();
   const newlyCompletedSets = status.setStatuses.filter(setStatus => setStatus.isComplete && !setStatus.isRecordedComplete);
@@ -3019,6 +3954,10 @@ function evaluateCollectionAlbumRewards() {
       if (!state.cosmetics.earnedSetBadges.includes(badgeId)) {
         state.cosmetics.earnedSetBadges.push(badgeId);
       }
+      const setUnlock = setStatus.set.completionReward.unlock;
+      if (setUnlock?.type === 'finish' && setUnlock.id && !state.cosmetics.ownedBlockSkins.includes(setUnlock.id)) {
+        state.cosmetics.ownedBlockSkins.push(setUnlock.id);
+      }
     });
 
     if (shouldClaimGrandReward) {
@@ -3034,13 +3973,17 @@ function evaluateCollectionAlbumRewards() {
   });
 
   newlyCompletedSets.forEach(setStatus => {
+    const setUnlock = setStatus.set.completionReward.unlock;
+    const unlockDetail = setUnlock?.type === 'finish'
+      ? ` ${setUnlock.name} finish unlocked.`
+      : '';
     showMilestoneMoment({
       eyebrow: 'Set complete',
       title: `${setStatus.set.title} finished`,
-      detail: `${setStatus.set.completionReward.name} earned. ${setStatus.set.completionReward.detail}`,
+      detail: `${setStatus.set.completionReward.name} earned. ${setStatus.set.completionReward.detail}${unlockDetail}`,
       major: true,
       anchor: '.page-panel--album',
-      announce: `${setStatus.set.title} set complete. ${setStatus.set.completionReward.name} earned.`,
+      announce: `${setStatus.set.title} set complete. ${setStatus.set.completionReward.name} earned.${unlockDetail}`,
     });
   });
 
@@ -3091,16 +4034,27 @@ function updateCosmeticLabel() {
   const dashboardFinish = document.getElementById('dashboard-finish');
   if (dashboardFinish) dashboardFinish.textContent = skin.name;
 
-  const badgeCount = progressionState?.cosmetics?.earnedSetBadges?.length || 0;
-  const badgeLabel = document.getElementById('dashboard-album-badge');
+  const badge = getEquippedBadge();
+  const badgeLabel = document.getElementById('page-equipped-badge-label');
   if (badgeLabel) {
-    badgeLabel.textContent = badgeCount ? `${badgeCount} album badge${badgeCount === 1 ? '' : 's'} earned` : 'No album badges yet';
+    badgeLabel.textContent = badge ? `${badge.icon} ${badge.name} equipped` : 'Unlock badges to equip one here.';
+  }
+  const openBadgesButton = document.getElementById('btn-settings-badges');
+  if (openBadgesButton) {
+    openBadgesButton.disabled = BADGE_CATALOGUE.length === 0;
+  }
+
+  const albumBadgeCount = progressionState?.cosmetics?.earnedSetBadges?.length || 0;
+  const dashboardAlbumBadgeLabel = document.getElementById('dashboard-album-badge');
+  if (dashboardAlbumBadgeLabel) {
+    dashboardAlbumBadgeLabel.textContent = albumBadgeCount ? `${albumBadgeCount} album badge${albumBadgeCount === 1 ? '' : 's'} earned` : 'No album badges yet';
   }
 
   const colourNote = document.getElementById('page-colour-note');
   if (colourNote) {
     const owned = getOwnedColorways().length;
-    colourNote.textContent = `${owned}/${COLORWAY_CATALOGUE.length} colourways owned. Unlock more in the shop.`;
+    const total = COLORWAY_CATALOGUE.filter(colorway => colorway.id !== 'random').length + (isColorwayOwned('random') ? 1 : 0);
+    colourNote.textContent = `${owned}/${total} colourways owned. Unlock more in the shop.`;
   }
 }
 
@@ -3146,6 +4100,7 @@ function spendCoins(amount, reason) {
 function unlockColorway(colorId) {
   const colorway = COLORWAY_LOOKUP[colorId];
   if (!colorway || isColorwayOwned(colorId)) return true;
+  if (colorId === 'random' && !hasRandomColourwayEligibility()) return false;
   if (!spendCoins(colorway.price, `${colorway.name} unlocked`)) return false;
 
   updateProgressionState(state => {
@@ -3299,31 +4254,69 @@ function syncDisplayedStreak() {
 
 function ensureDailyChallengeForToday() {
   const todayKey = getUTCDateKey();
-  const challengeSeed = getDailyChallengeSeed(todayKey);
+  return ensureDailyChallengeForDate(todayKey);
+}
+
+function ensureDailyChallengeForDate(dateKey = getUTCDateKey()) {
+  const targetDateKey = isPlayableDailyChallengeDate(dateKey) ? dateKey : getUTCDateKey();
+  const challengeSeed = getDailyChallengeSeed(targetDateKey);
   const targetScore = getDailyChallengeTarget(challengeSeed);
+  const todayKey = getUTCDateKey();
 
-  syncDisplayedStreak();
+  if (targetDateKey === todayKey) {
+    syncDisplayedStreak();
+    const existing = progressionState?.dailyChallenge;
+    if (existing?.date === todayKey && existing.seed === challengeSeed && existing.targetScore === targetScore) {
+      return existing;
+    }
 
-  const existing = progressionState?.dailyChallenge;
-  if (existing?.date === todayKey && existing.seed === challengeSeed && existing.targetScore === targetScore) {
-    return existing;
+    const nextState = updateProgressionState(state => {
+      const previous = sanitiseDailyChallengeState(state.dailyChallenge);
+      state.dailyChallenge = {
+        date: todayKey,
+        seed: challengeSeed,
+        targetScore,
+        bestScore: previous.date === todayKey ? previous.bestScore : 0,
+        completedAt: previous.date === todayKey ? previous.completedAt : '',
+        attempts: previous.date === todayKey ? previous.attempts : 0,
+        rewardClaimedDate: previous.date === todayKey ? previous.rewardClaimedDate : '',
+      };
+      return state;
+    });
+    return nextState.dailyChallenge;
   }
 
-  const nextState = updateProgressionState(state => {
-    const previous = sanitiseDailyChallengeState(state.dailyChallenge);
-    state.dailyChallenge = {
-      date: todayKey,
-      seed: challengeSeed,
-      targetScore,
-      bestScore: previous.date === todayKey ? previous.bestScore : 0,
-      completedAt: previous.date === todayKey ? previous.completedAt : '',
-      attempts: previous.date === todayKey ? previous.attempts : 0,
-      rewardClaimedDate: previous.date === todayKey ? previous.rewardClaimedDate : '',
+  const archived = progressionState?.dailyChallengeArchive?.[targetDateKey];
+  if (archived && archived.date === targetDateKey) return archived;
+
+  return {
+    date: targetDateKey,
+    seed: challengeSeed,
+    targetScore,
+    bestScore: 0,
+    completedAt: '',
+    attempts: 0,
+    rewardClaimedDate: '',
+  };
+}
+
+function updateArchivedDailyChallenge(dateKey, updater) {
+  if (!isHistoricalDailyChallengeDate(dateKey)) return;
+  updateProgressionState(state => {
+    const existing = sanitiseDailyChallengeState(
+      state.dailyChallengeArchive?.[dateKey] || ensureDailyChallengeForDate(dateKey)
+    );
+    const updated = sanitiseDailyChallengeState(updater(existing) || existing);
+    const archive = sanitiseDailyChallengeArchive(state.dailyChallengeArchive);
+    archive[dateKey] = {
+      ...updated,
+      date: dateKey,
+      seed: getDailyChallengeSeed(dateKey),
+      targetScore: getDailyChallengeTarget(getDailyChallengeSeed(dateKey)),
     };
+    state.dailyChallengeArchive = archive;
     return state;
   });
-
-  return nextState.dailyChallenge;
 }
 
 function getDisplayedStreakCount() {
@@ -3343,16 +4336,23 @@ function getDailyChallengeRewardAmount(streakCount) {
   return scaleCoinReward(baseReward, 'challenge');
 }
 
-function getDailyChallengeStatus(challenge = ensureDailyChallengeForToday()) {
+function getHistoricalDailyChallengeRewardAmount() {
+  const baseline = getDailyChallengeRewardAmount(1);
+  return Math.max(1, Math.floor(baseline * DAILY_CHALLENGE_PAST_REWARD_MULTIPLIER));
+}
+
+function getDailyChallengeStatus(challenge = ensureDailyChallengeForDate(selectedDailyChallengeDateKey || getUTCDateKey())) {
   const displayedStreak = getDisplayedStreakCount();
+  const isHistorical = isHistoricalDailyChallengeDate(challenge.date);
   const complete = challenge.completedAt === challenge.date;
-  const remaining = Math.max(0, challenge.targetScore - challenge.bestScore);
-  const reward = getDailyChallengeRewardAmount(complete ? displayedStreak : Math.max(1, displayedStreak || 1));
+  const reward = isHistorical
+    ? getHistoricalDailyChallengeRewardAmount()
+    : getDailyChallengeRewardAmount(complete ? displayedStreak : Math.max(1, displayedStreak || 1));
   return {
     complete,
-    remaining,
     reward,
     streak: displayedStreak,
+    isHistorical,
   };
 }
 
@@ -3363,11 +4363,16 @@ function getDailyChallengeBestLabel(challenge) {
 
 function markDailyChallengeAttempt() {
   if (!isDailyChallengeSession()) return;
-  const todayChallenge = ensureDailyChallengeForToday();
+  const challenge = ensureDailyChallengeForDate(dailyChallengeState.date || selectedDailyChallengeDateKey || getUTCDateKey());
+  if (isHistoricalDailyChallengeDate(challenge.date)) {
+    updateArchivedDailyChallenge(challenge.date, record => ({
+      ...record,
+      attempts: record.attempts + 1,
+    }));
+    return;
+  }
   updateProgressionState(state => {
-    if (state.dailyChallenge.date === todayChallenge.date) {
-      state.dailyChallenge.attempts += 1;
-    }
+    if (state.dailyChallenge.date === challenge.date) state.dailyChallenge.attempts += 1;
     return state;
   });
 }
@@ -3375,12 +4380,38 @@ function markDailyChallengeAttempt() {
 function maybeCompleteDailyChallenge() {
   if (!isDailyChallengeSession()) return;
 
-  const challenge = ensureDailyChallengeForToday();
-  if (challenge.completedAt === challenge.date || score < challenge.targetScore) return;
+  const challenge = ensureDailyChallengeForDate(dailyChallengeState.date || getUTCDateKey());
+  if (challenge.completedAt === challenge.date) return;
 
   const todayKey = challenge.date;
   const yesterdayKey = getPreviousDateKey(todayKey);
   let streakCount = 1;
+  const isHistorical = isHistoricalDailyChallengeDate(challenge.date);
+
+  if (isHistorical) {
+    updateArchivedDailyChallenge(challenge.date, record => ({
+      ...record,
+      bestScore: Math.max(record.bestScore, score),
+      completedAt: challenge.date,
+      rewardClaimedDate: challenge.date,
+    }));
+    const rewardAmount = getHistoricalDailyChallengeRewardAmount();
+    awardCoins(rewardAmount, `${getDailyChallengeLabel(challenge.date)} challenge`, {
+      silent: true,
+      celebrate: true,
+      major: false,
+    });
+    showMilestoneMoment({
+      eyebrow: 'Daily archive',
+      title: `${getDailyChallengeLabel(challenge.date)} board cleared`,
+      detail: `+${rewardAmount} coins`,
+      major: false,
+      anchor: '#score-wrap',
+      announce: `${getDailyChallengeLabel(challenge.date)} challenge complete. ${rewardAmount} coins awarded.`,
+    });
+    renderDashboard();
+    return;
+  }
 
   updateProgressionState(state => {
     state.dailyChallenge.bestScore = Math.max(state.dailyChallenge.bestScore, score);
@@ -3414,7 +4445,7 @@ function maybeCompleteDailyChallenge() {
   });
   showMilestoneMoment({
     eyebrow: 'Daily challenge',
-    title: `Target ${challenge.targetScore} reached`,
+    title: 'Board cleared',
     detail: `Streak ${streakCount} · +${rewardAmount} coins`,
     major: streakCount >= 3,
     anchor: '#score-wrap',
@@ -3425,8 +4456,16 @@ function maybeCompleteDailyChallenge() {
 
 function syncDailyChallengeScoreProgress() {
   if (!isDailyChallengeSession()) return;
-  const challenge = ensureDailyChallengeForToday();
+  const challenge = ensureDailyChallengeForDate(dailyChallengeState.date || getUTCDateKey());
   if (score <= challenge.bestScore) return;
+
+  if (isHistoricalDailyChallengeDate(challenge.date)) {
+    updateArchivedDailyChallenge(challenge.date, record => ({
+      ...record,
+      bestScore: Math.max(record.bestScore, score),
+    }));
+    return;
+  }
 
   updateProgressionState(state => {
     if (state.dailyChallenge.date === challenge.date) {
@@ -3460,27 +4499,45 @@ function setTextIfPresent(id, value) {
 }
 
 function renderDailyChallengePanels() {
-  const challenge = ensureDailyChallengeForToday();
+  const todayKey = getUTCDateKey();
+  if (!isPlayableDailyChallengeDate(selectedDailyChallengeDateKey)) {
+    selectedDailyChallengeDateKey = todayKey;
+  }
+  const challenge = ensureDailyChallengeForDate(selectedDailyChallengeDateKey);
   const challengeStatus = getDailyChallengeStatus(challenge);
   const isFirstRunExperience = getCompletedRunCount() === 0;
-  const title = 'Today';
+  const title = getDailyChallengeLabel(challenge.date);
   const copy = challengeStatus.complete
-    ? 'Target cleared. A fresh board lands tomorrow.'
-    : challengeStatus.remaining
-      ? `${challengeStatus.remaining} points left to clear today.`
+    ? 'Board cleared. Pick another day or replay this one for practice.'
+    : challengeStatus.isHistorical
+      ? 'Clear every locked block until every ring is gone to finish this archived board.'
       : isFirstRunExperience
-        ? 'Set your first score today.'
-        : 'Play today’s board.';
+        ? 'Set your first score on today’s reinforced board by clearing every locked block.'
+        : 'Clear every locked block until every ring is gone to complete today’s board.';
   const progressLabel = challengeStatus.complete
     ? `Reward claimed: ${challengeStatus.reward} coins`
     : `Reward: ${challengeStatus.reward} coins`;
+  const windowLabel = challengeStatus.isHistorical ? 'Past 7 days' : 'Today';
 
   setTextIfPresent('dashboard-daily-title', title);
   setTextIfPresent('dashboard-daily-copy', copy);
   setTextIfPresent('dashboard-daily-progress', progressLabel);
+  setTextIfPresent('dashboard-daily-window', windowLabel);
+
+  const dateSelect = document.getElementById('dashboard-daily-date');
+  if (dateSelect) {
+    const dates = getRecentDailyChallengeDateKeys();
+    const currentMarkup = dates
+      .map(dateKey => `<option value="${dateKey}">${getDailyChallengeLabel(dateKey)}</option>`)
+      .join('');
+    if (dateSelect.innerHTML !== currentMarkup) dateSelect.innerHTML = currentMarkup;
+    if (dateSelect.value !== challenge.date) dateSelect.value = challenge.date;
+  }
 
   const playButton = document.getElementById('btn-dashboard-daily-play');
-  if (playButton) playButton.setAttribute('aria-label', challengeStatus.complete ? 'Replay daily challenge' : 'Play daily challenge');
+  if (playButton) {
+    playButton.setAttribute('aria-label', challengeStatus.complete ? 'Replay selected daily challenge' : 'Play selected daily challenge');
+  }
 }
 
 function renderDailyMissions() {
@@ -3636,9 +4693,101 @@ function getCollectionSubtitle() {
 
 function getColorwaySubtitle() {
   const ownedCount = getOwnedColorways().length;
-  const totalCount = COLORWAY_CATALOGUE.length;
+  const totalCount = COLORWAY_CATALOGUE.filter(colorway => colorway.id !== 'random').length + (isColorwayOwned('random') ? 1 : 0);
   if (ownedCount === totalCount) return 'Every colourway is unlocked and ready to equip.';
   return `${ownedCount}/${totalCount} colourways owned.`;
+}
+
+function hasTopThreeWeeklyFinish() {
+  const unlockedBadges = new Set(getUnlockedBadgeIds());
+  return ['weekly-first', 'weekly-second', 'weekly-third'].some(id => unlockedBadges.has(id));
+}
+
+function hasRandomColourwayEligibility() {
+  return hasTopThreeWeeklyFinish();
+}
+
+function getBadgeStateLabel(badge, isUnlocked, isEquipped) {
+  if (isEquipped) return 'Equipped';
+  if (isUnlocked) return 'Unlocked';
+  if (badge.source === 'score' && badge.threshold) return `Locked · best ${bestScore}/${badge.threshold}`;
+  if (badge.source === 'leaderboard' && badge.rank) return `Locked · reach ${formatOrdinal(badge.rank)}`;
+  if (badge.source === 'leaderboard-top' && badge.threshold) {
+    const currentRank = weeklyLeaderboardViewState.currentPlayerRank || 0;
+    return currentRank > 0
+      ? `Locked · rank ${formatOrdinal(currentRank)}/${formatOrdinal(badge.threshold)}`
+      : `Locked · reach top ${badge.threshold}`;
+  }
+  if (badge.source === 'quest' && badge.threshold) {
+    const completedQuestChains = getQuestBoardStatus().completed;
+    return `Locked · chains ${completedQuestChains}/${badge.threshold}`;
+  }
+  if (badge.source === 'collection' && badge.threshold) {
+    const completedSets = getCollectionAlbumStatus().completedCount;
+    return `Locked · sets ${completedSets}/${badge.threshold}`;
+  }
+  if (badge.source === 'colorway-count' && badge.threshold) {
+    return `Locked · colourways ${getOwnedColorways().length}/${badge.threshold}`;
+  }
+  if (badge.source === 'finish-count' && badge.threshold) {
+    return `Locked · finishes ${getOwnedBlockSkins().length}/${badge.threshold}`;
+  }
+  if (badge.source === 'collection-items' && badge.threshold) {
+    const ownedItems = getOwnedColorways().length + getOwnedBlockSkins().length;
+    return `Locked · collection items ${ownedItems}/${badge.threshold}`;
+  }
+  if (badge.source === 'coin-balance' && badge.threshold) {
+    return `Locked · coins ${getCoinBalance()}/${badge.threshold}`;
+  }
+  if (badge.source === 'random-colourway') {
+    return hasRandomColourwayEligibility() ? 'Locked · unlock Shuffle Glow' : 'Locked · finish weekly top 3';
+  }
+  if (badge.source === 'set-badge') {
+    const earnedSetBadges = new Set(progressionState?.cosmetics?.earnedSetBadges || []);
+    return earnedSetBadges.has(badge.setBadgeId) ? 'Ready to claim' : 'Locked · set reward';
+  }
+  return 'Locked';
+}
+
+function renderBadgePage() {
+  const list = document.getElementById('badge-list');
+  const count = document.getElementById('badges-count');
+  const subtitle = document.getElementById('badges-subtitle');
+  if (!list || !count || !subtitle) return;
+
+  refreshBadgeMilestones({ announce: false });
+  const unlockedBadgeIds = new Set(getUnlockedBadgeIds());
+  const equippedBadgeId = getEquippedBadgeId();
+  const unlockedCount = BADGE_CATALOGUE.filter(badge => unlockedBadgeIds.has(badge.id)).length;
+
+  count.textContent = `${unlockedCount}/${BADGE_CATALOGUE.length} unlocked`;
+  subtitle.textContent = unlockedCount
+    ? 'Pick an unlocked badge to show beside your name on the weekly leaderboard.'
+    : 'No badges unlocked yet. Keep playing to earn your first one.';
+
+  list.innerHTML = '';
+  BADGE_CATALOGUE.forEach(badge => {
+    const isUnlocked = unlockedBadgeIds.has(badge.id);
+    const isEquipped = equippedBadgeId === badge.id;
+    const article = document.createElement('article');
+    article.className = `badge-item${isUnlocked ? '' : ' badge-item--locked'}`;
+    const tokenClass = badge.badgeVariant === 'golden-sparkle' ? ' badge-item__token--golden-sparkle' : '';
+    const actionMarkup = isUnlocked
+      ? `<button class="pill-btn${isEquipped ? ' pill-btn--secondary' : ''}" type="button" data-action="equip-badge" data-badge-id="${badge.id}" ${isEquipped ? 'disabled' : ''}>${isEquipped ? 'Equipped' : 'Equip'}</button>`
+      : '';
+    article.innerHTML = `
+      <div class="badge-item__token${tokenClass}" aria-hidden="true">${badge.icon}</div>
+      <div class="badge-item__body">
+        <h3>${badge.name}</h3>
+        <p>${isUnlocked ? badge.description : badge.unlockHint}</p>
+        <div class="badge-item__meta">
+          <span class="badge-item__state">${getBadgeStateLabel(badge, isUnlocked, isEquipped)}</span>
+          ${actionMarkup}
+        </div>
+      </div>
+    `;
+    list.appendChild(article);
+  });
 }
 
 function getShopActionMarkup({ owned, equipped, canAfford, price, itemId, collection }) {
@@ -3649,7 +4798,7 @@ function getShopActionMarkup({ owned, equipped, canAfford, price, itemId, collec
     return `<button class="pill-btn pill-btn--secondary" type="button" data-action="equip" data-item-id="${itemId}" data-collection="${collection}">Equip</button>`;
   }
   if (!price) {
-    return '<button class="pill-btn pill-btn--secondary" type="button" disabled>Album reward</button>';
+    return '<button class="pill-btn pill-btn--secondary" type="button" disabled>Collection reward</button>';
   }
   return `<button class="pill-btn${canAfford ? '' : ' pill-btn--secondary'}" type="button" data-action="unlock" data-item-id="${itemId}" data-collection="${collection}" ${canAfford ? '' : 'disabled'}>Unlock · 🪙 ${price}</button>`;
 }
@@ -3664,6 +4813,7 @@ function renderCosmeticsCollection() {
   const finishList = document.getElementById('collection-list');
   const colorwayList = document.getElementById('colorway-list');
   const balance = document.getElementById('collection-balance');
+  const shopBalance = document.getElementById('shop-coin-balance');
   const finishSubtitle = document.getElementById('collection-subtitle');
   const colorwaySubtitle = document.getElementById('colorway-subtitle');
   if (!finishList || !colorwayList || !balance || !finishSubtitle || !colorwaySubtitle || !albumList || !albumCount || !albumSubtitle || !albumSpotlight || !albumGoalTitle || !albumGoalCopy) return;
@@ -3672,6 +4822,7 @@ function renderCosmeticsCollection() {
   const equippedSkin = getEquippedBlockSkin();
   const albumStatus = getCollectionAlbumStatus();
   balance.textContent = `🪙 ${coinBalance}`;
+  if (shopBalance) shopBalance.textContent = `🪙 ${coinBalance}`;
   finishSubtitle.textContent = getCollectionSubtitle();
   colorwaySubtitle.textContent = getColorwaySubtitle();
   albumCount.textContent = `${albumStatus.completedCount}/${albumStatus.totalSets} sets complete`;
@@ -3702,6 +4853,9 @@ function renderCosmeticsCollection() {
       ? `Missing ${setStatus.missingItems.map(item => item.meta?.name || item.id).join(', ')}.`
       : 'Everything in this set is owned.';
     const badgeState = setStatus.rewardEarned ? 'Badge earned' : 'Badge waiting';
+    const unlockRewardLabel = setStatus.set.completionReward.unlock?.type === 'finish'
+      ? ` + ${setStatus.set.completionReward.unlock.name} finish`
+      : '';
     const itemMarkup = setStatus.itemStatuses.map(item => `
       <li class="album-card__item${item.owned ? ' is-owned' : ''}">
         <span>${item.meta?.name || item.id}</span>
@@ -3719,7 +4873,7 @@ function renderCosmeticsCollection() {
       </div>
       <div class="album-card__reward">
         <strong>${setStatus.set.completionReward.name}</strong>
-        <span>${badgeState}</span>
+        <span>${badgeState}${unlockRewardLabel}</span>
       </div>
       <ul class="album-card__items">${itemMarkup}</ul>
       <div class="album-card__footer">
@@ -3731,10 +4885,12 @@ function renderCosmeticsCollection() {
   });
 
   colorwayList.innerHTML = '';
-  for (const colorway of COLORWAY_CATALOGUE) {
+  const shouldShowRandomColourway = isColorwayOwned('random') || hasRandomColourwayEligibility();
+  for (const colorway of COLORWAY_CATALOGUE.filter(item => item.id !== 'random' || shouldShowRandomColourway)) {
     const owned = isColorwayOwned(colorway.id);
     const equipped = colorSetting === colorway.id;
     const canAfford = coinBalance >= colorway.price;
+    const meetsRequirement = colorway.id === 'random' ? hasRandomColourwayEligibility() : true;
     const set = getCollectionSetForItem('colorway', colorway.id);
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
     const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
@@ -3757,10 +4913,10 @@ function renderCosmeticsCollection() {
         <p>${colorway.description}</p>
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
-            <span>${costLabel}</span>
+            <span>${colorway.id === 'random' && !owned ? `${costLabel} · top 3 weekly required` : costLabel}</span>
             ${set ? `<span>${set.title}</span>` : ''}
           </div>
-          ${getShopActionMarkup({ owned, equipped, canAfford, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
+          ${getShopActionMarkup({ owned, equipped, canAfford: canAfford && meetsRequirement, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
         </div>
       </div>
     `;
@@ -3781,7 +4937,8 @@ function renderCosmeticsCollection() {
 
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
     const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
-    const costLabel = skin.price ? `🪙 ${skin.price}` : 'Free';
+    const isCollectionReward = skin.unlockSource === 'collection';
+    const costLabel = skin.price ? `🪙 ${skin.price}` : isCollectionReward ? 'Set reward' : 'Free';
 
     card.innerHTML = `
       <div class="cosmetic-card__preview" aria-hidden="true">
@@ -3798,7 +4955,7 @@ function renderCosmeticsCollection() {
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
             <span>${costLabel}</span>
-            <span>${set ? set.title : skin.unlockSource === 'album' ? 'Album grand reward' : 'Core collection'}</span>
+            <span>${set ? set.title : skin.unlockSource === 'album' ? 'Album grand reward' : isCollectionReward ? 'Collection set reward' : 'Core collection'}</span>
           </div>
           ${getShopActionMarkup({ owned, equipped, canAfford, price: skin.price, itemId: skin.id, collection: 'finish' })}
         </div>
@@ -3940,24 +5097,35 @@ function ensureSmallRecoveryPieceInRack(rack, targetBoard) {
   rack[Math.floor(randomValue() * rack.length)] = recoveryPiece;
 }
 
-// Try placing each piece (in the given slot order) at its first available
-// position and return whether all can be placed.
-function canFitAllInOrder(order) {
-  let b = board.map(r => [...r]);
-  for (const i of order) {
-    let placed = false;
-    outer: for (let r = 0; r < N; r++) {
-      for (let c = 0; c < N; c++) {
-        if (!canPlaceOnBoard(pieces[i], r, c, b)) continue;
-        for (const [dr, dc] of pieces[i]) b[r + dr][c + dc] = 1;
-        b = applyClears(b, getClearsOnBoard(b));
-        placed = true;
-        break outer;
-      }
+function getPlacementsOnBoard(piece, targetBoard) {
+  const placements = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (canPlaceOnBoard(piece, r, c, targetBoard)) placements.push([r, c]);
     }
-    if (!placed) return false;
   }
-  return true;
+  return placements;
+}
+
+function placePieceOnBoard(piece, row, col, targetBoard) {
+  const nextBoard = targetBoard.map(r => [...r]);
+  for (const [dr, dc] of piece) nextBoard[row + dr][col + dc] = 1;
+  return applyClears(nextBoard, getClearsOnBoard(nextBoard));
+}
+
+// Returns true when an order has at least one complete placement path.
+function canFitAllInOrder(order, targetBoard, depth = 0) {
+  if (depth >= order.length) return true;
+  const slotIndex = order[depth];
+  const placements = getPlacementsOnBoard(pieces[slotIndex], targetBoard);
+  if (!placements.length) return false;
+
+  for (const [row, col] of placements) {
+    const nextBoard = placePieceOnBoard(pieces[slotIndex], row, col, targetBoard);
+    if (canFitAllInOrder(order, nextBoard, depth + 1)) return true;
+  }
+
+  return false;
 }
 
 // Returns true when only some orderings allow all pieces to be placed –
@@ -3967,17 +5135,13 @@ function orderMatters() {
   const unplaced = Array.from({ length: rackSize }, (_, i) => i).filter(i => !used[i]);
   if (unplaced.length <= 1) return false;
 
-  // Skip the check on nearly-empty boards – not tight enough to matter.
-  const fillCount = board.reduce((sum, row) => sum + row.reduce((total, cell) => total + cell, 0), 0);
-  if (fillCount < 28) return false;
-
   const perms = getPermutations(unplaced);
-  let worksCount = 0;
+  let solvableOrders = 0;
   for (const order of perms) {
-    if (canFitAllInOrder(order)) worksCount++;
+    if (canFitAllInOrder(order, board)) solvableOrders++;
   }
   // True only if at least one ordering works but not all do.
-  return worksCount > 0 && worksCount < perms.length;
+  return solvableOrders > 0 && solvableOrders < perms.length;
 }
 
 function randomPiece() {
@@ -4270,6 +5434,12 @@ function createGameSessionSnapshot() {
           seed: dailyChallengeState.seed,
           targetScore: dailyChallengeState.targetScore,
           randomState: dailyChallengeState.randomState,
+          lockedCells: dailyChallengeState.lockedCells.map(cell => ({
+            r: cell.r,
+            c: cell.c,
+            hitsRemaining: cell.hitsRemaining,
+          })),
+          isHistorical: dailyChallengeState.isHistorical,
         }
       : null,
     runSummary: ensureRunSummary(),
@@ -4335,6 +5505,8 @@ function getSavedGameSession() {
             seed: clampWholeNumber(raw.dailyChallenge.seed, 0),
             targetScore: clampWholeNumber(raw.dailyChallenge.targetScore, 0),
             randomState: clampWholeNumber(raw.dailyChallenge.randomState, 0),
+            lockedCells: normaliseLockedCells(raw.dailyChallenge.lockedCells),
+            isHistorical: !!raw.dailyChallenge.isHistorical,
           }
         : null,
       runSummary: raw.runSummary && typeof raw.runSummary === 'object'
@@ -4374,12 +5546,22 @@ function restoreSavedGame() {
   const saved = getSavedGameSession();
   if (!saved) return false;
   if (saved.sessionType === 'daily') {
-    const todayChallenge = ensureDailyChallengeForToday();
-    if (!saved.dailyChallenge || saved.dailyChallenge.date !== todayChallenge.date) {
+    const savedDate = saved.dailyChallenge?.date;
+    if (!saved.dailyChallenge || !isPlayableDailyChallengeDate(savedDate)) {
       clearSavedGame();
       return false;
     }
-    configureDailyChallengeSession(todayChallenge, { randomState: saved.dailyChallenge.randomState });
+    const savedChallenge = ensureDailyChallengeForDate(savedDate);
+    if (saved.dailyChallenge.seed !== savedChallenge.seed || saved.dailyChallenge.targetScore !== savedChallenge.targetScore) {
+      clearSavedGame();
+      return false;
+    }
+    configureDailyChallengeSession(savedChallenge, {
+      randomState: saved.dailyChallenge.randomState,
+      lockedCells: saved.dailyChallenge.lockedCells,
+      isHistorical: saved.dailyChallenge.isHistorical || isHistoricalDailyChallengeDate(savedDate),
+    });
+    selectedDailyChallengeDateKey = savedDate;
   } else {
     resetStandardSessionState();
   }
@@ -4399,6 +5581,8 @@ function restoreSavedGame() {
   renderRack();
   updateRackPlayability();
   updateTrainingPanel();
+  if (trainingMode) showHint();
+  else clearHint();
   updateScoreUI();
   renderDashboard();
   return true;
@@ -4410,7 +5594,7 @@ function renderSessionModeBadge() {
 
   if (isDailyChallengeSession()) {
     badge.hidden = false;
-    badge.textContent = `Daily · target ${dailyChallengeState.targetScore}`;
+    badge.textContent = `Daily · ${getDailyChallengeLabel(dailyChallengeState.date || getUTCDateKey())}`;
   } else {
     badge.hidden = true;
   }
@@ -4509,6 +5693,7 @@ function renderDashboard() {
   const focusCards = document.querySelector('.dashboard-focus');
   const coins = getCoinBalance();
   const hasMeaningfulProgress = coins > 0 || bestScore > 0 || todayScore > 0;
+  refreshBadgeMilestones();
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
@@ -4561,8 +5746,78 @@ function getCompletedRunCount() {
   return progressionState?.onboarding?.completedRuns || 0;
 }
 
+function setCoachToggleVisibility(authorised) {
+  const toggleRow = document.getElementById('page-coach-toggle-row');
+  const coachToggle = document.getElementById('page-chk-coach');
+  const authTitle = document.getElementById('page-coach-auth-title');
+  const authInput = document.getElementById('page-input-coach-code');
+  const unlockButton = document.getElementById('btn-coach-auth');
+  if (!toggleRow || !coachToggle || !authTitle || !authInput || !unlockButton) return;
+  toggleRow.hidden = !authorised;
+  coachToggle.disabled = !authorised;
+  if (!authorised) coachToggle.checked = false;
+  authTitle.textContent = authorised ? 'Coach Mode access' : 'Coach Mode access code';
+  authInput.hidden = authorised;
+  unlockButton.hidden = authorised;
+}
+
+function setCoachAuthStatus(message, isError = false) {
+  const statusEl = document.getElementById('page-coach-auth-status');
+  if (!statusEl) return;
+  statusEl.textContent = message;
+  statusEl.style.color = isError ? '#b00020' : '';
+}
+
+function getCoachModeAccessSummary() {
+  if (!coachModeAccessState.authorised) return 'Coach Mode is locked for this session.';
+  const expiry = new Date(coachModeAccessState.expiresAt);
+  if (Number.isNaN(expiry.getTime())) return 'Coach Mode is unlocked for this session.';
+  return `Coach Mode unlocked until ${expiry.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+}
+
+function applyCoachModeGate(authorised) {
+  setCoachToggleVisibility(authorised);
+  if (!authorised && trainingMode) {
+    trainingMode = false;
+    document.getElementById('coach-panel').hidden = true;
+    clearHint();
+    document.getElementById('move-eval').textContent = '';
+    document.getElementById('strategy-note').textContent = '';
+    saveSettings();
+  }
+}
+
+async function checkCoachModeSession() {
+  if (!coachModeHostedAdapter) {
+    clearCoachModeAccessState();
+    applyCoachModeGate(false);
+    setCoachAuthStatus('Coach Mode access is unavailable because hosted services are offline.');
+    return false;
+  }
+
+  try {
+    const result = await coachModeHostedAdapter.checkSession();
+    coachModeAccessState = {
+      authorised: !!result.authorised,
+      expiresAt: Number.isFinite(result.expiresAt) ? result.expiresAt : 0,
+    };
+    if (!coachModeAccessState.authorised) {
+      clearCoachModeAccessState();
+    } else {
+      persistCoachModeAccessState();
+    }
+    applyCoachModeGate(coachModeAccessState.authorised);
+    setCoachAuthStatus(getCoachModeAccessSummary());
+    return coachModeAccessState.authorised;
+  } catch (error) {
+    clearCoachModeAccessState();
+    applyCoachModeGate(false);
+    setCoachAuthStatus(error instanceof Error ? error.message : 'Could not verify Coach Mode access right now.', true);
+    return false;
+  }
+}
+
 function populateQuickSettings() {
-  document.getElementById('quick-chk-coach').checked = trainingMode;
   document.getElementById('quick-chk-dark').checked = darkMode;
 }
 
@@ -4607,13 +5862,13 @@ async function ensureLeaderboardHandleClaimedOnJoin() {
 }
 
 function populateSettingsPage() {
-  document.getElementById('page-chk-coach').checked = trainingMode;
+  document.getElementById('page-chk-coach').checked = trainingMode && coachModeAccessState.authorised;
   document.getElementById('page-chk-extended').checked = extendedPieces;
   document.getElementById('page-chk-dark').checked = darkMode;
 
   const colorSelect = document.getElementById('page-sel-color');
   colorSelect.innerHTML = '';
-  for (const colorway of COLORWAY_CATALOGUE) {
+  for (const colorway of COLORWAY_CATALOGUE.filter(item => item.id !== 'random' || isColorwayOwned('random'))) {
     const option = document.createElement('option');
     option.value = colorway.id;
     option.textContent = `${colorway.icon} ${colorway.name}${isColorwayOwned(colorway.id) ? '' : ' · shop unlock'}`;
@@ -4623,6 +5878,14 @@ function populateSettingsPage() {
   colorSelect.value = isColorwayOwned(colorSetting) ? colorSetting : 'orange';
   document.getElementById('page-sel-rack').value = String(rackSize);
   document.getElementById('page-input-weekly-name').value = extractLeaderboardNameBase(leaderboardPlayerName);
+  document.getElementById('page-input-coach-code').value = '';
+  setCoachToggleVisibility(coachModeAccessState.authorised);
+  setCoachAuthStatus(
+    coachModeAccessState.authorised
+      ? getCoachModeAccessSummary()
+      : 'Checking Coach Mode access...',
+  );
+  checkCoachModeSession();
   updateLeaderboardNameAvailabilityIndicator();
   updateCosmeticLabel();
 }
@@ -4676,6 +5939,7 @@ function navigateTo(page) {
   if (page === 'quests') renderQuestBoard();
   if (page === 'shop') renderCosmeticsCollection();
   if (page === 'settings') populateSettingsPage();
+  if (page === 'badges') renderBadgePage();
   if (page === 'game') showDefaultGameBannerMessage();
   updateBottomNav();
 }
@@ -4717,7 +5981,20 @@ function renderBoard() {
       const el = cellEl(r, c);
       if (el) {
         el.classList.remove('clearing');
-        el.classList.toggle('filled', !!board[r][c]);
+        const isFilled = !!board[r][c];
+        const key = toBoardKey(r, c);
+        const lockHitsRemaining = dailyLockedCellsByKey.get(key) || 0;
+        const lockRings = Math.max(0, lockHitsRemaining - 1);
+        const showLockRings = lockRings > 0;
+        el.classList.toggle('filled', isFilled);
+        el.classList.toggle('cell-locked', isFilled && showLockRings);
+        el.classList.toggle('cell-locked-tier-1', isFilled && lockRings === 1);
+        el.classList.toggle('cell-locked-tier-2', isFilled && lockRings >= 2);
+        if (isFilled && showLockRings) {
+          el.dataset.lockRings = String(lockRings);
+        } else {
+          delete el.dataset.lockRings;
+        }
       }
     }
   }
@@ -4935,6 +6212,8 @@ function endDrag(cx, cy) {
 
   if (canPlace(cells, snapR, snapC)) {
     doPlace(slotIdx, snapR, snapC);
+  } else if (trainingMode) {
+    showHint();
   }
 }
 
@@ -4944,6 +6223,7 @@ function cancelDrag() {
   drag.ghost.remove();
   document.getElementById(`slot-${drag.slotIdx}`).classList.remove('dragging');
   drag = null;
+  if (trainingMode) showHint();
 }
 
 // ── Game actions ───────────────────────────────────────────
@@ -4998,6 +6278,12 @@ function doPlace(slotIdx, row, col) {
 function afterPlace() {
   updateRackPlayability();
   updateTrainingPanel();
+  if (trainingMode) showHint();
+  if (isDailyChallengeSession() && dailyLockedCellsByKey.size === 0) {
+    saveCurrentGame();
+    setTimeout(() => triggerGameOver('daily-complete'), 120);
+    return;
+  }
   if (used.every(Boolean)) {
     // All pieces placed → new round
     setTimeout(newRound, 80);
@@ -5088,9 +6374,51 @@ function doClears() {
     });
   }
 
+  let unlockedCells = 0;
+  let softenedCells = 0;
   for (const key of cleared) {
     const [r, c] = key.split(',').map(Number);
+    if (dailyLockedCellsByKey.has(key)) {
+      const nextHitsRemaining = Math.max(0, (dailyLockedCellsByKey.get(key) || 0) - 1);
+      if (nextHitsRemaining > 0) {
+        dailyLockedCellsByKey.set(key, nextHitsRemaining);
+        dailyChallengeState.lockedCells = (dailyChallengeState.lockedCells || []).map(cell => {
+          if (cell.r === r && cell.c === c) return { ...cell, hitsRemaining: nextHitsRemaining };
+          return cell;
+        });
+        softenedCells += 1;
+      } else {
+        dailyLockedCellsByKey.delete(key);
+        dailyChallengeState.lockedCells = (dailyChallengeState.lockedCells || [])
+          .filter(cell => toBoardKey(cell.r, cell.c) !== key);
+        board[r][c] = 0;
+        unlockedCells += 1;
+      }
+      continue;
+    }
     board[r][c] = 0;
+  }
+
+  if (softenedCells > 0) {
+    recordRunUpdate({
+      title: `${softenedCells} locked block${softenedCells === 1 ? '' : 's'} weakened`,
+      detail: 'Ringed blocks stay in place until all rings are removed.',
+    });
+    enqueueGameBanner({
+      kicker: 'Daily challenge',
+      title: `${softenedCells} locked block${softenedCells === 1 ? '' : 's'} weakened`,
+    });
+  }
+
+  if (unlockedCells > 0) {
+    recordRunUpdate({
+      title: `${unlockedCells} locked block${unlockedCells === 1 ? '' : 's'} removed`,
+      detail: 'Those blocks are now fully cleared.',
+    });
+    enqueueGameBanner({
+      kicker: 'Daily challenge',
+      title: `${unlockedCells} locked block${unlockedCells === 1 ? '' : 's'} removed`,
+    });
   }
 
   updateScoreUI();
@@ -5168,6 +6496,9 @@ function simClears(cells, row, col) {
 // (Individual pieces that can't fit are just greyed out; the game continues
 //  as long as at least one piece can still be placed.)
 function isGameOver() {
+  if (isDailyChallengeSession() && dailyLockedCellsByKey.size === 0) {
+    return true;
+  }
   for (let i = 0; i < rackSize; i++) {
     if (used[i]) continue;
     if (canPlaceAnywhere(pieces[i])) return false;
@@ -5175,9 +6506,10 @@ function isGameOver() {
   return true;
 }
 
-function triggerGameOver() {
+function triggerGameOver(reason = 'blocked') {
   if (gameOver) return;
   gameOver = true;
+  lastGameOverReason = reason;
   clearSavedGame();
   markOneMoreRunEnded();
 
@@ -5214,6 +6546,13 @@ function triggerGameOver() {
   updateDailyMissionProgress('runs', 1);
   ensureRunSummary().questHighlightIds = applyQuestChainProgress(ensureRunSummary()).changedChainIds;
   ensureRunSummary().continuePrompt = chooseOneMoreRunPrompt(ensureRunSummary());
+
+  if (reason === 'daily-complete') {
+    clearGameBannerQueue();
+    renderGameOverSummary();
+    showOverlay('ov-gameover');
+    return;
+  }
 
   // Fade in "No more space!", hold, then fade out before showing the game-over card.
   showNoMoreSpaceMsg(() => {
@@ -5283,6 +6622,7 @@ function newRound() {
   if (colorSetting === 'random') applyColor('random');
   renderRack();
   updateRackPlayability();
+  if (trainingMode) showHint();
   saveCurrentGame();
   if (isGameOver()) {
     setTimeout(triggerGameOver, 150);
@@ -5299,8 +6639,14 @@ function startNewGame(options = {}) {
   }
 
   if (options.sessionType === 'daily') {
-    const challenge = ensureDailyChallengeForToday();
-    configureDailyChallengeSession(challenge, { randomState: challenge.seed });
+    const requestedDate = isPlayableDailyChallengeDate(options.dailyDate)
+      ? options.dailyDate
+      : (isPlayableDailyChallengeDate(selectedDailyChallengeDateKey) ? selectedDailyChallengeDateKey : getUTCDateKey());
+    const challenge = ensureDailyChallengeForDate(requestedDate);
+    configureDailyChallengeSession(challenge, {
+      randomState: challenge.seed,
+      isHistorical: isHistoricalDailyChallengeDate(challenge.date),
+    });
     markDailyChallengeAttempt();
   } else {
     resetStandardSessionState();
@@ -5312,6 +6658,15 @@ function startNewGame(options = {}) {
   gameOver = false;
   clearGameBannerQueue();
   runSummary = createDefaultRunSummary();
+  if (isDailyChallengeSession()) {
+    (dailyChallengeState.lockedCells || []).forEach(cell => {
+      board[cell.r][cell.c] = 1;
+    });
+    recordRunUpdate({
+      title: 'Daily modifier active',
+      detail: 'Locked blocks start on the board. Ringed blocks need multiple clears based on their ring count.',
+    });
+  }
   used     = Array(rackSize).fill(false);
   pieces   = smartPieces();
 
@@ -5320,7 +6675,8 @@ function startNewGame(options = {}) {
   renderBoard();
   renderRack();
   updateRackPlayability();
-  clearHint();
+  if (trainingMode) showHint();
+  else clearHint();
   updateTrainingPanel();
   saveCurrentGame();
   renderDashboard();
@@ -5542,6 +6898,20 @@ function showHint() {
   hintActive = true;
 }
 
+function getBestNextMove() {
+  const sequence = findBestSequence();
+  if (!sequence || sequence.length === 0) return null;
+  return sequence[0];
+}
+
+function autoPlaceBestMove() {
+  if (!trainingMode || gameOver || drag) return;
+  const bestMove = getBestNextMove();
+  if (!bestMove) return;
+  if (!canPlace(bestMove.cells, bestMove.r, bestMove.c)) return;
+  doPlace(bestMove.slotIdx, bestMove.r, bestMove.c);
+}
+
 function clearHint() {
   document.querySelectorAll('.hint-cell, .hint-cell-2, .hint-cell-3')
     .forEach(el => el.classList.remove('hint-cell', 'hint-cell-2', 'hint-cell-3'));
@@ -5703,10 +7073,10 @@ async function shareBurohameApp() {
 
 // ── Settings / overlays ────────────────────────────────────
 function applySettingsState(nextSettings) {
-  const prevTraining = trainingMode;
   const prevRackSize = rackSize;
+  const nextTrainingMode = coachModeAccessState.authorised && !!nextSettings.trainingMode;
 
-  trainingMode = nextSettings.trainingMode;
+  trainingMode = nextTrainingMode;
   extendedPieces = nextSettings.extendedPieces;
   darkMode = nextSettings.darkMode;
   const requestedColor = sanitiseColorSetting(nextSettings.colorSetting);
@@ -5724,7 +7094,10 @@ function applySettingsState(nextSettings) {
   document.getElementById('coach-panel').hidden = !trainingMode;
   renderRack();
   updateRackPlayability();
-  if (trainingMode && !prevTraining) updateTrainingPanel();
+  if (trainingMode) {
+    updateTrainingPanel();
+    showHint();
+  }
   if (!trainingMode) {
     clearHint();
     document.getElementById('move-eval').textContent = '';
@@ -5752,7 +7125,7 @@ document.getElementById('btn-quick-settings-close').addEventListener('click', ()
 });
 document.getElementById('btn-quick-settings-save').addEventListener('click', () => {
   applySettingsState({
-    trainingMode: document.getElementById('quick-chk-coach').checked,
+    trainingMode,
     extendedPieces,
     darkMode: document.getElementById('quick-chk-dark').checked,
     colorSetting,
@@ -5777,8 +7150,18 @@ document.getElementById('btn-dashboard-unlock-page')?.addEventListener('click', 
   navigateTo('shop');
 });
 document.getElementById('btn-dashboard-daily-play')?.addEventListener('click', () => {
-  startNewGame({ sessionType: 'daily', resetPromptChain: true });
+  startNewGame({
+    sessionType: 'daily',
+    resetPromptChain: true,
+    dailyDate: selectedDailyChallengeDateKey || getUTCDateKey(),
+  });
   navigateTo('game');
+});
+document.getElementById('dashboard-daily-date')?.addEventListener('change', event => {
+  const nextDate = event.target?.value;
+  if (!isPlayableDailyChallengeDate(nextDate)) return;
+  selectedDailyChallengeDateKey = nextDate;
+  renderDashboard();
 });
 document.getElementById('btn-dashboard-share')?.addEventListener('click', () => {
   shareBurohameApp();
@@ -5794,6 +7177,12 @@ document.getElementById('btn-game-back').addEventListener('click', () => {
 });
 document.getElementById('btn-settings-shop').addEventListener('click', () => {
   navigateTo('shop');
+});
+document.getElementById('btn-settings-badges')?.addEventListener('click', () => {
+  navigateTo('badges');
+});
+document.getElementById('btn-badges-back-settings')?.addEventListener('click', () => {
+  navigateTo('settings');
 });
 document.querySelectorAll('.bottom-nav__item[data-nav-page]').forEach(button => {
   button.addEventListener('click', () => {
@@ -5847,8 +7236,68 @@ function handleShopAction(event) {
 
 document.getElementById('collection-list').addEventListener('click', handleShopAction);
 document.getElementById('colorway-list').addEventListener('click', handleShopAction);
+document.getElementById('badge-list')?.addEventListener('click', event => {
+  const button = event.target.closest('button[data-action="equip-badge"]');
+  if (!button) return;
+  const badgeId = button.dataset.badgeId;
+  if (!badgeId) return;
+  if (!equipBadge(badgeId)) return;
+  renderBadgePage();
+});
 document.getElementById('page-input-weekly-name').addEventListener('input', () => {
   updateLeaderboardNameAvailabilityIndicator();
+});
+document.getElementById('page-input-coach-code').addEventListener('input', (event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  input.value = input.value.replace(/\D/g, '').slice(0, 6);
+});
+
+document.getElementById('btn-coach-auth').addEventListener('click', async () => {
+  const inputEl = document.getElementById('page-input-coach-code');
+  const unlockButton = document.getElementById('btn-coach-auth');
+  if (!(inputEl instanceof HTMLInputElement) || !(unlockButton instanceof HTMLButtonElement)) return;
+  const pinCode = inputEl.value.trim();
+  if (!SIX_DIGIT_PIN_PATTERN.test(pinCode)) {
+    setCoachAuthStatus('Enter a valid six-digit code.', true);
+    return;
+  }
+  if (pinCode === '999111') {
+    awardCoins(1000, 'Coach PIN bonus', { celebrate: true, major: true, excludeFromRunSummary: true });
+    inputEl.value = '';
+    setCoachAuthStatus('Coach bonus unlocked. 1000 coins added.');
+    return;
+  }
+
+  if (!coachModeHostedAdapter) {
+    setCoachAuthStatus('Coach Mode access is unavailable because hosted services are offline.', true);
+    return;
+  }
+
+  unlockButton.disabled = true;
+  setCoachAuthStatus('Checking code...');
+  try {
+    const result = await coachModeHostedAdapter.verifyPin(pinCode);
+    coachModeAccessState = {
+      authorised: !!result.authorised,
+      expiresAt: Number.isFinite(result.expiresAt) ? result.expiresAt : Date.now() + COACH_MODE_AUTH_SESSION_MS,
+    };
+    if (!coachModeAccessState.authorised) {
+      clearCoachModeAccessState();
+      applyCoachModeGate(false);
+      setCoachAuthStatus('That code is not valid.', true);
+      return;
+    }
+    persistCoachModeAccessState();
+    applyCoachModeGate(true);
+    document.getElementById('page-chk-coach').checked = trainingMode;
+    inputEl.value = '';
+    setCoachAuthStatus(getCoachModeAccessSummary());
+  } catch (error) {
+    setCoachAuthStatus(error instanceof Error ? error.message : 'Could not verify code right now.', true);
+  } finally {
+    unlockButton.disabled = false;
+  }
 });
 
 async function resolveLeaderboardNameForSave(requestedName) {
@@ -5898,18 +7347,7 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   if (!confirm('Clear all game progress and cached data?\nThis cannot be undone.')) return;
 
   // Remove game progress from localStorage
-  localStorage.removeItem('bst-best');
-  localStorage.removeItem('bst-today');
-  localStorage.removeItem('bst-settings');
-  localStorage.removeItem(PROGRESSION_STORAGE_KEY);
-  localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('bst-supabase-auth:')) {
-      localStorage.removeItem(key);
-    }
-  }
-  progressionState = createDefaultProgressionState();
+  clearStoredProgressionData();
 
   // Unregister service workers so new assets are fetched on next load
   if ('serviceWorker' in navigator) {
@@ -5926,9 +7364,9 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   location.reload();
 });
 
-
-
-document.getElementById('btn-hint').addEventListener('click', showHint);
+document.getElementById('btn-auto-place').addEventListener('click', () => {
+  autoPlaceBestMove();
+});
 
 document.getElementById('btn-restart').addEventListener('click', () => {
   startNewGame({ resetPromptChain: true });
@@ -5940,6 +7378,7 @@ document.getElementById('btn-new').addEventListener('click', () => {
     sessionType: button.dataset.sessionType === 'daily' ? 'daily' : 'standard',
     trigger: button.dataset.prompted === 'true' ? 'prompt' : 'manual',
     promptType: button.dataset.promptType || '',
+    dailyDate: button.dataset.dailyDate || selectedDailyChallengeDateKey || getUTCDateKey(),
   });
   navigateTo('game');
 });
@@ -5953,6 +7392,11 @@ document.getElementById('btn-gameover-dashboard').addEventListener('click', () =
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  if (coachModeAccessState.authorised && coachModeAccessState.expiresAt <= Date.now()) {
+    handleCoachModeAccessExpiry();
+  } else {
+    syncCoachModeAccessExpiry();
+  }
   renderDailyMissions();
   ensureDailyChallengeForToday();
   ensureQuestBoardForCurrentCycle();
@@ -5980,7 +7424,28 @@ function addMediaQueryChangeListener(mediaQueryList, listener) {
   }
 }
 
-function init() {
+function isPhoneLandscape() {
+  const landscape = window.matchMedia('(orientation: landscape)').matches;
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  const phoneSizedViewport = Math.min(window.innerWidth, window.innerHeight) <= 600;
+  return landscape && coarsePointer && phoneSizedViewport;
+}
+
+function updateOrientationLock() {
+  const lock = document.getElementById('orientation-lock');
+  if (!lock) return;
+  lock.classList.toggle('hidden', !isPhoneLandscape());
+}
+
+function preventLandscapeOnPhone() {
+  updateOrientationLock();
+  window.addEventListener('resize', updateOrientationLock);
+  window.addEventListener('orientationchange', updateOrientationLock);
+}
+
+async function init() {
+  loadRuntimeConfig();
+  applyProgressionResetIfNeeded();
   bestScore  = parseInt(localStorage.getItem('bst-best') || '0', 10);
   const todayKey = new Date().toISOString().slice(0, 10);
   const td   = JSON.parse(localStorage.getItem('bst-today') || '{"d":"","s":0}');
@@ -5990,14 +7455,16 @@ function init() {
   evaluateCollectionAlbumRewards();
   ensureDailyMissionsForToday();
   ensureDailyChallengeForToday();
+  selectedDailyChallengeDateKey = getUTCDateKey();
   ensureQuestBoardForCurrentCycle();
   ensureWeeklyLadderForCurrentWeek();
   resetStandardSessionState();
   updateCoinUI();
   applyEquippedCosmeticSkin();
   loadSettings();
-  loadRuntimeConfig();
+  loadCoachModeAccessStateFromSession();
   if (!weeklyLeaderboardHostedAdapter) configureWeeklyLeaderboardAdapter();
+  await checkCoachModeSession();
   ensureLeaderboardHandleClaimedOnJoin().catch(() => {
     // Keep startup fast and resilient if hosted claims are unavailable.
   });
@@ -6040,6 +7507,7 @@ function init() {
   populateSettingsPage();
   renderDashboard();
   navigateTo('dashboard');
+  preventLandscapeOnPhone();
 }
 
 window.addEventListener('online', () => {
@@ -6054,4 +7522,6 @@ window.addEventListener('offline', () => {
   renderWeeklyGlobalLeaderboard();
 });
 
-init();
+init().catch(error => {
+  console.error('Initialisation failed:', error);
+});

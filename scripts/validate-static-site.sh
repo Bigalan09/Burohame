@@ -69,6 +69,14 @@ check_contains index.html '<script src="config.js"></script>' \
   "index.html must load config.js."
 check_contains index.html '<script src="leaderboard-handles.js"></script>' \
   "index.html must load leaderboard-handles.js."
+check_contains config.js 'progressionResetDate' \
+  "config.js must carry the one-time progression reset stamp."
+check_contains app.js 'PROGRESSION_RESET_APPLIED_STORAGE_KEY' \
+  "app.js must remember which progression reset date has already been applied."
+check_contains app.js 'applyProgressionResetIfNeeded' \
+  "app.js must apply the progression reset stamp on startup."
+check_contains .github/workflows/deploy.yml 'loadExistingRuntimeConfig' \
+  "deploy.yml must preserve the progression reset stamp when regenerating config.js."
 check_script_order index.html '<script src="config.js"></script>' '<script src="leaderboard-handles.js"></script>' \
   "index.html must load config.js before leaderboard-handles.js."
 check_script_order index.html '<script src="leaderboard-handles.js"></script>' '<script src="app.js"></script>' \

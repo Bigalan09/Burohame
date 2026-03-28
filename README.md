@@ -1,6 +1,6 @@
 # Burohame
 
-> A mobile-first block-puzzle game. Place three pieces per round onto a 9×9 grid — clear full rows, columns and 3×3 boxes to score points. Chain clears for combo bonuses, and use **Coach Mode** to get move hints and board-health feedback while you learn the strategy.
+> A mobile-first block-puzzle game. Place three pieces per round onto a 9×9 grid, clear full rows, columns and 3×3 boxes to score points, and chain clears for combo bonuses.
 
 **Pronunciation:** boo-roh-hah-meh · ブロハメ
 
@@ -16,7 +16,7 @@
 - Multi-clear and combo bonuses
 - Best score saved locally
 - Live weekly competition table with claimed public handles
-- **Coach Mode** (toggle via ⚙️): colour-coded move hints, board health metrics, move quality feedback
+- Daily challenge runs with reinforced locked blocks that must be cleared twice
 
 ## Hosted weekly table deployment
 

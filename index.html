@@ -24,6 +24,15 @@
             <h1>Burohame</h1>
             <p class="page-intro" id="dashboard-intro">Quick, calm runs built for one more go.</p>
           </div>
+          <div class="header-actions">
+            <button class="icon-btn icon-btn--share" id="btn-dashboard-share" aria-label="Share Burohame" type="button">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M14.5 4.5H19.5V9.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M10.5 13.5L19.2 4.8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M19.5 13.5V18.3C19.5 19.5 18.5 20.5 17.3 20.5H5.7C4.5 20.5 3.5 19.5 3.5 18.3V6.7C3.5 5.5 4.5 4.5 5.7 4.5H10.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </header>
 
         <section class="dash-hero dash-hero--calm" aria-label="Start playing">
@@ -60,14 +69,19 @@
         </section>
 
         <section class="dashboard-focus" aria-label="Today at a glance">
-          <button class="focus-card" id="btn-dashboard-daily-play" type="button" aria-label="Play daily challenge">
+          <article class="focus-card focus-card--daily" aria-label="Daily challenge options">
             <span class="focus-card__title" id="dashboard-daily-title">Today</span>
             <p class="focus-card__line" id="dashboard-daily-copy">Play today’s board.</p>
             <div class="focus-card__meta">
               <span id="dashboard-daily-progress">Reward: 12 coins</span>
-              <span class="focus-card__action">Play</span>
+              <span class="focus-card__action" id="dashboard-daily-window">Today</span>
             </div>
-          </button>
+            <div class="focus-card__controls">
+              <label class="sr-only" for="dashboard-daily-date">Choose a daily challenge date</label>
+              <select id="dashboard-daily-date" class="focus-card__select" aria-label="Choose a daily challenge date"></select>
+              <button class="pill-btn" id="btn-dashboard-daily-play" type="button" aria-label="Play selected daily challenge">Play</button>
+            </div>
+          </article>
 
           <button class="focus-card" id="btn-dashboard-weekly-page" type="button" aria-label="Open weekly progress">
             <span class="focus-card__title" id="dashboard-weekly-card-title">This week</span>
@@ -243,7 +257,7 @@
           <div id="strategy-note"></div>
           <div id="move-eval"></div>
           <div id="train-btns">
-            <button class="pill-btn" id="btn-hint">💡 Hint</button>
+            <button class="pill-btn" id="btn-auto-place">🤖 Auto place</button>
             <button class="pill-btn" id="btn-restart">↺ Restart</button>
           </div>
         </div>
@@ -260,6 +274,7 @@
             <h2>Shop</h2>
             <p class="page-intro">Spend coins on colourways and finishes, then equip your favourites for the next run.</p>
           </div>
+          <span class="missions-count shop-balance" id="shop-coin-balance" aria-live="polite" aria-label="Shop coin balance">🪙 0</span>
         </header>
 
         <div class="page-panel page-panel--shop">
@@ -314,13 +329,21 @@
         </header>
 
         <div class="page-panel settings-page-panel">
-          <label class="tog-row">
+          <label class="tog-row" id="page-coach-toggle-row" hidden>
             <span>Coach Mode</span>
             <span class="tog-wrap">
               <input type="checkbox" id="page-chk-coach">
               <span class="tog-track"><span class="tog-thumb"></span></span>
             </span>
           </label>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span id="page-coach-auth-title">Coach Mode access code</span>
+              <small id="page-coach-auth-status">Enter a six-digit code to unlock Coach Mode for this session.</small>
+            </div>
+            <input id="page-input-coach-code" type="text" maxlength="6" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" placeholder="Enter six-digit code">
+            <button class="pill-btn pill-btn--secondary" id="btn-coach-auth" type="button">Unlock Coach Mode</button>
+          </div>
           <label class="tog-row">
             <span>Extended Pieces</span>
             <span class="tog-wrap">
@@ -364,8 +387,39 @@
             </div>
             <button class="pill-btn pill-btn--secondary" id="btn-settings-shop" type="button">Open shop</button>
           </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Profile badge</span>
+              <small id="page-equipped-badge-label">Unlock badges to equip one here.</small>
+            </div>
+            <button class="pill-btn pill-btn--secondary" id="btn-settings-badges" type="button">Open badges</button>
+          </div>
           <button class="pill-btn wide" id="btn-settings-save" type="button">Save settings</button>
           <button class="pill-btn wide danger" id="btn-clear-data" type="button">🗑️ Clear All Data</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page page--badges" data-page="badges" aria-label="Badges">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Profile badges</p>
+            <h2>Equip badge</h2>
+            <p class="page-intro">Unlock badges through milestones, then equip one for the weekly leaderboard.</p>
+          </div>
+        </header>
+
+        <div class="page-panel badges-page-panel">
+          <div class="collection-head">
+            <div>
+              <h3>Your badge cabinet</h3>
+              <p id="badges-subtitle">No badges unlocked yet. Keep playing to earn your first one.</p>
+            </div>
+            <span class="missions-count" id="badges-count">0/0 unlocked</span>
+          </div>
+          <div id="badge-list" class="badge-list" aria-live="polite"></div>
+          <button class="pill-btn wide pill-btn--secondary" id="btn-badges-back-settings" type="button">Back to settings</button>
         </div>
       </div>
     </section>
@@ -393,8 +447,8 @@
           <section>
             <h3>Helpful reminders</h3>
             <ul class="about-list">
-              <li>Coach Mode spots risky holes and safer lanes.</li>
               <li>Combos matter, but board shape matters more.</li>
+              <li>Daily challenge boards include ringed locked blocks that need multiple clears.</li>
               <li>Shop colourways and finishes are cosmetic only, so score still comes first.</li>
             </ul>
           </section>
@@ -412,13 +466,6 @@
       <div class="ov-card ov-card--quick-settings">
         <h2>Quick settings</h2>
         <p>Fast adjustments while you are in a run.</p>
-        <label class="tog-row">
-          <span>Coach Mode</span>
-          <span class="tog-wrap">
-            <input type="checkbox" id="quick-chk-coach">
-            <span class="tog-track"><span class="tog-thumb"></span></span>
-          </span>
-        </label>
         <label class="tog-row">
           <span>Dark Mode</span>
           <span class="tog-wrap">
@@ -467,7 +514,7 @@
             <h3>Daily challenge</h3>
             <span id="go-daily-status">In progress</span>
           </div>
-          <p id="go-daily-copy">Today’s target is still waiting for you.</p>
+          <p id="go-daily-copy">Today’s board is still waiting for you.</p>
         </section>
         <button class="pill-btn wide summary-primary-btn" id="btn-new" type="button">Play again</button>
       </div>
@@ -510,6 +557,13 @@
         <span>Guide</span>
       </button>
     </nav>
+  </div>
+
+  <div class="orientation-lock hidden" id="orientation-lock" role="status" aria-live="polite" aria-label="Portrait orientation required">
+    <div class="orientation-lock__card">
+      <h2>Use portrait mode</h2>
+      <p>Burohame is designed for portrait play. Please rotate your phone upright to continue.</p>
+    </div>
   </div>
 
   <div id="milestone-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
