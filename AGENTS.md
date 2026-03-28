@@ -2,7 +2,7 @@
 
 ## Project snapshot
 
-Burohame is a mobile-first 9×9 block puzzle game built as a plain static web app with HTML, CSS, and vanilla JavaScript. The current live product is a single-page experience with dashboard, game, weekly leaderboard, quest chains, daily missions, shop, settings, and about pages, plus PWA support and GitHub Pages deployment.
+Burohame is a mobile-first 9×9 block puzzle game built as a plain static web app with HTML, CSS, and vanilla JavaScript. The current live product is a single-page experience with dashboard, game, weekly leaderboard, quest chains, daily missions, shop, settings, badge equip, and about pages, plus PWA support and GitHub Pages deployment.
 
 ### Core game
 
@@ -21,6 +21,7 @@ Burohame is a mobile-first 9×9 block puzzle game built as a plain static web ap
 - Daily missions that auto-pay rewards when completed.
 - Hosted weekly competition that ranks each player by their best single run in the current UTC week.
 - Quest chains with sequential steps and final rewards.
+- Achievement-style profile badges unlocked from milestones such as score targets, quest and collection progress, and weekly podium finishes.
 - Post-run rewards summary and contextual one-more-run prompts.
 - Mastery progression and permanent unlocks.
 - Cosmetic collection systems including colourways, finishes, themed sets, set badges, and a full collection album reward.
