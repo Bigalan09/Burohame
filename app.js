@@ -652,7 +652,7 @@ const COLORWAY_CATALOGUE = Object.freeze([
     id: 'random',
     name: 'Shuffle Glow',
     description: 'Swap to a fresh unlocked colour every rack.',
-    price: scaleShopPrice(90),
+    price: 6000,
     icon: '🎲',
     swatches: ['#ffd08a', '#5ac8fa', '#af52de'],
   },
@@ -770,6 +770,20 @@ const COSMETIC_CATALOGUE = Object.freeze({
       unlockSource: 'album',
     },
     {
+      id: 'aurora',
+      name: 'Aurora',
+      description: 'Animated colour ribbons that drift across each tile.',
+      price: 0,
+      unlockSource: 'collection',
+    },
+    {
+      id: 'starlight',
+      name: 'Starlight',
+      description: 'Animated starlit shimmer reserved for elite collectors.',
+      price: 0,
+      unlockSource: 'collection',
+    },
+    {
       id: 'obsidian',
       name: 'Obsidian',
       description: 'Mirror-dark faces with crisp reflective edges.',
@@ -834,11 +848,17 @@ const COLLECTION_SET_CATALOGUE = Object.freeze([
       id: 'tidal-archive-badge',
       name: 'Tidal seal',
       detail: 'A polished seal marking every item in the Tidal Archive set as owned.',
+      unlock: {
+        type: 'finish',
+        id: 'aurora',
+        name: 'Aurora',
+        detail: 'Animated finish unlocked for completing the Tidal Archive set.',
+      },
     },
     items: [
       { type: 'colorway', id: 'blue' },
       { type: 'colorway', id: 'teal' },
-      { type: 'colorway', id: 'random' },
+      { type: 'colorway', id: 'mint' },
       { type: 'finish', id: 'frost' },
       { type: 'finish', id: 'prism' },
     ],
@@ -860,6 +880,31 @@ const COLLECTION_SET_CATALOGUE = Object.freeze([
       { type: 'colorway', id: 'red' },
       { type: 'finish', id: 'carbon' },
       { type: 'finish', id: 'ember' },
+    ],
+  },
+  {
+    id: 'luminous-vault',
+    season: 'Core album · Set 4',
+    title: 'Luminous Vault',
+    description: 'Rare accents and premium finishes assembled for long-term collectors.',
+    completionReward: {
+      type: 'badge',
+      id: 'luminous-vault-badge',
+      name: 'Vault insignia',
+      detail: 'A rare insignia awarded for completing the Luminous Vault set.',
+      unlock: {
+        type: 'finish',
+        id: 'starlight',
+        name: 'Starlight',
+        detail: 'Animated finish unlocked for completing the Luminous Vault set.',
+      },
+    },
+    items: [
+      { type: 'colorway', id: 'gold' },
+      { type: 'colorway', id: 'indigo' },
+      { type: 'colorway', id: 'violet' },
+      { type: 'finish', id: 'obsidian' },
+      { type: 'finish', id: 'opal' },
     ],
   },
 ]);
@@ -1068,6 +1113,60 @@ const BADGE_CATALOGUE = Object.freeze([
     unlockHint: 'Complete the Afterglow Arcade collection set.',
     source: 'set-badge',
     setBadgeId: 'afterglow-arcade-badge',
+  },
+  {
+    id: 'luminous-insignia',
+    name: 'Luminous insignia',
+    icon: '🌟',
+    description: 'Earned for finishing the Luminous Vault set.',
+    unlockHint: 'Complete the Luminous Vault collection set.',
+    source: 'set-badge',
+    setBadgeId: 'luminous-vault-badge',
+  },
+  {
+    id: 'coin-keeper-500',
+    name: 'Coin keeper',
+    icon: '🪙',
+    description: 'Hold 500 coins at once.',
+    unlockHint: 'Save up to 500 coins.',
+    source: 'coin-balance',
+    threshold: 500,
+  },
+  {
+    id: 'coin-keeper-1000',
+    name: 'Coin warden',
+    icon: '💰',
+    description: 'Hold 1000 coins at once.',
+    unlockHint: 'Save up to 1000 coins.',
+    source: 'coin-balance',
+    threshold: 1000,
+  },
+  {
+    id: 'coin-keeper-2000',
+    name: 'Coin vault',
+    icon: '🏦',
+    description: 'Hold 2000 coins at once.',
+    unlockHint: 'Save up to 2000 coins.',
+    source: 'coin-balance',
+    threshold: 2000,
+  },
+  {
+    id: 'coin-keeper-5000',
+    name: 'Coin sovereign',
+    icon: '👑',
+    description: 'Hold 5000 coins at once.',
+    unlockHint: 'Save up to 5000 coins.',
+    source: 'coin-balance',
+    threshold: 5000,
+  },
+  {
+    id: 'golden-chaos',
+    name: 'Golden chaos',
+    icon: '✨',
+    description: 'Unlock the Shuffle Glow colourway after proving top-tier leaderboard skill.',
+    unlockHint: 'Finish in the weekly top 3 and unlock Shuffle Glow.',
+    source: 'random-colourway',
+    badgeVariant: 'golden-sparkle',
   },
   {
     id: 'weekly-first',
@@ -3769,6 +3868,8 @@ function getMilestoneBadgeUnlocks() {
   const ownedFinishes = getOwnedBlockSkins().length;
   const ownedCollectionItems = ownedColorways + ownedFinishes;
   const earnedSetBadges = new Set(progressionState?.cosmetics?.earnedSetBadges || []);
+  const currentCoinBalance = getCoinBalance();
+  const ownsRandomColourway = isColorwayOwned('random');
 
   BADGE_CATALOGUE.forEach(badge => {
     if (isBadgeUnlocked(badge.id)) return;
@@ -3781,6 +3882,8 @@ function getMilestoneBadgeUnlocks() {
     if (badge.source === 'finish-count' && ownedFinishes >= badge.threshold) unlocks.push(badge.id);
     if (badge.source === 'collection-items' && ownedCollectionItems >= badge.threshold) unlocks.push(badge.id);
     if (badge.source === 'set-badge' && badge.setBadgeId && earnedSetBadges.has(badge.setBadgeId)) unlocks.push(badge.id);
+    if (badge.source === 'coin-balance' && currentCoinBalance >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'random-colourway' && ownsRandomColourway) unlocks.push(badge.id);
   });
 
   return unlocks;
@@ -3809,6 +3912,10 @@ function evaluateCollectionAlbumRewards() {
       if (!state.cosmetics.earnedSetBadges.includes(badgeId)) {
         state.cosmetics.earnedSetBadges.push(badgeId);
       }
+      const setUnlock = setStatus.set.completionReward.unlock;
+      if (setUnlock?.type === 'finish' && setUnlock.id && !state.cosmetics.ownedBlockSkins.includes(setUnlock.id)) {
+        state.cosmetics.ownedBlockSkins.push(setUnlock.id);
+      }
     });
 
     if (shouldClaimGrandReward) {
@@ -3824,13 +3931,17 @@ function evaluateCollectionAlbumRewards() {
   });
 
   newlyCompletedSets.forEach(setStatus => {
+    const setUnlock = setStatus.set.completionReward.unlock;
+    const unlockDetail = setUnlock?.type === 'finish'
+      ? ` ${setUnlock.name} finish unlocked.`
+      : '';
     showMilestoneMoment({
       eyebrow: 'Set complete',
       title: `${setStatus.set.title} finished`,
-      detail: `${setStatus.set.completionReward.name} earned. ${setStatus.set.completionReward.detail}`,
+      detail: `${setStatus.set.completionReward.name} earned. ${setStatus.set.completionReward.detail}${unlockDetail}`,
       major: true,
       anchor: '.page-panel--album',
-      announce: `${setStatus.set.title} set complete. ${setStatus.set.completionReward.name} earned.`,
+      announce: `${setStatus.set.title} set complete. ${setStatus.set.completionReward.name} earned.${unlockDetail}`,
     });
   });
 
@@ -3900,7 +4011,8 @@ function updateCosmeticLabel() {
   const colourNote = document.getElementById('page-colour-note');
   if (colourNote) {
     const owned = getOwnedColorways().length;
-    colourNote.textContent = `${owned}/${COLORWAY_CATALOGUE.length} colourways owned. Unlock more in the shop.`;
+    const total = COLORWAY_CATALOGUE.filter(colorway => colorway.id !== 'random').length + (isColorwayOwned('random') ? 1 : 0);
+    colourNote.textContent = `${owned}/${total} colourways owned. Unlock more in the shop.`;
   }
 }
 
@@ -3946,6 +4058,7 @@ function spendCoins(amount, reason) {
 function unlockColorway(colorId) {
   const colorway = COLORWAY_LOOKUP[colorId];
   if (!colorway || isColorwayOwned(colorId)) return true;
+  if (colorId === 'random' && !hasRandomColourwayEligibility()) return false;
   if (!spendCoins(colorway.price, `${colorway.name} unlocked`)) return false;
 
   updateProgressionState(state => {
@@ -4538,9 +4651,18 @@ function getCollectionSubtitle() {
 
 function getColorwaySubtitle() {
   const ownedCount = getOwnedColorways().length;
-  const totalCount = COLORWAY_CATALOGUE.length;
+  const totalCount = COLORWAY_CATALOGUE.filter(colorway => colorway.id !== 'random').length + (isColorwayOwned('random') ? 1 : 0);
   if (ownedCount === totalCount) return 'Every colourway is unlocked and ready to equip.';
   return `${ownedCount}/${totalCount} colourways owned.`;
+}
+
+function hasTopThreeWeeklyFinish() {
+  const unlockedBadges = new Set(getUnlockedBadgeIds());
+  return ['weekly-first', 'weekly-second', 'weekly-third'].some(id => unlockedBadges.has(id));
+}
+
+function hasRandomColourwayEligibility() {
+  return hasTopThreeWeeklyFinish();
 }
 
 function getBadgeStateLabel(badge, isUnlocked, isEquipped) {
@@ -4572,6 +4694,12 @@ function getBadgeStateLabel(badge, isUnlocked, isEquipped) {
     const ownedItems = getOwnedColorways().length + getOwnedBlockSkins().length;
     return `Locked · collection items ${ownedItems}/${badge.threshold}`;
   }
+  if (badge.source === 'coin-balance' && badge.threshold) {
+    return `Locked · coins ${getCoinBalance()}/${badge.threshold}`;
+  }
+  if (badge.source === 'random-colourway') {
+    return hasRandomColourwayEligibility() ? 'Locked · unlock Shuffle Glow' : 'Locked · finish weekly top 3';
+  }
   if (badge.source === 'set-badge') {
     const earnedSetBadges = new Set(progressionState?.cosmetics?.earnedSetBadges || []);
     return earnedSetBadges.has(badge.setBadgeId) ? 'Ready to claim' : 'Locked · set reward';
@@ -4601,11 +4729,12 @@ function renderBadgePage() {
     const isEquipped = equippedBadgeId === badge.id;
     const article = document.createElement('article');
     article.className = `badge-item${isUnlocked ? '' : ' badge-item--locked'}`;
+    const tokenClass = badge.badgeVariant === 'golden-sparkle' ? ' badge-item__token--golden-sparkle' : '';
     const actionMarkup = isUnlocked
       ? `<button class="pill-btn${isEquipped ? ' pill-btn--secondary' : ''}" type="button" data-action="equip-badge" data-badge-id="${badge.id}" ${isEquipped ? 'disabled' : ''}>${isEquipped ? 'Equipped' : 'Equip'}</button>`
       : '';
     article.innerHTML = `
-      <div class="badge-item__token" aria-hidden="true">${badge.icon}</div>
+      <div class="badge-item__token${tokenClass}" aria-hidden="true">${badge.icon}</div>
       <div class="badge-item__body">
         <h3>${badge.name}</h3>
         <p>${isUnlocked ? badge.description : badge.unlockHint}</p>
@@ -4627,7 +4756,7 @@ function getShopActionMarkup({ owned, equipped, canAfford, price, itemId, collec
     return `<button class="pill-btn pill-btn--secondary" type="button" data-action="equip" data-item-id="${itemId}" data-collection="${collection}">Equip</button>`;
   }
   if (!price) {
-    return '<button class="pill-btn pill-btn--secondary" type="button" disabled>Album reward</button>';
+    return '<button class="pill-btn pill-btn--secondary" type="button" disabled>Collection reward</button>';
   }
   return `<button class="pill-btn${canAfford ? '' : ' pill-btn--secondary'}" type="button" data-action="unlock" data-item-id="${itemId}" data-collection="${collection}" ${canAfford ? '' : 'disabled'}>Unlock · 🪙 ${price}</button>`;
 }
@@ -4682,6 +4811,9 @@ function renderCosmeticsCollection() {
       ? `Missing ${setStatus.missingItems.map(item => item.meta?.name || item.id).join(', ')}.`
       : 'Everything in this set is owned.';
     const badgeState = setStatus.rewardEarned ? 'Badge earned' : 'Badge waiting';
+    const unlockRewardLabel = setStatus.set.completionReward.unlock?.type === 'finish'
+      ? ` + ${setStatus.set.completionReward.unlock.name} finish`
+      : '';
     const itemMarkup = setStatus.itemStatuses.map(item => `
       <li class="album-card__item${item.owned ? ' is-owned' : ''}">
         <span>${item.meta?.name || item.id}</span>
@@ -4699,7 +4831,7 @@ function renderCosmeticsCollection() {
       </div>
       <div class="album-card__reward">
         <strong>${setStatus.set.completionReward.name}</strong>
-        <span>${badgeState}</span>
+        <span>${badgeState}${unlockRewardLabel}</span>
       </div>
       <ul class="album-card__items">${itemMarkup}</ul>
       <div class="album-card__footer">
@@ -4711,10 +4843,12 @@ function renderCosmeticsCollection() {
   });
 
   colorwayList.innerHTML = '';
-  for (const colorway of COLORWAY_CATALOGUE) {
+  const shouldShowRandomColourway = isColorwayOwned('random') || hasRandomColourwayEligibility();
+  for (const colorway of COLORWAY_CATALOGUE.filter(item => item.id !== 'random' || shouldShowRandomColourway)) {
     const owned = isColorwayOwned(colorway.id);
     const equipped = colorSetting === colorway.id;
     const canAfford = coinBalance >= colorway.price;
+    const meetsRequirement = colorway.id === 'random' ? hasRandomColourwayEligibility() : true;
     const set = getCollectionSetForItem('colorway', colorway.id);
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
     const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
@@ -4737,10 +4871,10 @@ function renderCosmeticsCollection() {
         <p>${colorway.description}</p>
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
-            <span>${costLabel}</span>
+            <span>${colorway.id === 'random' && !owned ? `${costLabel} · top 3 weekly required` : costLabel}</span>
             ${set ? `<span>${set.title}</span>` : ''}
           </div>
-          ${getShopActionMarkup({ owned, equipped, canAfford, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
+          ${getShopActionMarkup({ owned, equipped, canAfford: canAfford && meetsRequirement, price: colorway.price, itemId: colorway.id, collection: 'colorway' })}
         </div>
       </div>
     `;
@@ -4761,7 +4895,8 @@ function renderCosmeticsCollection() {
 
     const status = equipped ? 'Equipped' : owned ? 'Unlocked' : 'Locked';
     const stateClass = equipped ? 'is-equipped' : owned ? 'is-unlocked' : 'is-locked';
-    const costLabel = skin.price ? `🪙 ${skin.price}` : 'Free';
+    const isCollectionReward = skin.unlockSource === 'collection';
+    const costLabel = skin.price ? `🪙 ${skin.price}` : isCollectionReward ? 'Set reward' : 'Free';
 
     card.innerHTML = `
       <div class="cosmetic-card__preview" aria-hidden="true">
@@ -4778,7 +4913,7 @@ function renderCosmeticsCollection() {
         <div class="cosmetic-card__footer">
           <div class="cosmetic-card__meta">
             <span>${costLabel}</span>
-            <span>${set ? set.title : skin.unlockSource === 'album' ? 'Album grand reward' : 'Core collection'}</span>
+            <span>${set ? set.title : skin.unlockSource === 'album' ? 'Album grand reward' : isCollectionReward ? 'Collection set reward' : 'Core collection'}</span>
           </div>
           ${getShopActionMarkup({ owned, equipped, canAfford, price: skin.price, itemId: skin.id, collection: 'finish' })}
         </div>
@@ -5691,7 +5826,7 @@ function populateSettingsPage() {
 
   const colorSelect = document.getElementById('page-sel-color');
   colorSelect.innerHTML = '';
-  for (const colorway of COLORWAY_CATALOGUE) {
+  for (const colorway of COLORWAY_CATALOGUE.filter(item => item.id !== 'random' || isColorwayOwned('random'))) {
     const option = document.createElement('option');
     option.value = colorway.id;
     option.textContent = `${colorway.icon} ${colorway.name}${isColorwayOwned(colorway.id) ? '' : ' · shop unlock'}`;
