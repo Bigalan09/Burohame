@@ -1073,6 +1073,11 @@ a.icon-btn { text-decoration: none; }
   box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
+.page-top--dashboard .icon-btn--share {
+  width: 40px;
+  height: 40px;
+}
+
 .dash-starter {
   margin-top: 12px;
   padding: 12px 14px;
