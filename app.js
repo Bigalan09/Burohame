@@ -219,7 +219,7 @@ let weeklyLeaderboardViewState = {
   hidden: true,
 };
 
-const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
+const COLOR_NAMES = ['orange', 'blue', 'green', 'purple', 'red', 'teal', 'pink', 'gold', 'indigo', 'mint', 'coral', 'slate', 'violet'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
 const PROGRESSION_STATE_VERSION = 10;
@@ -656,6 +656,54 @@ const COLORWAY_CATALOGUE = Object.freeze([
     icon: '🎲',
     swatches: ['#ffd08a', '#5ac8fa', '#af52de'],
   },
+  {
+    id: 'gold',
+    name: 'Gold Gleam',
+    description: 'Sunlit tones with warm metallic contrast.',
+    price: scaleShopPrice(85),
+    icon: '🟡',
+    swatches: ['#fff0a8', '#f4c430', '#b8860b'],
+  },
+  {
+    id: 'indigo',
+    name: 'Indigo Night',
+    description: 'A dusk-led palette for focused late sessions.',
+    price: scaleShopPrice(95),
+    icon: '🌌',
+    swatches: ['#b7b6ff', '#5c6ac4', '#2f3a8f'],
+  },
+  {
+    id: 'mint',
+    name: 'Mint Breeze',
+    description: 'Cool spring colours with gentle highlights.',
+    price: scaleShopPrice(105),
+    icon: '🌿',
+    swatches: ['#c9ffe8', '#47d7ac', '#1e9a79'],
+  },
+  {
+    id: 'coral',
+    name: 'Coral Bloom',
+    description: 'Soft sunset warmth for brighter boards.',
+    price: scaleShopPrice(115),
+    icon: '🪸',
+    swatches: ['#ffc2b5', '#ff7f50', '#d4552d'],
+  },
+  {
+    id: 'slate',
+    name: 'Slate Flux',
+    description: 'Muted steel shades with cleaner contrast.',
+    price: scaleShopPrice(130),
+    icon: '🪨',
+    swatches: ['#c6d0e1', '#7082a8', '#41506c'],
+  },
+  {
+    id: 'violet',
+    name: 'Violet Arc',
+    description: 'Neon-violet accents for bolder runs.',
+    price: scaleShopPrice(145),
+    icon: '✨',
+    swatches: ['#e4b9ff', '#a855f7', '#6d28d9'],
+  },
 ]);
 const COLORWAY_LOOKUP = Object.freeze(
   COLORWAY_CATALOGUE.reduce((acc, colorway) => {
@@ -720,6 +768,34 @@ const COSMETIC_CATALOGUE = Object.freeze({
       description: 'A gallery-grade finish awarded for completing the full core album.',
       price: 0,
       unlockSource: 'album',
+    },
+    {
+      id: 'obsidian',
+      name: 'Obsidian',
+      description: 'Mirror-dark faces with crisp reflective edges.',
+      price: scaleShopPrice(260),
+      unlockSource: 'shop',
+    },
+    {
+      id: 'opal',
+      name: 'Opal',
+      description: 'Soft iridescent gradients that shift across each block.',
+      price: scaleShopPrice(290),
+      unlockSource: 'shop',
+    },
+    {
+      id: 'neon',
+      name: 'Neon',
+      description: 'High-energy glow with strong contrast for late pushes.',
+      price: scaleShopPrice(320),
+      unlockSource: 'shop',
+    },
+    {
+      id: 'linen',
+      name: 'Linen',
+      description: 'A matte woven texture with subdued highlights.',
+      price: scaleShopPrice(350),
+      unlockSource: 'shop',
     },
   ],
 });
@@ -843,6 +919,24 @@ const BADGE_CATALOGUE = Object.freeze([
     threshold: 600,
   },
   {
+    id: 'score-900',
+    name: 'Skybreaker',
+    icon: '🌠',
+    description: 'Score 900 points in a run.',
+    unlockHint: 'Reach a best score of at least 900.',
+    source: 'score',
+    threshold: 900,
+  },
+  {
+    id: 'score-1200',
+    name: 'Mythic tactician',
+    icon: '🏆',
+    description: 'Score 1200 points in a run.',
+    unlockHint: 'Reach a best score of at least 1200.',
+    source: 'score',
+    threshold: 1200,
+  },
+  {
     id: 'quest-closer',
     name: 'Route closer',
     icon: '🧭',
@@ -851,12 +945,129 @@ const BADGE_CATALOGUE = Object.freeze([
     source: 'quest',
   },
   {
+    id: 'quest-vanguard',
+    name: 'Quest vanguard',
+    icon: '🛡️',
+    description: 'Complete two quest chains.',
+    unlockHint: 'Finish two quest chains in the current cycle.',
+    source: 'quest',
+    threshold: 2,
+  },
+  {
+    id: 'quest-grand-tour',
+    name: 'Grand tour',
+    icon: '🗺️',
+    description: 'Complete all active quest chains.',
+    unlockHint: 'Finish all active quest chains in the current cycle.',
+    source: 'quest',
+    threshold: 3,
+  },
+  {
     id: 'collection-curator',
     name: 'Collection curator',
     icon: '🗂️',
     description: 'Complete one themed collection set.',
     unlockHint: 'Complete any themed set from the shop album.',
     source: 'collection',
+  },
+  {
+    id: 'collection-builder',
+    name: 'Collection builder',
+    icon: '🧩',
+    description: 'Own five collection items across colourways and finishes.',
+    unlockHint: 'Unlock five collection items from the shop.',
+    source: 'collection-items',
+    threshold: 5,
+  },
+  {
+    id: 'collection-connoisseur',
+    name: 'Collection connoisseur',
+    icon: '🛍️',
+    description: 'Own ten collection items across colourways and finishes.',
+    unlockHint: 'Unlock ten collection items from the shop.',
+    source: 'collection-items',
+    threshold: 10,
+  },
+  {
+    id: 'palette-pioneer',
+    name: 'Palette pioneer',
+    icon: '🎨',
+    description: 'Unlock eight colourways.',
+    unlockHint: 'Own eight colourways.',
+    source: 'colorway-count',
+    threshold: 8,
+  },
+  {
+    id: 'palette-legend',
+    name: 'Palette legend',
+    icon: '🖌️',
+    description: 'Unlock all colourways.',
+    unlockHint: 'Own every colourway in the shop.',
+    source: 'colorway-count',
+    threshold: COLORWAY_CATALOGUE.length,
+  },
+  {
+    id: 'finish-fan',
+    name: 'Finish fan',
+    icon: '🪞',
+    description: 'Unlock six finishes.',
+    unlockHint: 'Own six finishes.',
+    source: 'finish-count',
+    threshold: 6,
+  },
+  {
+    id: 'finish-virtuoso',
+    name: 'Finish virtuoso',
+    icon: '💠',
+    description: 'Unlock every finish.',
+    unlockHint: 'Own every finish in the collection.',
+    source: 'finish-count',
+    threshold: COSMETIC_CATALOGUE.blockSkins.length,
+  },
+  {
+    id: 'set-trailblazer',
+    name: 'Set trailblazer',
+    icon: '📚',
+    description: 'Complete two themed collection sets.',
+    unlockHint: 'Finish two themed sets from the album.',
+    source: 'collection',
+    threshold: 2,
+  },
+  {
+    id: 'album-hero',
+    name: 'Album hero',
+    icon: '🏵️',
+    description: 'Complete every themed collection set.',
+    unlockHint: 'Finish all themed sets in the album.',
+    source: 'collection',
+    threshold: COLLECTION_SET_CATALOGUE.length,
+  },
+  {
+    id: 'sunrise-ribbon',
+    name: 'Sunrise ribbon',
+    icon: '🌅',
+    description: 'Earned for finishing the Sunrise Studio set.',
+    unlockHint: 'Complete the Sunrise Studio collection set.',
+    source: 'set-badge',
+    setBadgeId: 'sunrise-studio-badge',
+  },
+  {
+    id: 'tidal-seal',
+    name: 'Tidal seal',
+    icon: '🌊',
+    description: 'Earned for finishing the Tidal Archive set.',
+    unlockHint: 'Complete the Tidal Archive collection set.',
+    source: 'set-badge',
+    setBadgeId: 'tidal-archive-badge',
+  },
+  {
+    id: 'afterglow-crest',
+    name: 'Afterglow crest',
+    icon: '🌇',
+    description: 'Earned for finishing the Afterglow Arcade set.',
+    unlockHint: 'Complete the Afterglow Arcade collection set.',
+    source: 'set-badge',
+    setBadgeId: 'afterglow-arcade-badge',
   },
   {
     id: 'weekly-first',
@@ -884,6 +1095,24 @@ const BADGE_CATALOGUE = Object.freeze([
     unlockHint: 'Reach 3rd place in weekly standings.',
     source: 'leaderboard',
     rank: 3,
+  },
+  {
+    id: 'weekly-top-10',
+    name: 'Top ten',
+    icon: '🎖️',
+    description: 'Reach the top ten on the weekly leaderboard.',
+    unlockHint: 'Reach 10th place or better in weekly standings.',
+    source: 'leaderboard-top',
+    threshold: 10,
+  },
+  {
+    id: 'weekly-top-5',
+    name: 'Top five',
+    icon: '👑',
+    description: 'Reach the top five on the weekly leaderboard.',
+    unlockHint: 'Reach 5th place or better in weekly standings.',
+    source: 'leaderboard-top',
+    threshold: 5,
   },
 ]);
 
@@ -3532,16 +3761,26 @@ function unlockBadgeById(badgeId, { announce = true } = {}) {
 
 function getMilestoneBadgeUnlocks() {
   const unlocks = [];
-  const completedSets = getCollectionAlbumStatus().completedCount;
+  const collectionStatus = getCollectionAlbumStatus();
+  const completedSets = collectionStatus.completedCount;
   const completedQuestChains = getQuestBoardStatus().completed;
   const currentRank = weeklyLeaderboardViewState.currentPlayerRank || 0;
+  const ownedColorways = getOwnedColorways().length;
+  const ownedFinishes = getOwnedBlockSkins().length;
+  const ownedCollectionItems = ownedColorways + ownedFinishes;
+  const earnedSetBadges = new Set(progressionState?.cosmetics?.earnedSetBadges || []);
 
   BADGE_CATALOGUE.forEach(badge => {
     if (isBadgeUnlocked(badge.id)) return;
     if (badge.source === 'score' && bestScore >= badge.threshold) unlocks.push(badge.id);
-    if (badge.source === 'collection' && completedSets >= 1) unlocks.push(badge.id);
-    if (badge.source === 'quest' && completedQuestChains >= 1) unlocks.push(badge.id);
+    if (badge.source === 'collection' && completedSets >= (badge.threshold || 1)) unlocks.push(badge.id);
+    if (badge.source === 'quest' && completedQuestChains >= (badge.threshold || 1)) unlocks.push(badge.id);
     if (badge.source === 'leaderboard' && currentRank > 0 && currentRank === badge.rank) unlocks.push(badge.id);
+    if (badge.source === 'leaderboard-top' && currentRank > 0 && currentRank <= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'colorway-count' && ownedColorways >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'finish-count' && ownedFinishes >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'collection-items' && ownedCollectionItems >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'set-badge' && badge.setBadgeId && earnedSetBadges.has(badge.setBadgeId)) unlocks.push(badge.id);
   });
 
   return unlocks;
@@ -4309,6 +4548,34 @@ function getBadgeStateLabel(badge, isUnlocked, isEquipped) {
   if (isUnlocked) return 'Unlocked';
   if (badge.source === 'score' && badge.threshold) return `Locked · best ${bestScore}/${badge.threshold}`;
   if (badge.source === 'leaderboard' && badge.rank) return `Locked · reach ${formatOrdinal(badge.rank)}`;
+  if (badge.source === 'leaderboard-top' && badge.threshold) {
+    const currentRank = weeklyLeaderboardViewState.currentPlayerRank || 0;
+    return currentRank > 0
+      ? `Locked · rank ${formatOrdinal(currentRank)}/${formatOrdinal(badge.threshold)}`
+      : `Locked · reach top ${badge.threshold}`;
+  }
+  if (badge.source === 'quest' && badge.threshold) {
+    const completedQuestChains = getQuestBoardStatus().completed;
+    return `Locked · chains ${completedQuestChains}/${badge.threshold}`;
+  }
+  if (badge.source === 'collection' && badge.threshold) {
+    const completedSets = getCollectionAlbumStatus().completedCount;
+    return `Locked · sets ${completedSets}/${badge.threshold}`;
+  }
+  if (badge.source === 'colorway-count' && badge.threshold) {
+    return `Locked · colourways ${getOwnedColorways().length}/${badge.threshold}`;
+  }
+  if (badge.source === 'finish-count' && badge.threshold) {
+    return `Locked · finishes ${getOwnedBlockSkins().length}/${badge.threshold}`;
+  }
+  if (badge.source === 'collection-items' && badge.threshold) {
+    const ownedItems = getOwnedColorways().length + getOwnedBlockSkins().length;
+    return `Locked · collection items ${ownedItems}/${badge.threshold}`;
+  }
+  if (badge.source === 'set-badge') {
+    const earnedSetBadges = new Set(progressionState?.cosmetics?.earnedSetBadges || []);
+    return earnedSetBadges.has(badge.setBadgeId) ? 'Ready to claim' : 'Locked · set reward';
+  }
   return 'Locked';
 }
 
