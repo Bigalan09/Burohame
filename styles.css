@@ -147,6 +147,7 @@ html, body {
 #app[data-page="game"] .page[data-page="game"],
 #app[data-page="shop"] .page[data-page="shop"],
 #app[data-page="settings"] .page[data-page="settings"],
+#app[data-page="badges"] .page[data-page="badges"],
 #app[data-page="about"] .page[data-page="about"] {
   display: flex;
 }
@@ -2731,10 +2732,69 @@ a.icon-btn { text-decoration: none; }
 }
 
 .settings-page-panel,
+.badges-page-panel,
 .about-panel {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.badge-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.badge-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: var(--card);
+}
+
+.badge-item--locked {
+  opacity: 0.72;
+}
+
+.badge-item__token {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 24px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 65%, transparent);
+}
+
+.badge-item__body h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.badge-item__body p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.badge-item__meta {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.badge-item__state {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
 }
 
 .about-panel section + section {

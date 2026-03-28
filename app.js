@@ -222,7 +222,7 @@ let weeklyLeaderboardViewState = {
 const COLOR_NAMES = ['orange','blue','green','purple','red','teal','pink'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
-const PROGRESSION_STATE_VERSION = 9;
+const PROGRESSION_STATE_VERSION = 10;
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
@@ -813,6 +813,87 @@ const COLLECTION_ALBUM_GOAL = Object.freeze({
     detail: 'Exclusive finish for completing every themed set in the album.',
   },
 });
+
+const BADGE_CATALOGUE = Object.freeze([
+  {
+    id: 'score-100',
+    name: 'Century starter',
+    icon: '💯',
+    description: 'Score 100 points in a run.',
+    unlockHint: 'Reach a best score of at least 100.',
+    source: 'score',
+    threshold: 100,
+  },
+  {
+    id: 'score-300',
+    name: 'Score striker',
+    icon: '🔥',
+    description: 'Score 300 points in a run.',
+    unlockHint: 'Reach a best score of at least 300.',
+    source: 'score',
+    threshold: 300,
+  },
+  {
+    id: 'score-600',
+    name: 'Board legend',
+    icon: '⚡',
+    description: 'Score 600 points in a run.',
+    unlockHint: 'Reach a best score of at least 600.',
+    source: 'score',
+    threshold: 600,
+  },
+  {
+    id: 'quest-closer',
+    name: 'Route closer',
+    icon: '🧭',
+    description: 'Complete a full quest chain.',
+    unlockHint: 'Finish one quest chain in the current cycle.',
+    source: 'quest',
+  },
+  {
+    id: 'collection-curator',
+    name: 'Collection curator',
+    icon: '🗂️',
+    description: 'Complete one themed collection set.',
+    unlockHint: 'Complete any themed set from the shop album.',
+    source: 'collection',
+  },
+  {
+    id: 'weekly-first',
+    name: 'Weekly champion',
+    icon: '🥇',
+    description: 'Hold 1st place on the weekly leaderboard.',
+    unlockHint: 'Reach 1st place in weekly standings.',
+    source: 'leaderboard',
+    rank: 1,
+  },
+  {
+    id: 'weekly-second',
+    name: 'Weekly silver',
+    icon: '🥈',
+    description: 'Hold 2nd place on the weekly leaderboard.',
+    unlockHint: 'Reach 2nd place in weekly standings.',
+    source: 'leaderboard',
+    rank: 2,
+  },
+  {
+    id: 'weekly-third',
+    name: 'Weekly bronze',
+    icon: '🥉',
+    description: 'Hold 3rd place on the weekly leaderboard.',
+    unlockHint: 'Reach 3rd place in weekly standings.',
+    source: 'leaderboard',
+    rank: 3,
+  },
+]);
+
+const BADGE_LOOKUP = Object.freeze(
+  BADGE_CATALOGUE.reduce((acc, badge) => {
+    acc[badge.id] = badge;
+    return acc;
+  }, {})
+);
+
 const RUN_OBJECTIVES = Object.freeze([
   {
     id: 'first-clear',
@@ -1617,12 +1698,25 @@ function renderWeeklyGlobalLeaderboard() {
     const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
     const nameEl = document.createElement('span');
     const league = getLeagueById(entry.leagueId);
-    nameEl.textContent = `${index + 1}. ${name} · ${league.badge} ${league.name}`;
+    const leaderboardBadge = (() => {
+      if (index === 0) return '🥇';
+      if (index === 1) return '🥈';
+      if (index === 2) return '🥉';
+      if (entry.playerId === leaderboardPlayerId) {
+        const equipped = getEquippedBadge();
+        return equipped ? equipped.icon : '';
+      }
+      return '';
+    })();
+    const badgePrefix = leaderboardBadge ? `${leaderboardBadge} ` : '';
+    nameEl.textContent = `${index + 1}. ${badgePrefix}${name} · ${league.badge} ${league.name}`;
     const scoreEl = document.createElement('strong');
     scoreEl.textContent = String(entry.totalScore);
     item.append(nameEl, scoreEl);
     listEl.appendChild(item);
   });
+
+  refreshBadgeMilestones();
 }
 
 function stopWeeklyLeaderboardPolling() {
@@ -2524,6 +2618,8 @@ function createDefaultProgressionState() {
       ownedBlockSkins: ['classic'],
       ownedColorways: ['orange'],
       earnedSetBadges: [],
+      unlockedBadges: [],
+      equippedBadgeId: '',
     },
     dailyMissions: {
       date: '',
@@ -2667,6 +2763,12 @@ function sanitiseProgressionState(rawState) {
     && ownedBlockSkins.includes(cosmetics.equippedBlockSkin)
     ? cosmetics.equippedBlockSkin
     : defaults.cosmetics.equippedBlockSkin;
+  const unlockedBadges = uniqueStringList(cosmetics.unlockedBadges, defaults.cosmetics.unlockedBadges)
+    .filter(id => BADGE_LOOKUP[id]);
+  const equippedBadgeId = typeof cosmetics.equippedBadgeId === 'string'
+    && unlockedBadges.includes(cosmetics.equippedBadgeId)
+    ? cosmetics.equippedBadgeId
+    : defaults.cosmetics.equippedBadgeId;
 
   return {
     version: PROGRESSION_STATE_VERSION,
@@ -2685,6 +2787,8 @@ function sanitiseProgressionState(rawState) {
       ownedBlockSkins,
       ownedColorways,
       earnedSetBadges: uniqueStringList(cosmetics.earnedSetBadges, defaults.cosmetics.earnedSetBadges),
+      unlockedBadges,
+      equippedBadgeId,
     },
     dailyMissions: sanitiseMissionState(src.dailyMissions),
     dailyChallenge: sanitiseDailyChallengeState(src.dailyChallenge),
@@ -3301,6 +3405,33 @@ function getEquippedBlockSkin() {
   return progressionState?.cosmetics?.equippedBlockSkin || 'classic';
 }
 
+function getUnlockedBadgeIds() {
+  return progressionState?.cosmetics?.unlockedBadges || [];
+}
+
+function getEquippedBadgeId() {
+  return progressionState?.cosmetics?.equippedBadgeId || '';
+}
+
+function getEquippedBadge() {
+  const badgeId = getEquippedBadgeId();
+  return badgeId ? BADGE_LOOKUP[badgeId] || null : null;
+}
+
+function isBadgeUnlocked(badgeId) {
+  return getUnlockedBadgeIds().includes(badgeId);
+}
+
+function equipBadge(badgeId) {
+  if (!badgeId || !isBadgeUnlocked(badgeId)) return false;
+  updateProgressionState(state => {
+    state.cosmetics.equippedBadgeId = badgeId;
+    return state;
+  });
+  updateCosmeticLabel();
+  return true;
+}
+
 function isBlockSkinOwned(skinId) {
   return getOwnedBlockSkins().includes(skinId);
 }
@@ -3373,6 +3504,54 @@ function getCollectionAlbumStatus(sourceState = progressionState) {
     grandRewardOwned,
     grandRewardClaimed,
   };
+}
+
+function unlockBadgeById(badgeId, { announce = true } = {}) {
+  const badge = BADGE_LOOKUP[badgeId];
+  if (!badge || isBadgeUnlocked(badgeId)) return false;
+  let didUnlock = false;
+  updateProgressionState(state => {
+    if (state.cosmetics.unlockedBadges.includes(badgeId)) return state;
+    state.cosmetics.unlockedBadges.push(badgeId);
+    if (!state.cosmetics.equippedBadgeId) state.cosmetics.equippedBadgeId = badgeId;
+    didUnlock = true;
+    return state;
+  });
+  if (didUnlock && announce) {
+    showMilestoneMoment({
+      eyebrow: 'Badge unlocked',
+      title: badge.name,
+      detail: `${badge.icon} ${badge.description}`,
+      major: false,
+      anchor: '.page--badges',
+      announce: `${badge.name} badge unlocked.`,
+    });
+  }
+  return didUnlock;
+}
+
+function getMilestoneBadgeUnlocks() {
+  const unlocks = [];
+  const completedSets = getCollectionAlbumStatus().completedCount;
+  const completedQuestChains = getQuestBoardStatus().completed;
+  const currentRank = weeklyLeaderboardViewState.currentPlayerRank || 0;
+
+  BADGE_CATALOGUE.forEach(badge => {
+    if (isBadgeUnlocked(badge.id)) return;
+    if (badge.source === 'score' && bestScore >= badge.threshold) unlocks.push(badge.id);
+    if (badge.source === 'collection' && completedSets >= 1) unlocks.push(badge.id);
+    if (badge.source === 'quest' && completedQuestChains >= 1) unlocks.push(badge.id);
+    if (badge.source === 'leaderboard' && currentRank > 0 && currentRank === badge.rank) unlocks.push(badge.id);
+  });
+
+  return unlocks;
+}
+
+function refreshBadgeMilestones(options = {}) {
+  const unlocks = getMilestoneBadgeUnlocks();
+  if (!unlocks.length) return false;
+  unlocks.forEach(badgeId => unlockBadgeById(badgeId, options));
+  return true;
 }
 
 function evaluateCollectionAlbumRewards() {
@@ -3463,10 +3642,20 @@ function updateCosmeticLabel() {
   const dashboardFinish = document.getElementById('dashboard-finish');
   if (dashboardFinish) dashboardFinish.textContent = skin.name;
 
-  const badgeCount = progressionState?.cosmetics?.earnedSetBadges?.length || 0;
-  const badgeLabel = document.getElementById('dashboard-album-badge');
+  const badge = getEquippedBadge();
+  const badgeLabel = document.getElementById('page-equipped-badge-label');
   if (badgeLabel) {
-    badgeLabel.textContent = badgeCount ? `${badgeCount} album badge${badgeCount === 1 ? '' : 's'} earned` : 'No album badges yet';
+    badgeLabel.textContent = badge ? `${badge.icon} ${badge.name} equipped` : 'Unlock badges to equip one here.';
+  }
+  const openBadgesButton = document.getElementById('btn-settings-badges');
+  if (openBadgesButton) {
+    openBadgesButton.disabled = BADGE_CATALOGUE.length === 0;
+  }
+
+  const albumBadgeCount = progressionState?.cosmetics?.earnedSetBadges?.length || 0;
+  const dashboardAlbumBadgeLabel = document.getElementById('dashboard-album-badge');
+  if (dashboardAlbumBadgeLabel) {
+    dashboardAlbumBadgeLabel.textContent = albumBadgeCount ? `${albumBadgeCount} album badge${albumBadgeCount === 1 ? '' : 's'} earned` : 'No album badges yet';
   }
 
   const colourNote = document.getElementById('page-colour-note');
@@ -4113,6 +4302,54 @@ function getColorwaySubtitle() {
   const totalCount = COLORWAY_CATALOGUE.length;
   if (ownedCount === totalCount) return 'Every colourway is unlocked and ready to equip.';
   return `${ownedCount}/${totalCount} colourways owned.`;
+}
+
+function getBadgeStateLabel(badge, isUnlocked, isEquipped) {
+  if (isEquipped) return 'Equipped';
+  if (isUnlocked) return 'Unlocked';
+  if (badge.source === 'score' && badge.threshold) return `Locked · best ${bestScore}/${badge.threshold}`;
+  if (badge.source === 'leaderboard' && badge.rank) return `Locked · reach ${formatOrdinal(badge.rank)}`;
+  return 'Locked';
+}
+
+function renderBadgePage() {
+  const list = document.getElementById('badge-list');
+  const count = document.getElementById('badges-count');
+  const subtitle = document.getElementById('badges-subtitle');
+  if (!list || !count || !subtitle) return;
+
+  refreshBadgeMilestones({ announce: false });
+  const unlockedBadgeIds = new Set(getUnlockedBadgeIds());
+  const equippedBadgeId = getEquippedBadgeId();
+  const unlockedCount = BADGE_CATALOGUE.filter(badge => unlockedBadgeIds.has(badge.id)).length;
+
+  count.textContent = `${unlockedCount}/${BADGE_CATALOGUE.length} unlocked`;
+  subtitle.textContent = unlockedCount
+    ? 'Pick an unlocked badge to show beside your name on the weekly leaderboard.'
+    : 'No badges unlocked yet. Keep playing to earn your first one.';
+
+  list.innerHTML = '';
+  BADGE_CATALOGUE.forEach(badge => {
+    const isUnlocked = unlockedBadgeIds.has(badge.id);
+    const isEquipped = equippedBadgeId === badge.id;
+    const article = document.createElement('article');
+    article.className = `badge-item${isUnlocked ? '' : ' badge-item--locked'}`;
+    const actionMarkup = isUnlocked
+      ? `<button class="pill-btn${isEquipped ? ' pill-btn--secondary' : ''}" type="button" data-action="equip-badge" data-badge-id="${badge.id}" ${isEquipped ? 'disabled' : ''}>${isEquipped ? 'Equipped' : 'Equip'}</button>`
+      : '';
+    article.innerHTML = `
+      <div class="badge-item__token" aria-hidden="true">${badge.icon}</div>
+      <div class="badge-item__body">
+        <h3>${badge.name}</h3>
+        <p>${isUnlocked ? badge.description : badge.unlockHint}</p>
+        <div class="badge-item__meta">
+          <span class="badge-item__state">${getBadgeStateLabel(badge, isUnlocked, isEquipped)}</span>
+          ${actionMarkup}
+        </div>
+      </div>
+    `;
+    list.appendChild(article);
+  });
 }
 
 function getShopActionMarkup({ owned, equipped, canAfford, price, itemId, collection }) {
@@ -5012,6 +5249,7 @@ function renderDashboard() {
   const focusCards = document.querySelector('.dashboard-focus');
   const coins = getCoinBalance();
   const hasMeaningfulProgress = coins > 0 || bestScore > 0 || todayScore > 0;
+  refreshBadgeMilestones();
 
   if (continueBtn) {
     continueBtn.hidden = !hasSavedGame;
@@ -5257,6 +5495,7 @@ function navigateTo(page) {
   if (page === 'quests') renderQuestBoard();
   if (page === 'shop') renderCosmeticsCollection();
   if (page === 'settings') populateSettingsPage();
+  if (page === 'badges') renderBadgePage();
   if (page === 'game') showDefaultGameBannerMessage();
   updateBottomNav();
 }
@@ -6495,6 +6734,12 @@ document.getElementById('btn-game-back').addEventListener('click', () => {
 document.getElementById('btn-settings-shop').addEventListener('click', () => {
   navigateTo('shop');
 });
+document.getElementById('btn-settings-badges')?.addEventListener('click', () => {
+  navigateTo('badges');
+});
+document.getElementById('btn-badges-back-settings')?.addEventListener('click', () => {
+  navigateTo('settings');
+});
 document.querySelectorAll('.bottom-nav__item[data-nav-page]').forEach(button => {
   button.addEventListener('click', () => {
     navigateTo(button.dataset.navPage);
@@ -6547,6 +6792,14 @@ function handleShopAction(event) {
 
 document.getElementById('collection-list').addEventListener('click', handleShopAction);
 document.getElementById('colorway-list').addEventListener('click', handleShopAction);
+document.getElementById('badge-list')?.addEventListener('click', event => {
+  const button = event.target.closest('button[data-action="equip-badge"]');
+  if (!button) return;
+  const badgeId = button.dataset.badgeId;
+  if (!badgeId) return;
+  if (!equipBadge(badgeId)) return;
+  renderBadgePage();
+});
 document.getElementById('page-input-weekly-name').addEventListener('input', () => {
   updateLeaderboardNameAvailabilityIndicator();
 });

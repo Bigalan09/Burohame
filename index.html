@@ -387,8 +387,39 @@
             </div>
             <button class="pill-btn pill-btn--secondary" id="btn-settings-shop" type="button">Open shop</button>
           </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Profile badge</span>
+              <small id="page-equipped-badge-label">Unlock badges to equip one here.</small>
+            </div>
+            <button class="pill-btn pill-btn--secondary" id="btn-settings-badges" type="button">Open badges</button>
+          </div>
           <button class="pill-btn wide" id="btn-settings-save" type="button">Save settings</button>
           <button class="pill-btn wide danger" id="btn-clear-data" type="button">🗑️ Clear All Data</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page page--badges" data-page="badges" aria-label="Badges">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Profile badges</p>
+            <h2>Equip badge</h2>
+            <p class="page-intro">Unlock badges through milestones, then equip one for the weekly leaderboard.</p>
+          </div>
+        </header>
+
+        <div class="page-panel badges-page-panel">
+          <div class="collection-head">
+            <div>
+              <h3>Your badge cabinet</h3>
+              <p id="badges-subtitle">No badges unlocked yet. Keep playing to earn your first one.</p>
+            </div>
+            <span class="missions-count" id="badges-count">0/0 unlocked</span>
+          </div>
+          <div id="badge-list" class="badge-list" aria-live="polite"></div>
+          <button class="pill-btn wide pill-btn--secondary" id="btn-badges-back-settings" type="button">Back to settings</button>
         </div>
       </div>
     </section>
