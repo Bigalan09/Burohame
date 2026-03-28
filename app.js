@@ -200,6 +200,7 @@ let lastGameOverReason = 'blocked';
 let leaderboardPlayerName = '';
 let leaderboardPlayerId = '';
 let weeklyLeaderboardRuntimeConfig = createDefaultWeeklyLeaderboardRuntimeConfig();
+let progressionResetDate = '';
 let weeklyLeaderboardHostedAdapter = null;
 let coachModeHostedAdapter = null;
 let coachModeAccessState = {
@@ -222,7 +223,9 @@ let weeklyLeaderboardViewState = {
 const COLOR_NAMES = ['orange', 'blue', 'green', 'purple', 'red', 'teal', 'pink', 'gold', 'indigo', 'mint', 'coral', 'slate', 'violet'];
 const PROGRESSION_STORAGE_KEY = 'bst-progression';
 const GAME_SESSION_STORAGE_KEY = 'bst-current-run';
+const PROGRESSION_RESET_APPLIED_STORAGE_KEY = 'burohame-progression-reset-applied';
 const PROGRESSION_STATE_VERSION = 10;
+const PROGRESSION_RESET_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DAILY_CHALLENGE_REWARD_BASE = 12;
 const DAILY_CHALLENGE_STREAK_STEP = 2;
 const DAILY_CHALLENGE_STREAK_BONUS_CAP = 10;
@@ -1409,11 +1412,17 @@ function sanitiseWeeklyLeaderboardRuntimeConfig(value) {
   return defaults;
 }
 
+function sanitiseProgressionResetDate(value) {
+  const resetDate = typeof value === 'string' ? value.trim() : '';
+  return PROGRESSION_RESET_DATE_PATTERN.test(resetDate) ? resetDate : '';
+}
+
 function loadRuntimeConfig() {
   const runtimeConfig = window.BUROHAME_RUNTIME_CONFIG && typeof window.BUROHAME_RUNTIME_CONFIG === 'object'
     ? window.BUROHAME_RUNTIME_CONFIG
     : {};
   weeklyLeaderboardRuntimeConfig = sanitiseWeeklyLeaderboardRuntimeConfig(runtimeConfig.weeklyLeaderboard);
+  progressionResetDate = sanitiseProgressionResetDate(runtimeConfig.progressionResetDate);
 }
 
 function hasHostedWeeklyLeaderboardConfig() {
@@ -3703,6 +3712,39 @@ function updateProgressionState(updater) {
 function resetProgressionState() {
   progressionState = createDefaultProgressionState();
   saveProgressionState();
+}
+
+function clearStoredProgressionData() {
+  localStorage.removeItem('bst-best');
+  localStorage.removeItem('bst-today');
+  localStorage.removeItem('bst-settings');
+  localStorage.removeItem(PROGRESSION_STORAGE_KEY);
+  localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('bst-supabase-auth:')) {
+      localStorage.removeItem(key);
+    }
+  }
+  clearCoachModeAccessState();
+  leaderboardPlayerId = '';
+  leaderboardPlayerName = '';
+  progressionState = createDefaultProgressionState();
+}
+
+function applyProgressionResetIfNeeded() {
+  if (!progressionResetDate) return false;
+
+  try {
+    const appliedResetDate = localStorage.getItem(PROGRESSION_RESET_APPLIED_STORAGE_KEY) || '';
+    if (appliedResetDate === progressionResetDate) return false;
+
+    clearStoredProgressionData();
+    localStorage.setItem(PROGRESSION_RESET_APPLIED_STORAGE_KEY, progressionResetDate);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function getCoinBalance() {
@@ -7305,18 +7347,7 @@ document.getElementById('btn-clear-data').addEventListener('click', async () => 
   if (!confirm('Clear all game progress and cached data?\nThis cannot be undone.')) return;
 
   // Remove game progress from localStorage
-  localStorage.removeItem('bst-best');
-  localStorage.removeItem('bst-today');
-  localStorage.removeItem('bst-settings');
-  localStorage.removeItem(PROGRESSION_STORAGE_KEY);
-  localStorage.removeItem(GAME_SESSION_STORAGE_KEY);
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('bst-supabase-auth:')) {
-      localStorage.removeItem(key);
-    }
-  }
-  progressionState = createDefaultProgressionState();
+  clearStoredProgressionData();
 
   // Unregister service workers so new assets are fetched on next load
   if ('serviceWorker' in navigator) {
@@ -7413,6 +7444,8 @@ function preventLandscapeOnPhone() {
 }
 
 async function init() {
+  loadRuntimeConfig();
+  applyProgressionResetIfNeeded();
   bestScore  = parseInt(localStorage.getItem('bst-best') || '0', 10);
   const todayKey = new Date().toISOString().slice(0, 10);
   const td   = JSON.parse(localStorage.getItem('bst-today') || '{"d":"","s":0}');
@@ -7430,7 +7463,6 @@ async function init() {
   applyEquippedCosmeticSkin();
   loadSettings();
   loadCoachModeAccessStateFromSession();
-  loadRuntimeConfig();
   if (!weeklyLeaderboardHostedAdapter) configureWeeklyLeaderboardAdapter();
   await checkCoachModeSession();
   ensureLeaderboardHandleClaimedOnJoin().catch(() => {

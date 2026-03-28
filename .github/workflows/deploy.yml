@@ -39,9 +39,25 @@ jobs:
         run: |
           node <<'EOF'
           const fs = require('fs');
+          const vm = require('vm');
+
+          function loadExistingRuntimeConfig() {
+            try {
+              const source = fs.readFileSync('config.js', 'utf8');
+              const sandbox = { window: {} };
+              vm.runInNewContext(source, sandbox, { filename: 'config.js' });
+              return sandbox.window.BUROHAME_RUNTIME_CONFIG || {};
+            } catch (_) {
+              return {};
+            }
+          }
 
           const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
           const supabasePublishableKey = (process.env.SUPABASE_PUBLISHABLE_KEY || '').trim();
+          const existingRuntimeConfig = loadExistingRuntimeConfig();
+          const progressionResetDate = typeof existingRuntimeConfig.progressionResetDate === 'string'
+            ? existingRuntimeConfig.progressionResetDate.trim()
+            : '';
           const hasHostedLeaderboard = Boolean(supabaseUrl) && Boolean(supabasePublishableKey);
 
           if ((supabaseUrl && !supabasePublishableKey) || (!supabaseUrl && supabasePublishableKey)) {
@@ -52,6 +68,7 @@ jobs:
           console.log(`Weekly leaderboard backend: ${hasHostedLeaderboard ? 'supabase' : 'local'}`);
 
           const config = {
+            ...(progressionResetDate ? { progressionResetDate } : {}),
             weeklyLeaderboard: {
               backend: hasHostedLeaderboard ? 'supabase' : 'local',
               supabaseUrl: hasHostedLeaderboard ? supabaseUrl : '',

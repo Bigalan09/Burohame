@@ -32,6 +32,7 @@ Burohame is a mobile-first 9×9 block puzzle game built as a plain static web ap
 - Main app files live at the repository root: `index.html`, `styles.css`, `app.js`, `sw.js`, and static assets.
 - GitHub Actions handle CI, PR previews, CodeQL, and production deployment to GitHub Pages, including injecting public runtime config for hosted services.
 - Weekly leaderboard uses claimed public handles and a hosted backend in production, with the leaderboard card hidden when hosted access is unavailable.
+- A date-stamped runtime reset flag can clear local progression once per device, then stays inert after the first applied reset.
 
 ## Branch and PR workflow
 
