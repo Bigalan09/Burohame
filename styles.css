@@ -222,6 +222,65 @@ html, body {
   -webkit-user-select: none;
 }
 
+body.app-loading #app {
+  visibility: hidden;
+}
+
+.app-loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 56%),
+    var(--bg);
+  transition: opacity 220ms ease, visibility 220ms ease;
+}
+
+.app-loading-screen.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.app-loading-screen__card {
+  width: min(320px, 100%);
+  padding: 20px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border));
+  text-align: center;
+}
+
+.app-loading-screen__spinner {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border-top-color: var(--accent);
+  animation: appLoadingSpin 0.85s linear infinite;
+}
+
+.app-loading-screen__title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.app-loading-screen__copy {
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+@keyframes appLoadingSpin {
+  to { transform: rotate(360deg); }
+}
+
 #app {
   height: 100vh;      /* fallback for older browsers */
   height: 100dvh;     /* dynamic viewport – avoids iOS URL-bar overlap */

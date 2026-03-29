@@ -13,7 +13,14 @@
   <title>Burohame</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="app-loading">
+  <div id="app-loading-screen" class="app-loading-screen" role="status" aria-live="polite" aria-label="Loading Burohame">
+    <div class="app-loading-screen__card">
+      <div class="app-loading-screen__spinner" aria-hidden="true"></div>
+      <p class="app-loading-screen__title">Loading Burohame…</p>
+      <p class="app-loading-screen__copy">Preparing your theme, scores, coins, and live data.</p>
+    </div>
+  </div>
   <div id="app" data-page="dashboard">
 
     <section class="page page--dashboard" data-page="dashboard" aria-label="Dashboard">
