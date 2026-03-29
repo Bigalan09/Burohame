@@ -7459,6 +7459,16 @@ function preventLandscapeOnPhone() {
   window.addEventListener('orientationchange', updateOrientationLock);
 }
 
+function hideLoadingScreen() {
+  const loadingScreen = document.getElementById('app-loading-screen');
+  document.body.classList.remove('app-loading');
+  if (!loadingScreen) return;
+  loadingScreen.classList.add('is-hidden');
+  window.setTimeout(() => {
+    loadingScreen.remove();
+  }, 260);
+}
+
 async function init() {
   loadRuntimeConfig();
   applyProgressionResetIfNeeded();
@@ -7538,6 +7548,10 @@ window.addEventListener('offline', () => {
   renderWeeklyGlobalLeaderboard();
 });
 
-init().catch(error => {
-  console.error('Initialisation failed:', error);
-});
+init()
+  .catch(error => {
+    console.error('Initialisation failed:', error);
+  })
+  .finally(() => {
+    hideLoadingScreen();
+  });
