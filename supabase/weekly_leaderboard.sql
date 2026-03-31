@@ -158,12 +158,23 @@ create table if not exists public.weekly_leaderboard_entries (
   player_name text not null default 'Guest',
   league_id text not null default 'bronze',
   total_score integer not null default 0,
+  equipped_badge_id text not null default '',
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   constraint weekly_leaderboard_entries_score_non_negative check (total_score >= 0),
   constraint weekly_leaderboard_entries_name_len check (char_length(player_name) between 1 and 24),
+  constraint weekly_leaderboard_entries_badge_len check (char_length(equipped_badge_id) <= 64),
   constraint weekly_leaderboard_entries_pk primary key (week_id, player_id)
 );
+
+alter table public.weekly_leaderboard_entries
+  add column if not exists equipped_badge_id text not null default '';
+
+alter table public.weekly_leaderboard_entries
+  drop constraint if exists weekly_leaderboard_entries_badge_len;
+
+alter table public.weekly_leaderboard_entries
+  add constraint weekly_leaderboard_entries_badge_len check (char_length(equipped_badge_id) <= 64);
 
 alter table public.weekly_leaderboard_entries
   drop column if exists counted_runs;
@@ -200,7 +211,8 @@ create or replace function public.upsert_weekly_best_leaderboard_entry(
   p_player_id text,
   p_player_name text,
   p_league_id text,
-  p_submitted_score integer
+  p_submitted_score integer,
+  p_equipped_badge_id text default ''
 )
 returns setof public.weekly_leaderboard_entries
 language plpgsql
@@ -214,6 +226,7 @@ begin
     player_name,
     league_id,
     total_score,
+    equipped_badge_id,
     updated_at
   )
   values (
@@ -222,11 +235,13 @@ begin
     p_player_name,
     p_league_id,
     p_submitted_score,
+    left(coalesce(p_equipped_badge_id, ''), 64),
     now()
   )
   on conflict (week_id, player_id) do update
   set player_name = excluded.player_name,
       league_id = excluded.league_id,
+      equipped_badge_id = excluded.equipped_badge_id,
       total_score = greatest(entries.total_score, excluded.total_score),
       updated_at = case
         when excluded.total_score > entries.total_score then now()
@@ -241,9 +256,9 @@ begin
 end;
 $$;
 
-revoke all on function public.upsert_weekly_best_leaderboard_entry(text, text, text, text, integer)
+revoke all on function public.upsert_weekly_best_leaderboard_entry(text, text, text, text, integer, text)
   from public, anon, authenticated;
-grant execute on function public.upsert_weekly_best_leaderboard_entry(text, text, text, text, integer)
+grant execute on function public.upsert_weekly_best_leaderboard_entry(text, text, text, text, integer, text)
   to service_role;
 
 alter table public.weekly_leaderboard_entries enable row level security;
