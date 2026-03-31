@@ -1674,7 +1674,7 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
 
   function buildQuery(weekId) {
     const params = new URLSearchParams();
-    params.set('select', 'player_id,player_name,league_id,total_score,updated_at,created_at');
+    params.set('select', 'player_id,player_name,league_id,total_score,equipped_badge_id,updated_at,created_at');
     params.set('week_id', `eq.${weekId}`);
     // Tie-break: earliest created_at wins when scores are level.
     params.set('order', 'total_score.desc,created_at.asc,player_id.asc');
@@ -1802,6 +1802,7 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
             leagueId: typeof item.league_id === 'string' ? item.league_id : 'bronze',
             totalScore: clampWholeNumber(item.total_score, 0),
             updatedAt: typeof item.updated_at === 'string' ? item.updated_at : new Date(0).toISOString(),
+            equippedBadgeId: typeof item.equipped_badge_id === 'string' ? item.equipped_badge_id : '',
             createdAt: typeof item.created_at === 'string' ? item.created_at : new Date(0).toISOString(),
           }))
         : [];
@@ -1822,6 +1823,7 @@ function createSupabaseWeeklyLeaderboardAdapter(url, apiKey) {
           player_id: session.userId,
           league_id: entry.leagueId,
           total_score: entry.totalScore,
+          equipped_badge_id: typeof entry.equippedBadgeId === 'string' ? entry.equippedBadgeId : '',
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -1880,6 +1882,7 @@ function getWeeklyLeaderboardEntryPayload() {
     playerId: leaderboardPlayerId,
     leagueId: weekly.leagueId,
     totalScore: countedRuns[0] || 0,
+    equippedBadgeId: getEquippedBadgeId(),
   };
 }
 
@@ -2162,6 +2165,8 @@ function renderWeeklyGlobalLeaderboard() {
           if (index === 0) return '🥇';
           if (index === 1) return '🥈';
           if (index === 2) return '🥉';
+          const equippedBadge = BADGE_LOOKUP[entry.equippedBadgeId] || null;
+          if (equippedBadge) return equippedBadge.icon;
           if (entry.playerId === leaderboardPlayerId) {
             const equipped = getEquippedBadge();
             return equipped ? equipped.icon : '';
@@ -2205,7 +2210,13 @@ function renderWeeklyGlobalLeaderboard() {
         const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
         const nameEl = document.createElement('span');
         const league = getLeagueById(entry.leagueId);
-        const leaderboardBadge = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+        const leaderboardBadge = (() => {
+          if (index === 0) return '🥇';
+          if (index === 1) return '🥈';
+          if (index === 2) return '🥉';
+          const equippedBadge = BADGE_LOOKUP[entry.equippedBadgeId] || null;
+          return equippedBadge ? equippedBadge.icon : '';
+        })();
         const badgePrefix = leaderboardBadge ? `${leaderboardBadge} ` : '';
         nameEl.textContent = `${index + 1}. ${badgePrefix}${name} · ${league.badge} ${league.name}`;
         const scoreEl = document.createElement('strong');
