@@ -12,6 +12,7 @@ const corsHeaders = {
 const WEEK_ID_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const VALID_LEAGUES = new Set(['bronze', 'silver', 'gold', 'diamond']);
 const MAX_RUN_SCORE = 1_000_000;
+const MAX_BADGE_ID_LENGTH = 64;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_AUTH_KEY =
   Deno.env.get('SB_PUBLISHABLE_KEY') ??
@@ -125,6 +126,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const submittedScore = entry.total_score;
+  const equippedBadgeId = typeof entry.equipped_badge_id === 'string'
+    ? entry.equipped_badge_id.trim().slice(0, MAX_BADGE_ID_LENGTH)
+    : '';
 
   const { data, error } = await serviceClient.rpc('upsert_weekly_best_leaderboard_entry', {
     p_week_id: weekId,
@@ -132,6 +136,7 @@ Deno.serve(async (req: Request) => {
     p_player_name: playerName,
     p_league_id: leagueId,
     p_submitted_score: submittedScore,
+    p_equipped_badge_id: equippedBadgeId,
   });
 
   if (error) {
