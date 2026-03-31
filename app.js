@@ -2137,48 +2137,46 @@ function renderWeeklyGlobalLeaderboard() {
   if (shouldHide) {
     listEl.innerHTML = '';
     statusEl.textContent = '';
-    return;
+  } else {
+    const rankLine = weeklyLeaderboardViewState.currentPlayerRank > 0
+      ? ` · Your rank: ${formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)}`
+      : '';
+    const statusLine = weeklyLeaderboardViewState.loading
+      ? `${weeklyLeaderboardViewState.sourceLabel} · Refreshing live standings…`
+      : `${weeklyLeaderboardViewState.sourceLabel}${rankLine}`;
+    statusEl.textContent = statusLine;
+
+    listEl.innerHTML = '';
+    const rows = weeklyLeaderboardViewState.entries.slice(0, 8);
+    if (!rows.length) {
+      const empty = document.createElement('li');
+      empty.textContent = 'No runs are on this week’s leaderboard yet.';
+      listEl.appendChild(empty);
+    } else {
+      rows.forEach((entry, index) => {
+        const item = document.createElement('li');
+        const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
+        const nameEl = document.createElement('span');
+        const league = getLeagueById(entry.leagueId);
+        const leaderboardBadge = (() => {
+          if (index === 0) return '🥇';
+          if (index === 1) return '🥈';
+          if (index === 2) return '🥉';
+          if (entry.playerId === leaderboardPlayerId) {
+            const equipped = getEquippedBadge();
+            return equipped ? equipped.icon : '';
+          }
+          return '';
+        })();
+        const badgePrefix = leaderboardBadge ? `${leaderboardBadge} ` : '';
+        nameEl.textContent = `${index + 1}. ${badgePrefix}${name} · ${league.badge} ${league.name}`;
+        const scoreEl = document.createElement('strong');
+        scoreEl.textContent = String(entry.totalScore);
+        item.append(nameEl, scoreEl);
+        listEl.appendChild(item);
+      });
+    }
   }
-
-  const rankLine = weeklyLeaderboardViewState.currentPlayerRank > 0
-    ? ` · Your rank: ${formatOrdinal(weeklyLeaderboardViewState.currentPlayerRank)}`
-    : '';
-  const statusLine = weeklyLeaderboardViewState.loading
-    ? `${weeklyLeaderboardViewState.sourceLabel} · Refreshing live standings…`
-    : `${weeklyLeaderboardViewState.sourceLabel}${rankLine}`;
-  statusEl.textContent = statusLine;
-
-  listEl.innerHTML = '';
-  const rows = weeklyLeaderboardViewState.entries.slice(0, 8);
-  if (!rows.length) {
-    const empty = document.createElement('li');
-    empty.textContent = 'No runs are on this week’s leaderboard yet.';
-    listEl.appendChild(empty);
-    return;
-  }
-
-  rows.forEach((entry, index) => {
-    const item = document.createElement('li');
-    const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
-    const nameEl = document.createElement('span');
-    const league = getLeagueById(entry.leagueId);
-    const leaderboardBadge = (() => {
-      if (index === 0) return '🥇';
-      if (index === 1) return '🥈';
-      if (index === 2) return '🥉';
-      if (entry.playerId === leaderboardPlayerId) {
-        const equipped = getEquippedBadge();
-        return equipped ? equipped.icon : '';
-      }
-      return '';
-    })();
-    const badgePrefix = leaderboardBadge ? `${leaderboardBadge} ` : '';
-    nameEl.textContent = `${index + 1}. ${badgePrefix}${name} · ${league.badge} ${league.name}`;
-    const scoreEl = document.createElement('strong');
-    scoreEl.textContent = String(entry.totalScore);
-    item.append(nameEl, scoreEl);
-    listEl.appendChild(item);
-  });
 
   const previousShouldHide = previousWeeklyLeaderboardViewState.hidden
     || !canShowHostedWeeklyLeaderboard()
@@ -2187,40 +2185,36 @@ function renderWeeklyGlobalLeaderboard() {
   if (previousShouldHide) {
     previousListEl.innerHTML = '';
     previousStatusEl.textContent = '';
-    refreshBadgeMilestones();
-    return;
+  } else {
+    const previousRankLine = previousWeeklyLeaderboardViewState.currentPlayerRank > 0
+      ? ` · Your finish: ${formatOrdinal(previousWeeklyLeaderboardViewState.currentPlayerRank)}`
+      : '';
+    previousStatusEl.textContent = previousWeeklyLeaderboardViewState.loading
+      ? `${previousWeeklyLeaderboardViewState.sourceLabel} · Loading previous week…`
+      : `${previousWeeklyLeaderboardViewState.sourceLabel}${previousRankLine}`;
+
+    previousListEl.innerHTML = '';
+    const previousRows = previousWeeklyLeaderboardViewState.entries.slice(0, 8);
+    if (!previousRows.length) {
+      const empty = document.createElement('li');
+      empty.textContent = 'No runs were recorded on the previous leaderboard.';
+      previousListEl.appendChild(empty);
+    } else {
+      previousRows.forEach((entry, index) => {
+        const item = document.createElement('li');
+        const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
+        const nameEl = document.createElement('span');
+        const league = getLeagueById(entry.leagueId);
+        const leaderboardBadge = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+        const badgePrefix = leaderboardBadge ? `${leaderboardBadge} ` : '';
+        nameEl.textContent = `${index + 1}. ${badgePrefix}${name} · ${league.badge} ${league.name}`;
+        const scoreEl = document.createElement('strong');
+        scoreEl.textContent = String(entry.totalScore);
+        item.append(nameEl, scoreEl);
+        previousListEl.appendChild(item);
+      });
+    }
   }
-
-  const previousRankLine = previousWeeklyLeaderboardViewState.currentPlayerRank > 0
-    ? ` · Your finish: ${formatOrdinal(previousWeeklyLeaderboardViewState.currentPlayerRank)}`
-    : '';
-  previousStatusEl.textContent = previousWeeklyLeaderboardViewState.loading
-    ? `${previousWeeklyLeaderboardViewState.sourceLabel} · Loading previous week…`
-    : `${previousWeeklyLeaderboardViewState.sourceLabel}${previousRankLine}`;
-
-  previousListEl.innerHTML = '';
-  const previousRows = previousWeeklyLeaderboardViewState.entries.slice(0, 8);
-  if (!previousRows.length) {
-    const empty = document.createElement('li');
-    empty.textContent = 'No runs were recorded on the previous leaderboard.';
-    previousListEl.appendChild(empty);
-    refreshBadgeMilestones();
-    return;
-  }
-
-  previousRows.forEach((entry, index) => {
-    const item = document.createElement('li');
-    const name = entry.playerId === leaderboardPlayerId ? `${entry.playerName} (You)` : entry.playerName;
-    const nameEl = document.createElement('span');
-    const league = getLeagueById(entry.leagueId);
-    const leaderboardBadge = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
-    const badgePrefix = leaderboardBadge ? `${leaderboardBadge} ` : '';
-    nameEl.textContent = `${index + 1}. ${badgePrefix}${name} · ${league.badge} ${league.name}`;
-    const scoreEl = document.createElement('strong');
-    scoreEl.textContent = String(entry.totalScore);
-    item.append(nameEl, scoreEl);
-    previousListEl.appendChild(item);
-  });
 
   refreshBadgeMilestones();
 }
