@@ -9,7 +9,7 @@ Burohame is a mobile-first 9×9 block puzzle game built as a plain static web ap
 - Place three pieces per round on a 9×9 board with no rotation.
 - Clear full rows, columns, and 3×3 boxes for points.
 - Chain clears to build combo bonuses.
-- Support both the standard piece set and the extended piece set.
+- Use the standard piece set only.
 - Offer Coach Mode guidance with move hints, board-health feedback, and quality callouts.
 - Daily challenge boards include reinforced locked blocks that must be cleared twice, and the run ends in a win when all reinforced blocks are fully cleared.
 
