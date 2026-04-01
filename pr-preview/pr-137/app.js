@@ -7225,7 +7225,7 @@ async function shareBurohameApp() {
   const shareUrl = `${window.location.origin}${window.location.pathname}`;
   const sharePayload = {
     title: 'Burohame',
-    text: 'I have been playing this 9×9 puzzle game. Give it a go.',
+    text: 'I have been playing Burohame, this 9×9 puzzle game. Give it a go.',
     url: shareUrl,
   };
 
