@@ -8,89 +8,6 @@
 // Each entry is an array of [row, col] offsets.
 // All pieces normalised: minRow = 0, minCol = 0.
 
-// Extended set – all 51 canonical pieces (current full set)
-const PIECE_DEFS_EXTENDED = [
-  // 1-cell
-  [[0,0]],
-  // Dominoes
-  [[0,0],[0,1]],
-  [[0,0],[1,0]],
-  // Diagonal dominoes (2-block diagonal)
-  [[0,0],[1,1]],
-  [[0,1],[1,0]],
-  // Straight trominoes
-  [[0,0],[0,1],[0,2]],
-  [[0,0],[1,0],[2,0]],
-  // Diagonal trominoes (3-block diagonal)
-  [[0,0],[1,1],[2,2]],
-  [[0,2],[1,1],[2,0]],
-  // Corner trominoes (2 canonical forms)
-  [[0,0],[0,1],[1,0]],
-  [[0,0],[1,0],[1,1]],
-  // 2×2 square
-  [[0,0],[0,1],[1,0],[1,1]],
-  // Straight tetrominoes
-  [[0,0],[0,1],[0,2],[0,3]],
-  [[0,0],[1,0],[2,0],[3,0]],
-  // L-tetromino
-  [[0,0],[1,0],[2,0],[2,1]],
-  // Extended corner (wide L in 2×3)
-  [[0,0],[0,1],[0,2],[1,0]],
-  // T-tetromino
-  [[0,0],[0,1],[0,2],[1,1]],
-  // S-tetromino (horizontal)
-  [[0,1],[0,2],[1,0],[1,1]],
-  // Step corner (vertical S)
-  [[0,0],[1,0],[1,1],[2,1]],
-  // Z-tetromino
-  [[0,0],[0,1],[1,1],[1,2]],
-  // Straight pentominoes
-  [[0,0],[0,1],[0,2],[0,3],[0,4]],
-  [[0,0],[1,0],[2,0],[3,0],[4,0]],
-
-  // ── 5-cell shapes ──────────────────────────────────────
-  // Plus / X-pentomino (rotationally symmetric)
-  [[0,1],[1,0],[1,1],[1,2],[2,1]],
-  // T-pentomino (4 orientations)
-  [[0,0],[0,1],[0,2],[1,1],[2,1]],
-  [[0,2],[1,0],[1,1],[1,2],[2,2]],
-  [[0,1],[1,1],[2,0],[2,1],[2,2]],
-  [[0,0],[1,0],[1,1],[1,2],[2,0]],
-  // V-pentomino / large corner (4 orientations)
-  [[0,0],[1,0],[2,0],[2,1],[2,2]],
-  [[0,0],[0,1],[0,2],[1,0],[2,0]],
-  [[0,0],[0,1],[0,2],[1,2],[2,2]],
-  [[0,2],[1,2],[2,0],[2,1],[2,2]],
-  // L-pentomino (4 orientations)
-  [[0,0],[1,0],[2,0],[3,0],[3,1]],
-  [[0,0],[0,1],[0,2],[0,3],[1,0]],
-  [[0,0],[0,1],[1,1],[2,1],[3,1]],
-  [[0,3],[1,0],[1,1],[1,2],[1,3]],
-  // J-pentomino (4 orientations)
-  [[0,1],[1,1],[2,1],[3,0],[3,1]],
-  [[0,0],[1,0],[1,1],[1,2],[1,3]],
-  [[0,0],[0,1],[1,0],[2,0],[3,0]],
-  [[0,0],[0,1],[0,2],[0,3],[1,3]],
-  // U-pentomino (4 orientations)
-  [[0,0],[0,2],[1,0],[1,1],[1,2]],
-  [[0,0],[0,1],[1,0],[2,0],[2,1]],
-  [[0,0],[0,1],[0,2],[1,0],[1,2]],
-  [[0,0],[0,1],[1,1],[2,0],[2,1]],
-  // W-pentomino / staircase (4 orientations)
-  [[0,0],[1,0],[1,1],[2,1],[2,2]],
-  [[0,1],[0,2],[1,0],[1,1],[2,0]],
-  [[0,0],[0,1],[1,1],[1,2],[2,2]],
-  [[0,2],[1,1],[1,2],[2,0],[2,1]],
-  // P-pentomino (2×2 plus one extension)
-  [[0,0],[0,1],[1,0],[1,1],[2,0]],
-  // F-pentomino (offset cross form)
-  [[0,1],[0,2],[1,0],[1,1],[2,1]],
-  // Z5-pentomino (5-block zigzag)
-  [[0,0],[0,1],[1,1],[2,1],[2,2]],
-  // S5-pentomino (5-block mirror of Z)
-  [[0,1],[0,2],[1,1],[2,0],[2,1]],
-];
-
 // Standard set – matches original Blockudoku shapes (no complex V/W/P/F/Z5/S5 pentominoes)
 // Explicitly defined (not filtered by index) for maintainability
 const PIECE_DEFS_STANDARD = [
@@ -173,7 +90,6 @@ let todayScore = 0;
 let combo   = 0;
 let gameOver = false;
 let trainingMode = false;
-let extendedPieces = false;
 let darkMode     = false;
 let colorSetting = 'orange';   // 'orange','blue','green','purple','red','teal','pink','random'
 let rackSize     = 3;          // number of pieces shown in the rack (1–3)
@@ -5557,14 +5473,13 @@ function applyDarkMode(on) {
     .setAttribute('content', on ? '#1c1c1e' : '#f2f2f7');
 }
 
-function applyExtendedPieces(on) {
-  PIECE_DEFS = on ? PIECE_DEFS_EXTENDED : PIECE_DEFS_STANDARD;
+function applyExtendedPieces() {
+  PIECE_DEFS = PIECE_DEFS_STANDARD;
 }
 
 function saveSettings() {
   localStorage.setItem('bst-settings', JSON.stringify({
     training:  trainingMode,
-    extended:  extendedPieces,
     dark:      darkMode,
     color:     colorSetting,
     rackSize:  rackSize,
@@ -5580,7 +5495,6 @@ function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('bst-settings') || '{}');
     if (typeof s.training === 'boolean')  trainingMode   = s.training;
-    if (typeof s.extended === 'boolean')  extendedPieces = s.extended;
     if (typeof s.color === 'string')      colorSetting   = sanitiseColorSetting(s.color);
     if (typeof s.rackSize === 'number' && s.rackSize >= 1 && s.rackSize <= 3)
       rackSize = s.rackSize;
@@ -6043,7 +5957,6 @@ async function ensureLeaderboardHandleClaimedOnJoin() {
 
 function populateSettingsPage() {
   document.getElementById('page-chk-coach').checked = trainingMode && coachModeAccessState.authorised;
-  document.getElementById('page-chk-extended').checked = extendedPieces;
   document.getElementById('page-chk-dark').checked = darkMode;
 
   const colorSelect = document.getElementById('page-sel-color');
@@ -6440,13 +6353,13 @@ function doPlace(slotIdx, row, col) {
   }
 
   // Check clears
-  const cleared = doClears();
+  const clearResult = doClears();
   evaluateRunObjectives();
 
-  if (cleared.size) {
-    showPointsPopup(cleared.size);
-    if (combo > 0) showComboPopup(combo);
-    animateClears(cleared, () => {
+  if (clearResult.cells.size) {
+    showPointsPopup(clearResult.cells.size);
+    if (combo > 0) showComboPopup(combo, clearResult.patternName);
+    animateClears(clearResult.cells, () => {
       renderBoard();
       afterPlace();
     });
@@ -6473,6 +6386,17 @@ function afterPlace() {
   }
 }
 
+function getClearPatternName(rowCount, colCount, boxCount) {
+  if (rowCount >= 1 && colCount >= 1 && boxCount >= 1) return 'Crown burst';
+  if (rowCount >= 2 && colCount >= 2) return 'Crossfire';
+  if (rowCount >= 1 && colCount >= 1) return 'Cross';
+  if (boxCount >= 2 && rowCount === 0 && colCount === 0) return 'Spinning top';
+  if (boxCount >= 1 && (rowCount >= 1 || colCount >= 1)) return 'Lollipop';
+  if (rowCount >= 2 || colCount >= 2) return 'Twin lane';
+  if (boxCount >= 2) return 'Box storm';
+  return '';
+}
+
 function doClears() {
   const rowFull = [], colFull = [], boxFull = [];
 
@@ -6495,7 +6419,7 @@ function doClears() {
   }
 
   const total = rowFull.length + colFull.length + boxFull.length;
-  if (!total) { combo = 0; return new Set(); }
+  if (!total) { combo = 0; return { cells: new Set(), patternName: '' }; }
 
   const cleared = new Set();
   for (const r of rowFull) {
@@ -6602,7 +6526,10 @@ function doClears() {
   }
 
   updateScoreUI();
-  return cleared;
+  return {
+    cells: cleared,
+    patternName: total > 1 ? getClearPatternName(rowFull.length, colFull.length, boxFull.length) : '',
+  };
 }
 
 function animateClears(cleared, cb) {
@@ -7166,11 +7093,15 @@ function explainMove(cells, row, col) {
 }
 
 // ── Animation helpers ──────────────────────────────────────
-function showComboPopup(c) {
+function showComboPopup(c, patternName = '') {
   const label = c >= 5 ? '🔥🔥🔥' : c >= 3 ? '🔥🔥' : '🔥';
   const popup = document.createElement('div');
   popup.className = 'combo-popup';
-  popup.textContent = `${label} ${c}× Combo!`;
+  if (patternName) {
+    popup.innerHTML = `<span class="combo-popup__pattern">${patternName}</span><span>${label} ${c}× Combo!</span>`;
+  } else {
+    popup.textContent = `${label} ${c}× Combo!`;
+  }
   // Position above the board
   const boardRect = document.getElementById('board-wrap').getBoundingClientRect();
   popup.style.top = (boardRect.top + boardRect.height * 0.3) + 'px';
@@ -7257,7 +7188,6 @@ function applySettingsState(nextSettings) {
   const nextTrainingMode = coachModeAccessState.authorised && !!nextSettings.trainingMode;
 
   trainingMode = nextTrainingMode;
-  extendedPieces = nextSettings.extendedPieces;
   darkMode = nextSettings.darkMode;
   const requestedColor = sanitiseColorSetting(nextSettings.colorSetting);
   colorSetting = isColorwayOwned(requestedColor) ? requestedColor : colorSetting;
@@ -7268,7 +7198,7 @@ function applySettingsState(nextSettings) {
 
   applyDarkMode(darkMode);
   applyColor(colorSetting);
-  applyExtendedPieces(extendedPieces);
+  applyExtendedPieces();
   saveSettings();
 
   document.getElementById('coach-panel').hidden = !trainingMode;
@@ -7306,7 +7236,6 @@ document.getElementById('btn-quick-settings-close').addEventListener('click', ()
 document.getElementById('btn-quick-settings-save').addEventListener('click', () => {
   applySettingsState({
     trainingMode,
-    extendedPieces,
     darkMode: document.getElementById('quick-chk-dark').checked,
     colorSetting,
     rackSize,
@@ -7508,7 +7437,6 @@ document.getElementById('btn-settings-save').addEventListener('click', async () 
 
   applySettingsState({
     trainingMode: document.getElementById('page-chk-coach').checked,
-    extendedPieces: document.getElementById('page-chk-extended').checked,
     darkMode: document.getElementById('page-chk-dark').checked,
     colorSetting: sanitiseColorSetting(document.getElementById('page-sel-color').value),
     rackSize: parseInt(document.getElementById('page-sel-rack').value, 10),
@@ -7664,7 +7592,7 @@ async function init() {
   ensureSelectedColorway({ preserveLegacy: true });
   applyDarkMode(darkMode);
   applyColor(colorSetting);
-  applyExtendedPieces(extendedPieces);
+  applyExtendedPieces();
   document.getElementById('coach-panel').hidden = !trainingMode;
 
   // Follow OS dark-mode changes dynamically when the user hasn't set
