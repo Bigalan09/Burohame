@@ -4680,7 +4680,7 @@ function renderDailyChallengePanels() {
   const challenge = ensureDailyChallengeForDate(selectedDailyChallengeDateKey);
   const challengeStatus = getDailyChallengeStatus(challenge);
   const isFirstRunExperience = getCompletedRunCount() === 0;
-  const title = getDailyChallengeLabel(challenge.date);
+  const title = 'Daily Challenge';
   const copy = challengeStatus.complete
     ? 'Board cleared. Pick another day or replay this one for practice.'
     : challengeStatus.isHistorical
@@ -5793,7 +5793,7 @@ function renderWeeklyLadder() {
   setTextIfPresent('weekly-page-copy', 'Live standings update this week as players post better single-run scores.');
   setTextIfPresent('weekly-page-score', String(localBestScore));
   setTextIfPresent('weekly-page-rank', liveRank);
-  setTextIfPresent('dashboard-weekly-card-title', 'This week');
+  setTextIfPresent('dashboard-weekly-card-title', 'Leaderboard');
   setTextIfPresent('dashboard-weekly-card-copy', 'Live global leaderboard');
   setTextIfPresent('dashboard-weekly-card-progress', localBestScore > 0 ? `${liveRank} · best ${localBestScore}` : 'Set your first weekly score');
 
@@ -5833,17 +5833,17 @@ function renderDashboardUnlockPreview({ isFirstRunExperience = false } = {}) {
   const albumStatus = getCollectionAlbumStatus();
   const spotlight = albumStatus.spotlightSet;
 
-  let title = 'Next unlock';
+  let title = 'Collections';
   let copy = 'Unlock your first finish reward.';
   let progress = 'Complete your first run';
 
   if (!isFirstRunExperience) {
     if (albumStatus.allSetsComplete) {
-      title = 'Next unlock';
+      title = 'Collections';
       copy = 'Your collection is complete. Try a higher weekly finish for bonus rewards.';
       progress = `${COLLECTION_ALBUM_GOAL.reward.name} unlocked`;
     } else if (spotlight) {
-      title = 'Next unlock';
+      title = 'Collections';
       copy = spotlight.remainingCount === 1
         ? `One more unlock completes ${spotlight.set.title}.`
         : `${spotlight.remainingCount} more unlocks for ${spotlight.set.title}.`;
