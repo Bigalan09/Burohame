@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Burohame">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#f2f2f7">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Burohame</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="app-loading">
+  <div id="app-loading-screen" class="app-loading-screen" role="status" aria-live="polite" aria-label="Loading Burohame">
+    <div class="app-loading-screen__card">
+      <div class="app-loading-screen__spinner" aria-hidden="true"></div>
+      <p class="app-loading-screen__title">Loading Burohame…</p>
+      <p class="app-loading-screen__copy">Preparing your theme, scores, coins, and live data.</p>
+    </div>
+  </div>
+  <div id="app" data-page="dashboard">
+
+    <section class="page page--dashboard" data-page="dashboard" aria-label="Dashboard">
+      <div class="page-scroll page-scroll--dashboard">
+        <header class="page-top page-top--dashboard">
+          <div>
+            <p class="page-kicker">9×9 block puzzle</p>
+            <h1>Burohame</h1>
+            <p class="page-intro" id="dashboard-intro">Quick, calm runs built for one more go.</p>
+          </div>
+          <div class="header-actions">
+            <button class="icon-btn icon-btn--share" id="btn-dashboard-share" aria-label="Share Burohame" type="button">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M14.5 4.5H19.5V9.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M10.5 13.5L19.2 4.8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M19.5 13.5V18.3C19.5 19.5 18.5 20.5 17.3 20.5H5.7C4.5 20.5 3.5 19.5 3.5 18.3V6.7C3.5 5.5 4.5 4.5 5.7 4.5H10.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <section class="dash-hero dash-hero--calm" aria-label="Start playing">
+          <p class="dash-hero__value" id="dashboard-value-prop">Place three pieces per turn. Clear lines and 3×3 boxes to stay alive.</p>
+          <div class="dash-actions dash-actions--hero">
+            <button class="pill-btn wide" id="btn-dashboard-play" type="button">Play now</button>
+            <button class="pill-btn wide pill-btn--secondary" id="btn-dashboard-continue" type="button" hidden>Continue run</button>
+          </div>
+          <div class="dash-progress-strip" id="dashboard-progress-strip" aria-label="Progress overview" hidden>
+            <article class="dashboard-stat">
+              <span>Coins</span>
+              <strong id="dashboard-coins">0</strong>
+            </article>
+            <article class="dashboard-stat">
+              <span>Best run</span>
+              <strong id="dashboard-best">0</strong>
+            </article>
+            <article class="dashboard-stat">
+              <span>Daily Challenge</span>
+              <strong id="dashboard-today">0</strong>
+            </article>
+          </div>
+          <p class="dash-hero-chip" id="dashboard-run-state">Ready for a fresh run</p>
+        </section>
+
+        <section class="dash-onboarding" id="dashboard-onboarding" hidden aria-label="How to play">
+          <h2>Start in under a minute</h2>
+          <div class="dash-onboarding__steps" role="list" aria-label="Quick play steps">
+            <p role="listitem">Drop pieces onto the 9×9 board.</p>
+            <p role="listitem">Clear lines and 3×3 boxes.</p>
+            <p role="listitem">Keep placing to grow your score.</p>
+          </div>
+          <p class="dash-onboarding__reward" id="dashboard-first-reward">First run reward: 20 coins</p>
+        </section>
+
+        <section class="dashboard-focus" aria-label="Today at a glance">
+          <article class="focus-card focus-card--daily" aria-label="Daily challenge options">
+            <span class="focus-card__title" id="dashboard-daily-title">Daily Challenge</span>
+            <p class="focus-card__line" id="dashboard-daily-copy">Play today’s board.</p>
+            <div class="focus-card__meta">
+              <span id="dashboard-daily-progress">Reward: 12 coins</span>
+              <span class="focus-card__action" id="dashboard-daily-window">Today</span>
+            </div>
+            <div class="focus-card__controls">
+              <label class="sr-only" for="dashboard-daily-date">Choose a daily challenge date</label>
+              <select id="dashboard-daily-date" class="focus-card__select" aria-label="Choose a daily challenge date"></select>
+              <button class="pill-btn" id="btn-dashboard-daily-play" type="button" aria-label="Play selected daily challenge">Play</button>
+            </div>
+          </article>
+
+          <button class="focus-card" id="btn-dashboard-weekly-page" type="button" aria-label="Open weekly progress">
+            <span class="focus-card__title" id="dashboard-weekly-card-title">Leaderboard</span>
+            <p class="focus-card__line" id="dashboard-weekly-card-copy">One more run could improve your rank.</p>
+            <div class="focus-card__meta">
+              <span id="dashboard-weekly-card-progress">Complete your first weekly run</span>
+              <span class="focus-card__action">View</span>
+            </div>
+          </button>
+
+          <button class="focus-card" id="btn-dashboard-unlock-page" type="button" aria-label="Open collections">
+            <span class="focus-card__title" id="dashboard-unlock-title">Collections</span>
+            <p class="focus-card__line" id="dashboard-unlock-copy">Complete your first run to start unlocking finishes.</p>
+            <div class="focus-card__meta">
+              <span id="dashboard-unlock-progress">Collection progress starts after your first run</span>
+              <span class="focus-card__action">Open collection</span>
+            </div>
+          </button>
+        </section>
+      </div>
+    </section>
+
+    <section class="page page--weekly" data-page="weekly" aria-label="Weekly leaderboard">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Live weekly competition</p>
+            <h2>Weekly leaderboard</h2>
+            <p class="page-intro">Live standings reset each UTC Monday. Your best single score this week sets your competitive rank.</p>
+          </div>
+          <button class="icon-btn" data-back-page="dashboard" aria-label="Back to dashboard" type="button">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </header>
+
+        <section class="dashboard-weekly page-panel page-panel--retention" aria-label="Weekly ladder and leagues">
+          <div class="dashboard-weekly__head">
+            <div>
+              <span class="dashboard-weekly__kicker">Hosted weekly competition</span>
+              <h2 id="weekly-page-title">Current UTC week</h2>
+            </div>
+            <span class="dashboard-weekly__countdown" id="weekly-page-countdown">0h left</span>
+          </div>
+          <p class="dashboard-weekly__copy" id="weekly-page-copy">Your best single score this week decides your live global rank.</p>
+          <div class="dashboard-weekly__stats">
+            <article>
+              <span>Your best</span>
+              <strong id="weekly-page-score">0</strong>
+            </article>
+            <article>
+              <span>Your live rank</span>
+              <strong id="weekly-page-rank">20th</strong>
+            </article>
+          </div>
+          <div class="dashboard-weekly__global" id="weekly-global-card" aria-live="polite" hidden>
+            <div class="dashboard-weekly__global-head">
+              <strong>Live weekly table</strong>
+              <span id="weekly-global-status">Loading weekly table…</span>
+            </div>
+            <ol class="dashboard-weekly__global-list" id="weekly-global-list" aria-label="Weekly leaderboard entries"></ol>
+          </div>
+          <div class="dashboard-weekly__global" id="weekly-last-global-card" aria-live="polite" hidden>
+            <div class="dashboard-weekly__global-head">
+              <strong>Last week final table</strong>
+              <span id="weekly-last-global-status">Loading last week…</span>
+            </div>
+            <ol class="dashboard-weekly__global-list" id="weekly-last-global-list" aria-label="Last week leaderboard entries"></ol>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="page page--quests" data-page="quests" aria-label="Quest chains">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Weekly routes</p>
+            <h2>Quest chains</h2>
+            <p class="page-intro">Longer routes unfold one step at a time through the week, then pay out the bigger rewards when the chain is complete.</p>
+          </div>
+          <button class="icon-btn" data-back-page="dashboard" aria-label="Back to dashboard" type="button">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </header>
+
+        <div class="page-panel page-panel--goals page-panel--retention">
+          <div class="missions-head">
+            <div>
+              <h2>Quest chains</h2>
+              <p id="quests-subtitle">Only one step is active in each chain. Finish the active step to unlock the next reward.</p>
+            </div>
+            <span class="missions-count" id="quests-count">0/0 chains complete</span>
+          </div>
+          <div id="quest-list" class="missions-list" aria-live="polite"></div>
+          <button class="pill-btn wide pill-btn--secondary retention-back-btn" data-back-page="dashboard" type="button">Back to dashboard</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page page--missions" data-page="missions" aria-label="Daily missions">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Daily goals</p>
+            <h2>Daily missions</h2>
+            <p class="page-intro">Short one-step goals refresh each day, settle rewards automatically, and give you a clear next nudge.</p>
+          </div>
+          <button class="icon-btn" data-back-page="dashboard" aria-label="Back to dashboard" type="button">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </header>
+
+        <div class="page-panel page-panel--goals page-panel--retention">
+          <div class="missions-head">
+            <div>
+              <h2>Daily missions</h2>
+              <p id="missions-subtitle">Fresh goals are on the way.</p>
+            </div>
+            <span class="missions-count" id="missions-count">0/0 completed</span>
+          </div>
+          <div id="missions-list" class="missions-list" aria-live="polite"></div>
+          <button class="pill-btn wide pill-btn--secondary retention-back-btn" data-back-page="dashboard" type="button">Back to dashboard</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page page--game" data-page="game" aria-label="Game">
+      <header id="hdr">
+        <button class="icon-btn" id="btn-game-back" aria-label="Back to dashboard" type="button">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div id="score-wrap">
+          <div id="score-main">0</div>
+          <div id="score-sub">
+            <span id="session-mode-badge" class="session-mode-badge" hidden>Daily challenge</span>
+            <span>Today&nbsp;<span id="today-val">0</span></span>
+            <span>🏆&nbsp;<span id="best-val">0</span></span>
+            <span class="coins-stat" aria-live="polite" aria-label="Coins">🪙&nbsp;<span id="coin-balance">0</span></span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" id="btn-quick-settings" aria-label="Quick settings" type="button">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="2"/>
+              <path d="M10 1.5v2M10 16.5v2M1.5 10h2M16.5 10h2M4.1 4.1l1.4 1.4M14.5 14.5l1.4 1.4M4.1 15.9l1.4-1.4M14.5 5.5l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="game-banner" class="game-banner" aria-live="polite" aria-atomic="true">
+        <div id="game-banner-stack" class="game-banner__stack">
+          <article class="game-banner__message game-banner__message--live game-banner__message--placeholder">
+            <span class="game-banner__kicker">Run updates</span>
+            <strong class="game-banner__title">Play to see live milestones.</strong>
+          </article>
+        </div>
+      </div>
+
+      <main id="main">
+        <div id="board-wrap">
+          <div id="board"></div>
+        </div>
+
+        <div id="coach-panel" hidden>
+          <div id="health-row">
+            <span class="metric" id="m-holes">Holes&nbsp;<b>0</b></span>
+            <span class="metric" id="m-lanes">Lanes&nbsp;<b>18</b></span>
+            <span class="metric" id="m-centre">Centre&nbsp;<b>ok</b></span>
+            <span class="metric" id="m-combo">Combo&nbsp;<b>0</b></span>
+          </div>
+          <div id="strategy-note"></div>
+          <div id="move-eval"></div>
+          <div id="train-btns">
+            <button class="pill-btn" id="btn-auto-place">🤖 Auto place</button>
+            <button class="pill-btn" id="btn-restart">↺ Restart</button>
+          </div>
+        </div>
+
+        <div id="rack"></div>
+      </main>
+    </section>
+
+    <section class="page page--shop" data-page="shop" aria-label="Shop">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Collection</p>
+            <h2>Shop</h2>
+            <p class="page-intro">Spend coins on colourways and finishes, then equip your favourites for the next run.</p>
+          </div>
+          <span class="missions-count shop-balance" id="shop-coin-balance" aria-live="polite" aria-label="Shop coin balance">🪙 0</span>
+        </header>
+
+        <div class="page-panel page-panel--shop">
+          <div class="collection-head">
+            <div>
+              <h3>Collection album</h3>
+              <p id="collection-album-subtitle">Finish themed sets to bank prestige rewards.</p>
+            </div>
+            <span class="missions-count" id="collection-album-count">0/0 sets complete</span>
+          </div>
+          <div class="album-goal">
+            <div>
+              <strong id="collection-album-goal-title">Heirloom</strong>
+              <p id="collection-album-goal-copy">Complete the full album to unlock an exclusive finish.</p>
+            </div>
+            <span class="album-goal__spotlight" id="collection-album-spotlight">A featured set will appear here.</span>
+          </div>
+          <div id="collection-album-list" class="album-list" aria-live="polite"></div>
+        </div>
+
+        <div class="page-panel page-panel--shop page-panel--album">
+          <div class="collection-head">
+            <div>
+              <h3>Colourways</h3>
+              <p id="colorway-subtitle">Unlock new block colours for future runs.</p>
+            </div>
+            <span class="missions-count" id="collection-balance">🪙 0</span>
+          </div>
+          <div id="colorway-list" class="collection-list" aria-live="polite"></div>
+        </div>
+
+        <div class="page-panel page-panel--shop">
+          <div class="collection-head">
+            <div>
+              <h3>Block finishes</h3>
+              <p id="collection-subtitle">Unlock a finish with coins, then equip it.</p>
+            </div>
+          </div>
+          <div id="collection-list" class="collection-list" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page page--settings" data-page="settings" aria-label="Settings">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Tune play</p>
+            <h2>Settings</h2>
+            <p class="page-intro">Adjust how the game feels and looks.</p>
+          </div>
+        </header>
+
+        <div class="page-panel settings-page-panel">
+          <label class="tog-row" id="page-coach-toggle-row" hidden>
+            <span>Coach Mode</span>
+            <span class="tog-wrap">
+              <input type="checkbox" id="page-chk-coach">
+              <span class="tog-track"><span class="tog-thumb"></span></span>
+            </span>
+          </label>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span id="page-coach-auth-title">Coach Mode access code</span>
+              <small id="page-coach-auth-status">Enter a six-digit code to unlock Coach Mode for this session.</small>
+            </div>
+            <input id="page-input-coach-code" type="text" maxlength="6" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" placeholder="Enter six-digit code">
+            <button class="pill-btn pill-btn--secondary" id="btn-coach-auth" type="button">Unlock Coach Mode</button>
+          </div>
+          <label class="tog-row">
+            <span>Dark Mode</span>
+            <span class="tog-wrap">
+              <input type="checkbox" id="page-chk-dark">
+              <span class="tog-track"><span class="tog-thumb"></span></span>
+            </span>
+          </label>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Block Colour</span>
+              <small id="page-colour-note">Unlock more colourways in the shop.</small>
+            </div>
+            <select id="page-sel-color"></select>
+          </div>
+          <div class="setting-row">
+            <span>Pieces per Round</span>
+            <select id="page-sel-rack">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Leaderboard name</span>
+              <small id="page-weekly-backend-status">Choose a leaderboard name to join the weekly table.</small>
+            </div>
+            <input id="page-input-weekly-name" type="text" maxlength="18" autocomplete="off" spellcheck="false" placeholder="Choose a name">
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Equipped finish</span>
+              <small id="page-equipped-cosmetic-label">Classic finish equipped</small>
+            </div>
+            <button class="pill-btn pill-btn--secondary" id="btn-settings-shop" type="button">Open shop</button>
+          </div>
+          <div class="setting-row setting-row--stack">
+            <div>
+              <span>Profile badge</span>
+              <small id="page-equipped-badge-label">Unlock badges to equip one here.</small>
+            </div>
+            <button class="pill-btn pill-btn--secondary" id="btn-settings-badges" type="button">Open badges</button>
+          </div>
+          <button class="pill-btn wide" id="btn-settings-save" type="button">Save settings</button>
+          <button class="pill-btn wide danger" id="btn-clear-data" type="button">🗑️ Clear All Data</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page page--badges" data-page="badges" aria-label="Badges">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Profile badges</p>
+            <h2>Equip badge</h2>
+            <p class="page-intro">Unlock badges through milestones, then equip one for the weekly leaderboard.</p>
+          </div>
+        </header>
+
+        <div class="page-panel badges-page-panel">
+          <div class="collection-head">
+            <div>
+              <h3>Your badge cabinet</h3>
+              <p id="badges-subtitle">No badges unlocked yet. Keep playing to earn your first one.</p>
+            </div>
+            <span class="missions-count" id="badges-count">0/0 unlocked</span>
+          </div>
+          <div id="badge-list" class="badge-list" aria-live="polite"></div>
+          <button class="pill-btn wide pill-btn--secondary" id="btn-badges-back-settings" type="button">Back to settings</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page page--about" data-page="about" aria-label="About and guide">
+      <div class="page-scroll">
+        <header class="page-top">
+          <div>
+            <p class="page-kicker">Guide</p>
+            <h2>About and guide</h2>
+            <p class="page-intro">Learn the basics and find the project.</p>
+          </div>
+        </header>
+
+        <div class="page-panel about-panel">
+          <section>
+            <h3>How to play</h3>
+            <ol class="about-list">
+              <li>Place every piece in the rack on the 9×9 board.</li>
+              <li>Fill rows, columns, or 3×3 boxes to clear them.</li>
+              <li>Keep space open so future racks still fit.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h3>Helpful reminders</h3>
+            <ul class="about-list">
+              <li>Combos matter, but board shape matters more.</li>
+              <li>Daily challenge boards include ringed locked blocks that need multiple clears.</li>
+              <li>Shop colourways and finishes are cosmetic only, so score still comes first.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>Find us</h3>
+            <p class="about-copy">Follow development, raise issues, or suggest the next feature on GitHub.</p>
+            <a class="pill-btn wide about-link" href="https://github.com/Bigalan09/Burohame" target="_blank" rel="noopener noreferrer">Open GitHub</a>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <div id="ov-quick-settings" class="overlay" hidden>
+      <div class="ov-card ov-card--quick-settings">
+        <h2>Quick settings</h2>
+        <p>Fast adjustments while you are in a run.</p>
+        <label class="tog-row">
+          <span>Dark Mode</span>
+          <span class="tog-wrap">
+            <input type="checkbox" id="quick-chk-dark">
+            <span class="tog-track"><span class="tog-thumb"></span></span>
+          </span>
+        </label>
+        <button class="pill-btn wide" id="btn-quick-settings-save" type="button">Apply</button>
+        <button class="pill-btn wide pill-btn--secondary" id="btn-quick-settings-close" type="button">Back to game</button>
+      </div>
+    </div>
+
+    <div id="ov-gameover" class="overlay" hidden>
+      <div class="ov-card ov-card--summary">
+        <button class="summary-close-btn" id="btn-gameover-dashboard" type="button" aria-label="Back to dashboard">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M11.75 4.5L6 10l5.75 5.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <h2>Run complete</h2>
+        <p class="summary-intro">Ready for another go?</p>
+        <div class="run-summary" aria-label="Run rewards summary">
+          <div class="summary-stat summary-stat--score">
+            <span class="summary-label">Score</span>
+            <strong id="go-score">0</strong>
+          </div>
+          <div class="summary-stat">
+            <span class="summary-label">Best</span>
+            <strong id="go-best">0</strong>
+          </div>
+          <div class="summary-stat summary-stat--coins">
+            <span class="summary-label">Coins this run</span>
+            <strong id="go-coins-earned">0</strong>
+          </div>
+        </div>
+        <p class="summary-total">Total coins <strong id="go-coin-total">0</strong></p>
+        <p class="summary-note" id="go-summary-note" hidden>One tidy line for this run.</p>
+        <section class="summary-continue" id="go-continue-prompt" hidden aria-labelledby="go-continue-title">
+          <span class="summary-continue__eyebrow" id="go-continue-eyebrow">One more run</span>
+          <h3 id="go-continue-title">A calm nudge to play again</h3>
+          <p id="go-continue-copy">You’re close to something meaningful, so another run is only one tap away.</p>
+          <span class="summary-continue__meta" id="go-continue-meta">Reward · progress nearby</span>
+        </section>
+        <section class="summary-challenge" id="go-daily-summary" hidden>
+          <div class="summary-challenge__head">
+            <h3>Daily challenge</h3>
+            <span id="go-daily-status">In progress</span>
+          </div>
+          <p id="go-daily-copy">Today’s board is still waiting for you.</p>
+        </section>
+        <button class="pill-btn wide summary-primary-btn" id="btn-new" type="button">Play again</button>
+      </div>
+    </div>
+
+    <nav class="bottom-nav" aria-label="Primary">
+      <button class="bottom-nav__item" data-nav-page="dashboard" type="button" aria-label="Dashboard">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M3.5 8.25L10 3l6.5 5.25V16a1 1 0 0 1-1 1h-3.75v-4.5h-3.5V17H4.5a1 1 0 0 1-1-1V8.25Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+        </svg>
+        <span>Home</span>
+      </button>
+      <button class="bottom-nav__item" data-nav-page="shop" type="button" aria-label="Shop">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M5 7.25h10l-.75 9.25a1 1 0 0 1-1 .92H6.75a1 1 0 0 1-1-.92L5 7.25Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          <path d="M7.5 7.25V6a2.5 2.5 0 1 1 5 0v1.25" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+        <span>Shop</span>
+      </button>
+      <button class="bottom-nav__item bottom-nav__item--play" id="btn-bottom-nav-play" type="button" aria-label="Start new run">
+        <span class="bottom-nav__play-disc" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M9 7.5v9l7-4.5-7-4.5Z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span id="bottom-nav-play-label">Play</span>
+      </button>
+      <button class="bottom-nav__item" data-nav-page="settings" type="button" aria-label="Settings">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.7"/>
+          <path d="M10 2.75v2.1M10 15.15v2.1M4.87 4.87l1.48 1.48M13.65 13.65l1.48 1.48M2.75 10h2.1M15.15 10h2.1M4.87 15.13l1.48-1.48M13.65 6.35l1.48-1.48" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Settings</span>
+      </button>
+      <button class="bottom-nav__item" data-nav-page="about" type="button" aria-label="Guide">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M6 4.25h7.25a1.75 1.75 0 0 1 1.75 1.75v9.75H7.5A1.5 1.5 0 0 0 6 17.25V4.25Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          <path d="M6 4.25v13m0 0h8.25" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+        <span>Guide</span>
+      </button>
+    </nav>
+  </div>
+
+  <div class="orientation-lock hidden" id="orientation-lock" role="status" aria-live="polite" aria-label="Portrait orientation required">
+    <div class="orientation-lock__card">
+      <h2>Use portrait mode</h2>
+      <p>Burohame is designed for portrait play. Please rotate your phone upright to continue.</p>
+    </div>
+  </div>
+
+  <div id="milestone-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="config.js"></script>
+  <script src="leaderboard-handles.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      const hadController = !!navigator.serviceWorker.controller;
+
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+      });
+
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController && !refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
